@@ -1,3 +1,9 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+
+
+.custom-blue {
+    background-color: #eceff8; /* Replace with your desired color code */
+  }
