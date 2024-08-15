@@ -15,9 +15,10 @@ return new class extends Migration
 
         Schema::create('boards', function (Blueprint $table) {
             $table->id();
-            $table->foreign('board_id')->references('project_id')->on('projects');
+            $table->bigInteger('project_id')->unsigned();  // Foreign key for projects
+            $table->foreign('project_id')->references('id')->on('projects')->onUpdate('cascade'); 
             $table->string('board_name')->index();
-            $table->bigInteger('project_id');
+            $table->timestamps();
         });
 
         Schema::enableForeignKeyConstraints();

@@ -20,10 +20,10 @@ return new class extends Migration
             $table->string('status');
             $table->string('priority');
             $table->dateTime('due_date');
-            $table->bigInteger('board_id');
-            $table->foreign('board_id')->references('board_id')->on('boards');
-            $table->bigInteger('assigned_to')->nullable();
-            $table->foreign('assigned_to')->references('user_id')->on('users');
+            $table->bigInteger('board_id')->unsigned();
+            $table->foreign('board_id')->references('id')->on('boards')->onUpdate('cascade');
+            $table->bigInteger('assigned_to')->nullable()->unsigned();
+            $table->foreign('assigned_to')->references('id')->on('users')->onUpdate('cascade');
             $table->bigInteger('budget')->nullable();
             $table->longText('notes')->nullable();
             $table->longText('dependencies')->nullable();

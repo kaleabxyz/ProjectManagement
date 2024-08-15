@@ -16,8 +16,8 @@ return new class extends Migration
         Schema::create('projects', function (Blueprint $table) {
             $table->id();
             $table->string('Project_name')->index();
-            $table->bigInteger('team_id');
-            $table->foreign('team_id')->references('team_id')->on('teams');
+            $table->bigInteger('team_id')->unsigned();
+            $table->foreign('team_id')->references('id')->on('teams')->onUpdate('cascade');
         });
 
         Schema::enableForeignKeyConstraints();

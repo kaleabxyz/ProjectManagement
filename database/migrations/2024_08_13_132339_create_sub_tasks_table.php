@@ -20,14 +20,14 @@ return new class extends Migration
             $table->string('status');
             $table->string('priority');
             $table->dateTime('due_date');
-            $table->bigInteger('board_id');
-            $table->bigInteger('assigned_to')->nullable();
+            $table->bigInteger('board_id')->unsigned();
+            $table->bigInteger('assigned_to')->nullable()->unsigned();
             $table->bigInteger('budget')->nullable();
             $table->longText('notes')->nullable();
             $table->longText('dependencies')->nullable();
             $table->text('label')->nullable();
-            $table->bigInteger('task_id');
-            $table->foreign('task_id')->references('task_id')->on('tasks');
+            $table->bigInteger('task_id')->unsigned();
+            $table->foreign('task_id')->references('id')->on('tasks')->onUpdate('cascade')->onDelete('cascade');
         });
 
         Schema::enableForeignKeyConstraints();

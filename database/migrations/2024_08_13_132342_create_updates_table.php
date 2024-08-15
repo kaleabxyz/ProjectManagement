@@ -15,10 +15,10 @@ return new class extends Migration
 
         Schema::create('updates', function (Blueprint $table) {
             $table->id();
-            $table->bigInteger('task_id')->index();
-            $table->foreign('task_id')->references('task_id')->on('tasks');
-            $table->bigInteger('user_id');
-            $table->foreign('user_id')->references('user_id')->on('users');
+            $table->bigInteger('task_id')->index()->unsigned();
+            $table->foreign('task_id')->references('id')->on('tasks')->onUpdate('cascade')->onDelete('cascade');
+            $table->bigInteger('user_id')->unsigned();
+            $table->foreign('user_id')->references('id')->on('users')->onUpdate('cascade')->onDelete('cascade');
             $table->longText('content');
         });
 

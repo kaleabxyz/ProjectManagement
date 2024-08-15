@@ -15,10 +15,10 @@ return new class extends Migration
 
         Schema::create('invitations', function (Blueprint $table) {
             $table->id();
-            $table->bigInteger('user_id')->index();
-            $table->foreign('user_id')->references('user_id')->on('users');
-            $table->bigInteger('team_id')->index();
-            $table->foreign('team_id')->references('team_id')->on('teams');
+            $table->bigInteger('user_id')->index()->unsigned();
+            $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
+            $table->bigInteger('team_id')->index()->unsigned();
+            $table->foreign('team_id')->references('id')->on('teams')->onDelete('cascade')->onUpdate('cascade');
             $table->string('role')->nullable();
             $table->string('email');
             $table->string('token')->unique();
