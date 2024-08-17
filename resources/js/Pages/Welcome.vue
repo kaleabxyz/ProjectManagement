@@ -11,24 +11,30 @@ import Sidebar from "@/Components/Sidebar.vue";
         <Navbar></Navbar>
         <div class="flex">
             <Sidebar></Sidebar>
-            <div class="h=full w-full mt-14 bg-white rounded-lg ml-72 pt-4">
+            <div
+                class="h=full w-full overflow-hidden mt-14 bg-white rounded-lg ml-60 pt-4"
+            >
                 <div class="border-b-2 border-solid pb-4 shadow-lg">
-                    <h2 class="font-thin mx-16">Good afternoon, kaleab!</h2>
-                    <h2 class="font-light mx-16">
+                    <h2 class="font-thin mx-16 text-xs">
+                        Good afternoon, kaleab!
+                    </h2>
+                    <h2 class="font-light mx-16 text-sm">
                         Quickly access your recent boards, inbox and workspaces
                     </h2>
                 </div>
-                <div class="ml-16 mt-4 h-full w-fit p-6 rounded-lg shadow-lg">
+                <div
+                    class="ml-16 mt-4 h-full w-full pr-80 p-6 rounded-lg shadow-lg"
+                >
                     <div class="flex items-center">
                         <i
-                            class="fa fa-chevron-down mr-2"
+                            class="fa fa-chevron-down mr-2 text-xs"
                             aria-hidden="true"
                         ></i>
-                        <h2 class="font-bold text-2xl">Recently visited</h2>
+                        <h2 class="font-bold text-md">Recently visited</h2>
                     </div>
                     <div class="flex flex-wrap">
                         <div
-                            class="m-4 border-blue-200 border border-solid rounded-lg p-2 hover:shadow-xl transition-shadow duration-300"
+                            class="m-2 border-blue-200 border border-solid rounded-lg p-2 hover:shadow-xl transition-shadow duration-300"
                         >
                             <img
                                 class="rounded-lg w-60"
@@ -36,7 +42,7 @@ import Sidebar from "@/Components/Sidebar.vue";
                                 alt="loading"
                             />
 
-                            <div class="flex justify-between items-center my-2">
+                            <div class="flex justify-between items-center my-1">
                                 <div class="flex my-2 items-center">
                                     <svg
                                         fill="#bfbbbb"
@@ -60,7 +66,7 @@ import Sidebar from "@/Components/Sidebar.vue";
                                             ></path>
                                         </g>
                                     </svg>
-                                    <h2 class="font-bold ml-2 text-1xl">
+                                    <h2 class="font-bold ml-2 text-sm">
                                         New Board
                                     </h2>
                                 </div>
@@ -78,13 +84,13 @@ import Sidebar from "@/Components/Sidebar.vue";
                                     src="images/logoC.png"
                                     alt=""
                                 />
-                                <h3 class="font-light text-sm text-gray-500">
+                                <h3 class="font-light text-xs text-gray-500">
                                     work management > Main workspace
                                 </h3>
                             </div>
                         </div>
                         <div
-                            class="m-4 border-blue-200 border border-solid rounded-lg p-2 hover:shadow-xl transition-shadow duration-300"
+                            class="m-2 border-blue-200 border border-solid rounded-lg p-2 hover:shadow-xl transition-shadow duration-300"
                         >
                             <img
                                 class="rounded-lg w-60"
@@ -92,8 +98,8 @@ import Sidebar from "@/Components/Sidebar.vue";
                                 alt="loading"
                             />
 
-                            <div class="flex justify-between items-center my-2">
-                                <div class="flex my-2 items-center">
+                            <div class="flex justify-between items-center my-1">
+                                <div class="flex my-1 items-center">
                                     <svg
                                         fill="#bfbbbb"
                                         width="24px"
@@ -116,7 +122,7 @@ import Sidebar from "@/Components/Sidebar.vue";
                                             ></path>
                                         </g>
                                     </svg>
-                                    <h2 class="font-bold ml-2 text-1xl">
+                                    <h2 class="font-bold ml-2 text-sm">
                                         New Board
                                     </h2>
                                 </div>
@@ -128,13 +134,13 @@ import Sidebar from "@/Components/Sidebar.vue";
                                     ></i>
                                 </div>
                             </div>
-                            <div class="flex row items-center my-1">
+                            <div class="flex row items-center">
                                 <img
                                     class="w-7 mr-2"
                                     src="images/logoC.png"
                                     alt=""
                                 />
-                                <h3 class="font-light text-sm text-gray-500">
+                                <h3 class="font-light text-xs text-gray-500">
                                     work management > Main workspace
                                 </h3>
                             </div>
@@ -142,61 +148,64 @@ import Sidebar from "@/Components/Sidebar.vue";
                     </div>
                     <div class="flex items-center mt-6">
                         <i
-                            class="fa fa-chevron-down mr-2"
+                            class="fa fa-chevron-down mr-2 text-xs"
                             aria-hidden="true"
                         ></i>
-                        <h2 class="font-bold text-2xl">Update feed(inbox)</h2>
+                        <h2 class="font-bold text-md">Update feed(inbox)</h2>
                         <h3 class="bg-blue-500 px-2 rounded-full text-white">
                             1
                         </h3>
                     </div>
                     <div
-                        class="flex flex-col p-8 border rounded-lg border-gray-300 mt-4"
+                        class="flex w-full flex-col p-8 border rounded-lg border-gray-300 mt-4"
                     >
                         <div
-                            class="flex items-center justify-between border-b border-gray-300 pb-4"
+                            class="flex items-center w-full justify-between border-b border-gray-300 pb-4"
                         >
                             <div class="flex items-center mr-72">
                                 <img
-                                    class="rounded-full w-20 h-20 object-cover mr-4"
+                                    class="rounded-full w-10 h-10 object-cover mr-4"
                                     src="/images/logoC.png"
                                     alt="loading"
                                 />
 
                                 <div>
-                                    <h3>Roy Mann</h3>
-                                    <h3>Hi @kaleab,</h3>
+                                    <h3 class="text-sm">Roy Mann</h3>
+                                    <h3 class="text-sm">Hi @kaleab,</h3>
                                 </div>
                             </div>
-                            <div class="ml-96">
-                                <i class="far fa-clock" aria-hidden="true"></i>
-                                <h3>13d</h3>
+                            <div class="flex items-center">
+                                <i
+                                    class="far fa-clock text-xs"
+                                    aria-hidden="true"
+                                ></i>
+                                <h3 class="text-xs ml-1">12 jun</h3>
                             </div>
                         </div>
                         <div
                             class="flex mt-4 bg-gray-200 p-3 rounded-lg justify-between"
                         >
                             <div class="relative flex items-center">
-                                <i class="fa fa-user-circle text-5xl"></i>
+                                <i class="fa fa-user-circle text-4xl"></i>
                                 <i
-                                    class="fa fa-user-circle text-5xl left-8 border border-white p-0 rounded-full absolute"
+                                    class="fa fa-user-circle text-4xl left-6 border border-white p-0 rounded-full absolute"
                                 ></i>
                                 <i
-                                    class="fa text-white bg-blue-600 fa-plus text-2xl left-16 border border-white p-3 rounded-full absolute"
+                                    class="fa text-white bg-blue-600 fa-plus text-2xl left-12 border border-white p-2 rounded-full absolute"
                                 ></i>
-                                <h3 class="ml-24">
+                                <div class="ml-24 text-base text-sm">
                                     Invite your teammates and start
                                     collaborating
-                                </h3>
+                                </div>
                             </div>
-                            <div class="items-center">
+                            <div class="items-center flex">
                                 <button
-                                    class="text-black px-4 py-2 rounded-lg hover:bg-gray-300 mr-4"
+                                    class="text-black px-4 py-2 rounded-lg hover:bg-gray-300 mr-4 text-xs"
                                 >
                                     No thanks
                                 </button>
                                 <button
-                                    class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                                    class="bg-blue-600 text-white px-4 py-2 text-xs rounded-lg hover:bg-blue-700"
                                 >
                                     Invite
                                 </button>
@@ -205,10 +214,10 @@ import Sidebar from "@/Components/Sidebar.vue";
                     </div>
                     <div class="flex items-center mt-8">
                         <i
-                            class="fa fa-chevron-down mr-2"
+                            class="fa fa-chevron-down mr-2 text-xs"
                             aria-hidden="true"
                         ></i>
-                        <h2 class="font-bold text-2xl">My workspaces</h2>
+                        <h2 class="font-bold text-md">My workspaces</h2>
                     </div>
                     <div
                         class="flex p-8 w-fit border rounded-lg border-gray-300 mt-4"

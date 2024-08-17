@@ -118,15 +118,15 @@ function handleImageError() {
             <h1 class="font-sans">work management</h1>
         </div>
         <div class="flex items-center pr-4">
-            <i class="far fa-bell fa-lg m-4"></i>
-            <i class="fa fa-laptop m-4"></i>
-            <i class="fa fa-user-plus m-4"></i>
-            <i class="fa fa-puzzle-piece m-4"></i>
+            <i class="far fa-bell m-2.5 text-sm"></i>
+            <i class="fa fa-laptop m-2.5 text-sm"></i>
+            <i class="fa fa-user-plus m-2.5 text-sm"></i>
+            <i class="fa fa-puzzle-piece m-2.5"></i>
             <div
-                class="border-solid m-4 border-r-2 w-1 h-6 border-gray-400"
+                class="border-solid m-4 border-r-2 w-0.5 h-6 border-gray-400"
             ></div>
-            <i class="fa fa-search m-4"></i>
-            <i class="fa fa-question m-4"></i>
+            <i class="fa fa-search m-2.5"></i>
+            <i class="fa fa-question m-2.5"></i>
             <div class="bg-custom-gray flex items-center rounded-r-full">
                 <img class="ml-2 w-6" src="images/logo-s.png" alt="" />
                 <i class="fa fa-user-circle ml-4 fa-2x"></i>

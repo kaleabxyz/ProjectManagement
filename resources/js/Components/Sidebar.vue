@@ -20,13 +20,13 @@ function handleImageError() {
         />
     </head>
     <aside
-        class="fixed top-0 left-0 mt-14 bg-gradient-to-b from-white via-blue-50 to-white rounded-lg w-fit min-h-screen px-3 pt-2"
+        class="fixed top-0 left-0 mt-14 bg-gradient-to-b from-white via-custom-blue to-custom-blue rounded-lg w-fit min-h-screen px-2.5 pt-2"
     >
         <div
-            class="flex items-center bg-blue-100 py-2 rounded-lg hover:bg-gray-300"
+            class="flex items-center bg-blue-100 py-1 rounded-md hover:bg-gray-200 cursor-pointer"
         >
             <svg
-                width="24px"
+                width="20px"
                 viewBox="0 0 24 24"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
@@ -46,25 +46,28 @@ function handleImageError() {
                     ></path>
                 </g>
             </svg>
-            <h2 class="ml-2 font-thin">Home</h2>
+            <h2 class="ml-2 font-thin text-sm">Home</h2>
         </div>
         <div
-            class="flex items-center border-b-2 border-solid py-2 rounded-lg hover:bg-gray-300 mb-2"
+            class="flex items-center border-b-2 border-solid py-1 pb-4 rounded-md hover:bg-gray-200 cursor-pointer mb-2"
         >
-            <i class="far fa-calendar-check ml-1" aria-hidden="true"></i>
-            <h2 class="ml-3 font-thin">My work</h2>
+            <i
+                class="far fa-calendar-check ml-1 text-sm"
+                aria-hidden="true"
+            ></i>
+            <h2 class="ml-3 font-thin text-sm">My work</h2>
         </div>
-        <div class="flex flex-col">
-            <div class="flex mt-2">
+        <div class="flex flex-col w-fit">
+            <div class="flex mt-2 w-fit">
                 <div class="flex relative items-center mr-6">
                     <h3
-                        class="bg-gray-500 w-fit text-white py-1 px-2 rounded-lg text-1xl"
+                        class="bg-gray-500 w-fit text-white py-0.5 px-1 rounded-md text-xs"
                     >
                         M
                     </h3>
                     <svg
-                        class="absolute left-4 top-4"
-                        width="24px"
+                        class="absolute left-2 top-4"
+                        width="15px"
                         viewBox="0 0 24 24"
                         fill="#000000"
                         xmlns="http://www.w3.org/2000/svg"
@@ -84,28 +87,44 @@ function handleImageError() {
                             ></path>
                         </g>
                     </svg>
-                    <div
-                        class="flex items-center hover:bg-gray-200 p-2 rounded-md"
-                    >
-                        <h1 class="ml-2">Main workspace</h1>
+                    <div class="flex items-center p-2 pl-0 rounded-md">
+                        <div
+                            class="hover:bg-gray-200 cursor-pointer flex p-2 pl-1 flex items-center"
+                        >
+                            <h1 class="text-md font-bold">Main workspace</h1>
+                            <i
+                                class="fa fa-chevron-down text-xs ml-4"
+                                aria-hidden="true"
+                            ></i>
+                        </div>
+
                         <i
-                            class="fa fa-chevron-down ttext-xs ml-6"
+                            class="fa fa-ellipsis-h text-xl ml-4 p-2 hover:bg-gray-200 cursor-pointer"
                             aria-hidden="true"
                         ></i>
-                        <i class="fa fa-ellipsis-h ml-2" aria-hidden="true"></i>
                     </div>
                 </div>
             </div>
 
-            <div>
-                <TextInput class="h-8 my-4" placeholder="Search"> </TextInput>
+            <div class="w-fit flex items-center">
+                <div class="relative">
+                    <TextInput
+                        class="h-10 my-2 w-44 pl-6 text-sm font-thin"
+                        placeholder="Search"
+                    >
+                    </TextInput>
+                    <i
+                        class="absolute left-2 top-6 fa fa-search text-xs text-gray-400"
+                    ></i>
+                </div>
+
                 <i
-                    class="fa text-white bg-blue-600 fa-plus text-2xl border border-white p-1 px-1 rounded-md ml-2"
+                    class="fa text-white bg-blue-600 fa-plus text-2xl font-thin border border-white p-1 px-1 rounded-md ml-2"
                 ></i>
             </div>
-            <a href="Project.vue">
+            <a href="project">
                 <div
-                    class="flex my-2 mx-1 items-center hover:bg-gray-200 p-2 rounded-md"
+                    class="flex my-2 mx-1 items-center hover:bg-gray-200 cursor-pointer p-2 rounded-md"
                 >
                     <svg
                         fill="#bfbbbb"
@@ -126,7 +145,7 @@ function handleImageError() {
                             ></path>
                         </g>
                     </svg>
-                    <h2 class="ml-2 text-1xl">Project management</h2>
+                    <h2 class="ml-2 text-xs">Project management</h2>
                 </div>
             </a>
         </div>
