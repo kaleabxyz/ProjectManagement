@@ -1,22 +1,57 @@
 <script setup>
-import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head } from '@inertiajs/vue3';
+import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
+
+import { Head } from "@inertiajs/vue3";
 </script>
 
 <template>
     <Head title="Dashboard" />
-
-    <AuthenticatedLayout>
-        <template #header>
-            <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">Dashboard</h2>
-        </template>
-
-        <div class="py-12">
-            <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-                <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
-                    <div class="p-6 text-gray-900 dark:text-gray-100">You're logged in!</div>
+    <head>
+        <link
+            href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap"
+            rel="stylesheet"
+        />
+    </head>
+    
+        <body>
+            <div class="nav px-52 py-6 flex justify-between">
+                <div class="flex items-end">
+                    <img class="ml-2 w-10" src="images/logo-s.png" alt="" />
+                    <h1 class="text-3xl font-bold">Friday</h1>
+                    <h2>.com</h2>
+                </div>
+                <div class="flex items-center">
+                    <h1 class="text-gray-600 mx-2">Login</h1>
+                    <div
+                        class="group border flex text-white border-blue-300 mx-2 items-center px-4 py-2 rounded-3xl bg-blue-600 hover:bg-blue-700"
+                    >
+                        <h1>Get started</h1>
+                        <svg
+                            class="group-hover:pr-0 hover:pl-2 px-1"
+                            width="28px"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
+                        >
+                            <g id="SVGRepo_bgCarrier" stroke-width="0"></g>
+                            <g
+                                id="SVGRepo_tracerCarrier"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            ></g>
+                            <g id="SVGRepo_iconCarrier">
+                                <path
+                                    d="M6 12H18M18 12L13 7M18 12L13 17"
+                                    stroke="#ffffff"
+                                    stroke-width="2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                ></path>
+                            </g>
+                        </svg>
+                    </div>
                 </div>
             </div>
-        </div>
-    </AuthenticatedLayout>
+        </body>
+
 </template>
