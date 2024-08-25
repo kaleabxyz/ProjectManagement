@@ -23,6 +23,7 @@ const showSide = (val) => {
         <Navbar></Navbar>
         <div class="flex h-full ">
             <Sidebar @nav="showSide" />
+            <router-view />
         </div>
 
             <div
