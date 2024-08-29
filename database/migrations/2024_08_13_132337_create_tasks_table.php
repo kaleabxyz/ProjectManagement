@@ -16,18 +16,27 @@ return new class extends Migration
         Schema::create('tasks', function (Blueprint $table) {
             $table->id();
             $table->string('task_name')->index();
-            $table->longText('description')->nullable();
-            $table->string('status');
-            $table->string('priority');
-            $table->dateTime('due_date');
+            $table->string('status')->default("In Progress");
+            $table->boolean('selectStatus')->default(false);
+            $table->boolean('selectOwner')->default(false);
+            $table->boolean('selectPriority')->default(false);
+            $table->boolean('showUpdates')->default(false);
+
+            $table->string('priority')->default("Medium");
+            $table->dateTime('due_date')->nullable();
             $table->bigInteger('board_id')->unsigned();
             $table->foreign('board_id')->references('id')->on('boards')->onUpdate('cascade');
             $table->bigInteger('assigned_to')->nullable()->unsigned();
             $table->foreign('assigned_to')->references('id')->on('users')->onUpdate('cascade');
             $table->bigInteger('budget')->nullable();
             $table->longText('notes')->nullable();
-            $table->longText('dependencies')->nullable();
-            $table->string('label')->nullable();
+            $table->boolean('is_trashed')->nullable();
+            $table->timestamp('trashed_at')->nullable();
+            $table->bigInteger('trashed_by')->unsigned()->nullable();
+            $table->foreign('trashed_by')->references('id')->on('users')->onUpdate('cascade');
+            $table->integer('column')->nullable();
+            $table->boolean('subItemVisible')->default(false);
+            $table->timestamps();
         });
 
         Schema::enableForeignKeyConstraints();

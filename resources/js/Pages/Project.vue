@@ -1,15 +1,34 @@
 <script setup>
-import { Head, Link } from "@inertiajs/vue3";
 import ResponsiveNavLink from "@/Components/ResponsiveNavLink.vue";
+
 import Navbar from "@/Components/Navbar.vue";
 import Sidebar from "@/Components/Sidebar.vue";
 import SideDetail from "@/Components/SideDetail.vue";
 import TextInput from "@/Components/TextInput.vue";
+import axios from "axios";
+import { useRoute } from "vue-router";
 
 import { ref, watch, onMounted, computed, onUnmounted } from "vue";
 
+const route = useRoute();
+
+const updates = ref([]);
+const tasks = ref([]);
+const filteredTasks = ref([]);
+const filteredTasksId = ref([]);
+
+const board = ref([]);
+const workspaces = ref([]);
+const users = ref([]);
+const teams = ref([]);
+const updateContent = ref("");
+
 const showTable = ref(true);
 const showCard = ref(false);
+const showSelector = ref(false);
+const showSelectorId = ref(null);
+const showSelectorSId = ref(null);
+const showSelectorPId = ref(null);
 
 const side = ref("active");
 const subItem = ref(false);
@@ -21,7 +40,7 @@ const taskUpdate = ref(false);
 const projectName = ref("Project managemnt");
 // Reactive state
 const isEditing = ref(false);
-const content = ref("Task 1"); // Initial content of h1
+const selectedTaskName = ref("");
 const projectDiscription = ref(
     "Filter by Board Lorem ipsum dolor sit amet, consectetur adipisicing elit. Voluptatum, ratione. Molestias perferendis incidunt quisquam eveniet harum"
 );
@@ -30,7 +49,7 @@ const showHide = ref(false);
 
 const showTasks = ref(false);
 const showAll = ref(false);
-const showOwner = ref(false);
+const showOwner = ref(true);
 const showStatus = ref(true);
 const showDueDate = ref(true);
 const showPriority = ref(true);
@@ -51,54 +70,311 @@ const showFilesS = ref(true);
 const showTimeLineS = ref(true);
 const showLastUpdateS = ref(true);
 
-const tasks = ref([
-    {
-        avatar: "", // Leave empty for default avatar
-        initial: "K",
-        title: "Task 2",
-        status: "Done",
-        statusClass: "bg-green-500",
-        priority: "High",
-        priorityClass: "bg-purple-700",
-        dueDate: "19 Aug",
-        dueDateClass: "text-gray-500",
-    },
-    {
-        avatar: "", // Leave empty for default avatar
-        initial: "",
-        title: "Task 3",
-        status: "Stuck",
-        statusClass: "bg-red-500",
-        priority: "Medium",
-        priorityClass: "bg-blue-600",
-        dueDate: "20 Aug",
-        dueDateClass: "text-red-600",
-    },
-    {
-        avatar: "https://via.placeholder.com/40/FF0000/FFFFFF?text=K", // Sample avatar URL
-        initial: "K",
-        title: "Task 1",
-        status: "Working on it",
-        statusClass: "bg-orange-500",
-        priority: "Low",
-        priorityClass: "bg-blue-400",
-        dueDate: "18 Aug",
-        dueDateClass: "text-red-600",
-    },
-    {
-        avatar: "", // Leave empty for default avatar
-        initial: "",
-        title: "Task 4",
-        status: "Not Started",
-        statusClass: "bg-gray-400",
-        priority: "None",
-        priorityClass: "bg-gray-400",
-        dueDate: "",
-        dueDateClass: "text-gray-500",
-    },
-]);
+const fetchTasks = async () => {
+    try {
+        const response = await axios.get("/api/tasks");
 
+        tasks.value = response.data;
+
+        console.log("Fetched Tasks:", tasks.value);
+        filterTasksByBoard();
+    } catch (error) {
+        console.error("There was an error fetching tasks!", error);
+    }
+};
+const fetchUpdates = async () => {
+    try {
+        const response = await axios.get("/api/updates");
+
+        updates.value = response.data;
+
+        console.log("Fetched Updates:", updates.value);
+    } catch (error) {
+        console.error("There was an error fetching updates!", error);
+    }
+};
+const fetchBoard = async (boardId) => {
+    try {
+        const response = await axios.get(`/api/boards/${boardId}`);
+        board.value = response.data;
+        console.log("Fetched Board:", board.value);
+        filterTasksByBoard();
+    } catch (error) {
+        console.error(
+            `There was an error fetching board with ID ${boardId}!`,
+            error
+        );
+    }
+};
+
+const fetchWorkspaces = async () => {
+    try {
+        const response = await axios.get("/api/workspaces");
+
+        workspaces.value = response.data;
+    } catch (error) {
+        console.error("There was an error fetching workspaces!", error);
+    }
+};
+const filterTasksByBoard = () => {
+    if (board.value) {
+        filteredTasks.value = tasks.value.filter(
+            (task) => task.board_id === board.value.id
+        );
+    } else {
+        filteredTasks.value = tasks.value; // Show all tasks if no board is fetched
+    }
+};
+
+const filterTasksById = (task_id) => {
+    filteredTasksId.value = tasks.value.filter((task) => task.id === task_id);
+    console.log("Selected task id", task_id);
+    console.log("Filtered task", filteredTasksId.value);
+
+    // Set the selected task name if a task is found
+    if (filteredTasksId.value.length > 0) {
+        selectedTaskName.value = filteredTasksId.value[0].task_name;
+    } else {
+        selectedTaskName.value = ""; // Clear the input if no task is found
+    }
+};
+
+const updateTaskName = async () => {
+    if (filteredTasksId.value.length === 0) return;
+
+    const selectedTask = filteredTasksId.value[0];
+    selectedTask.task_name = selectedTaskName.value;
+
+    try {
+        // Update the task name in the database
+        await axios.patch(`/api/tasks/${selectedTask.id}`, {
+            task_name: selectedTask.task_name,
+        });
+    } catch (error) {
+        console.error("Error updating task name:", error);
+    }
+};
+
+const postUpdate = async () => {
+    console.log("content update", updateContent.value);
+    const selectedTask = filteredTasksId.value[0];
+    if (updateContent.value.trim() === "") {
+        // Do not post if content is empty
+        return;
+    }
+    const payload = {
+        content: updateContent.value,
+        task_id: selectedTask.id,
+        read: false,
+        user_id: 1, // Replace with actual user ID
+        board_id: board.value.id, // Replace with actual board ID
+    };
+    console.log("Posting update with payload:", payload);
+
+    try {
+        await axios.post("/api/updates", {
+            content: updateContent.value,
+            task_id: selectedTask.id,
+            user_id: 1,
+            read: false,
+            board_id: board.value.id,
+        });
+        // Optionally, handle success (e.g., clear input, show a success message)
+        updateContent.value = "";
+    } catch (error) {
+        // Handle error (e.g., show an error message)
+        console.error("Failed to post update:", error);
+    }
+};
+
+const toggleOwner = (task) => {
+    task.selectOwner = !task.selectOwner;
+
+    // Ensure only one selector is active at a time
+    if (task.selectOwner) {
+        task.selectStatus = false;
+        task.selectPriority = false;
+    }
+
+    setSelectOwnerToFalse(showSelectorId.value);
+    showSelectorId.value = task.id;
+    showSelector.value = task.selectOwner;
+};
+
+const toggleStatus = (task) => {
+    task.selectStatus = !task.selectStatus;
+
+    // Ensure only one selector is active at a time
+    if (task.selectStatus) {
+        task.selectOwner = false;
+        task.selectPriority = false;
+    }
+
+    setSelectStatusToFalse(showSelectorSId.value);
+    showSelectorSId.value = task.id;
+    showSelector.value = task.selectStatus;
+};
+
+const togglePriority = (task) => {
+    task.selectPriority = !task.selectPriority;
+
+    // Ensure only one selector is active at a time
+    if (task.selectPriority) {
+        task.selectOwner = false;
+        task.selectStatus = false;
+    }
+
+    setSelectPriorityToFalse(showSelectorPId.value);
+    showSelectorPId.value = task.id;
+    showSelector.value = task.selectPriority;
+};
+
+// Clear previously selected owner, status, or priority
+const setSelectOwnerToFalse = (taskId) => {
+    if (showSelector.value) {
+        const task = filteredTasks.value.find((task) => task.id === taskId);
+        if (task) {
+            task.selectOwner = false;
+        }
+    }
+};
+
+const setSelectStatusToFalse = (taskId) => {
+    if (showSelector.value) {
+        const task = filteredTasks.value.find((task) => task.id === taskId);
+        if (task) {
+            task.selectStatus = false;
+        }
+    }
+};
+
+const setSelectPriorityToFalse = (taskId) => {
+    if (showSelector.value) {
+        const task = filteredTasks.value.find((task) => task.id === taskId);
+        if (task) {
+            task.selectPriority = false;
+        }
+    }
+};
+watch(
+    () => route.params.boardId,
+    (newBoardId) => {
+        if (newBoardId) {
+            fetchBoard(newBoardId);
+        }
+    }
+);
+onMounted(() => {
+    const boardId = route.params.boardId;
+    if (boardId) {
+        fetchBoard(boardId);
+    }
+
+    fetchTasks();
+    fetchWorkspaces();
+    fetchUpdates();
+});
+
+function formatDateForDisplay(dateString) {
+    const date = new Date(dateString);
+    if (isNaN(date)) return "Invalid date"; // Handle invalid date case
+
+    const currentYear = new Date().getFullYear();
+    const taskYear = date.getFullYear();
+    const month = date.toLocaleString("default", { month: "short" });
+    const day = date.getDate();
+    const year =
+        taskYear !== currentYear ? `/${taskYear.toString().slice(-2)}` : "";
+
+    return `${month} ${day}${year}`;
+}
+function formatDateForDisplayB(dateString) {
+    const date = new Date(dateString);
+    if (isNaN(date)) return "Invalid date"; // Handle invalid date case
+
+    const currentYear = new Date().getFullYear();
+    const taskYear = date.getFullYear();
+    const month = date.toLocaleString("default", { month: "short" });
+    const day = date.getDate();
+    const year =
+        taskYear !== currentYear ? `/${taskYear.toString().slice(-2)}` : "";
+
+    return `${month} ${day}/${taskYear}`;
+}
+function getEarliestAndLatestDates(tasks) {
+    if (!tasks || tasks.length === 0) return { earliest: null, latest: null };
+
+    let earliest = new Date(tasks[0].due_date);
+    let earliest2 = new Date(tasks[0].created_at);
+    let latest = new Date(tasks[0].due_date);
+
+    tasks.forEach((task) => {
+        const taskDate = new Date(task.due_date);
+        const taskDate2 = new Date(task.created_at);
+
+        if (taskDate < earliest) earliest = taskDate;
+        if (taskDate > latest) latest = taskDate;
+        if (taskDate2 < earliest2) earliest2 = taskDate;
+    });
+
+    return { earliest, earliest2, latest };
+}
+
+const elapsedPercentage2 = (createdDate, dueDate) => {
+    const createdAt = new Date(createdDate);
+    const dueDateObj = new Date(dueDate);
+    const now = new Date();
+
+    // Calculate the total duration and elapsed time
+    const totalDuration = dueDateObj - createdAt;
+    const elapsedTime = now - createdAt;
+
+    // Calculate the percentage of elapsed time
+    const percentage = Math.min(100, (elapsedTime / totalDuration) * 100);
+
+    return percentage.toFixed(2);
+};
+function calculateTimeElapsedPercentage(creationDate, dueDate) {
+    const created = new Date(creationDate);
+    const due = new Date(dueDate);
+    const now = new Date();
+
+    if (due <= created) return 0; // Handle invalid date range
+
+    const totalDuration = due - created;
+    const elapsedDuration = now - created;
+
+    // Calculate the percentage of time elapsed, ensuring it doesn't exceed 100%
+    const percentageElapsed = Math.min(
+        (elapsedDuration / totalDuration) * 100,
+        100
+    );
+
+    return percentageElapsed;
+}
+const { earliest, latest } = getEarliestAndLatestDates(filteredTasks.value);
+
+const elapsedPercentage = computed(() => {
+    return calculateTimeElapsedPercentage(earliest, latest);
+});
 // Methods
+const toggleSubItem = (taskId) => {
+    const task = tasks.value.find((t) => t.id === taskId);
+    if (task) {
+        task.subItemVisible = !task.subItemVisible;
+    }
+};
+const segmentWidth = computed(() => {
+    const numTasks = filteredTasks.value.length;
+    return numTasks > 0 ? `${(100 / numTasks).toFixed(2)}%` : "0%";
+});
+const totalBudget = computed(() => {
+    return filteredTasks.value.reduce(
+        (sum, task) => sum + (task.budget || 0),
+        0
+    );
+});
+
 const enableEditing = () => {
     isEditing.value = true;
 };
@@ -123,9 +399,6 @@ watch(isEditing, (newValue) => {
         });
     }
 });
-const updateContent = ref(
-    "Filter by Board Lorem ipsum dolor sit amet, consectetur adipisicing elit. Voluptatum, ratione. Molestias perferendis incidunt quisquam eveniet harum aliquam, ab mollitia facere quas cupiditate libero doloribus enim accusantium earum et ducimus? Cum? Filter by Board Lorem ipsum dolor sit amet, consectetur adipisicing elit. Voluptatum, ratione. Molestias perferendis incidunt quisquam eveniet harum aliquam, ab mollitia facere quas cupiditate libero doloribus enim accusantium earum et ducimus? Cum?"
-);
 
 const showFullDescription = ref(false);
 
@@ -156,6 +429,19 @@ const handleClickOutside = (event) => {
     ) {
         hidesideDetail();
     }
+    if (showSelector.value) {
+        if (showSelectorId.value !== null) {
+            setSelectOwnerToFalse(showSelectorId.value);
+        }
+        if (showSelectorSId.value !== null) {
+            setSelectStatusToFalse(showSelectorSId.value);
+        }
+        if (showSelectorPId.value !== null) {
+            setSelectPriorityToFalse(showSelectorPId.value);
+        }
+
+        showSelector.value = false;
+    }
 };
 document.addEventListener("click", handleClickOutside);
 
@@ -165,8 +451,8 @@ onUnmounted(() => {
 </script>
 
 <template>
-    <Head title="projects" />
-    <body class="bg-custom-blue min-h-screen flex flex-col">
+    <!-- <Head title="projects" /> -->
+    <body class="bg-custom-blue min-h-screen w-full flex flex-col">
         <Navbar />
         <div class="flex">
             <Sidebar @nav="showSide" />
@@ -557,7 +843,7 @@ onUnmounted(() => {
                 'ml-72': side === 'active',
                 'ml-8': side === 'inactive',
             }"
-            class="h-full flex-1 w-98 overflow-hidden pr-8 mt-14 bg-white rounded-lg pl-10 pt-4"
+            class="h-full flex-1 w-98 overflow-x-hidden-hidden overflow-y-auto pr-8 mt-14 bg-white rounded-lg pl-10 pt-4"
         >
             <div class="flex justify-between relative">
                 <div
@@ -565,7 +851,7 @@ onUnmounted(() => {
                     @click.stop
                     class="flex items-center hover:bg-gray-100 cursor-pointer p-1 mb-2"
                 >
-                    <h1 class="text-2xl font-bold">Project management</h1>
+                    <h1 class="text-2xl font-bold">{{ board.board_name }}</h1>
                     <i
                         class="fa fa-chevron-down ml-2 text-xs"
                         aria-hidden="true"
@@ -578,7 +864,7 @@ onUnmounted(() => {
                         <input
                             class="border-0 text-lg px-0"
                             type="text"
-                            v-model="projectName"
+                            v-model="board.board_name"
                         />
 
                         <textarea
@@ -621,7 +907,13 @@ onUnmounted(() => {
                                         K
                                     </h1>
                                     <h1>on</h1>
-                                    <h1 class="ml-2">Aug 19, 2024</h1>
+                                    <h1 class="ml-2">
+                                        {{
+                                            formatDateForDisplayB(
+                                                board.created_at
+                                            )
+                                        }}
+                                    </h1>
                                 </div>
                             </div>
                         </div>
@@ -1073,7 +1365,7 @@ onUnmounted(() => {
                             </th>
                             <th
                                 v-if="showDueDate || showAll || showTasks"
-                                class="px-6 py-1 flex items-center w-36 justify-center border"
+                                class="px-6 py-1 flex items-center w-40 justify-center border"
                             >
                                 Due date
                             </th>
@@ -1103,7 +1395,7 @@ onUnmounted(() => {
                             </th>
                             <th
                                 v-if="showTimeLine || showAll || showTasks"
-                                class="px-6 py-1 flex items-center justify-center border"
+                                class="px-6 py-1 w-40 flex items-center justify-center border"
                             >
                                 Timeline
                             </th>
@@ -1129,12 +1421,18 @@ onUnmounted(() => {
                                         class="fa fa-times fa-font-extralight text-gray-500 text-2xl p-1 hover:bg-gray-200 cursor-pointer"
                                         aria-hidden="true"
                                     ></i>
-
+                                    {{
+                                        console.log(
+                                            "task name",
+                                            selectedTaskName
+                                        )
+                                    }}
                                     <input
                                         type="text"
-                                        v-model="content"
+                                        v-model="selectedTaskName"
                                         ref="editableInput"
                                         class="border-0 px-0 border-gray-300 text-2xl rounded p-2 w-full"
+                                        @input="updateTaskName"
                                     />
                                 </div>
                                 <div
@@ -1160,11 +1458,14 @@ onUnmounted(() => {
                                 </div>
                                 <div class="px-6 mt-16">
                                     <TextInput
+                                        v-model="updateContent"
                                         class="w-full border-indigo-500 hover:bg-gray-200"
-                                        placeholder="Write an update for all board members to see "
+                                        placeholder="Write an update about task"
+                                        @keyup.enter="postUpdate"
                                     ></TextInput>
                                 </div>
                                 <div
+                                    v-for="update in updates"
                                     class="flex w-full h-full mt-8 text-black overflow-y-auto"
                                 >
                                     <div class="w-full px-6 overflow-y-auto">
@@ -1176,22 +1477,32 @@ onUnmounted(() => {
                                                     <div
                                                         class="rounded-full group/detail relative"
                                                     >
-                                                        <h1
-                                                            class="py-1 w-fit text-3xl px-3.5 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
-                                                        >
-                                                            K
-                                                        </h1>
+                                                    <template v-if="update.user?.profile_picture_url">
+            <img :src="update.user.profile_picture_url" alt="Profile Picture" class="w-full h-full object-cover rounded-full" />
+        </template>
+        
+        <!-- Display h1 only if there is no profile_picture_url -->
+        <template v-else>
+            <h1 class="py-1 w-fit text-3xl px-3.5 border-2 mr-2 border-white text-white rounded-full bg-blue-300">
+                {{ update.user?.user_name ? update.user.user_name.charAt(0) : "?" }}
+            </h1>
+        </template>
                                                         <div
-                                                            class="w-64 transition-opacity hidden group-hover/detail:flex duration-1000 ease-in-out opacity-0 group-hover/detail:opacity-100 rounded-lg shadow-lg px-0 py-6 pb-0 -top-20 flex-col justify-between left-14 h-44 absolute bg-white"
+                                                            class="w-64 transition-opacity hidden group-hover/detail:flex duration-1000 ease-in-out opacity-0 group-hover/detail:opacity-100 rounded-lg shadow-lg px-0 py-6 pb-0 -top-1 flex-col justify-between left-14 h-44 absolute bg-white"
                                                         >
                                                             <div
                                                                 class="flex px-8"
                                                             >
-                                                                <h1
-                                                                    class="py-3 w-fit text-5xl px-6 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
-                                                                >
-                                                                    K
-                                                                </h1>
+                                                            <template v-if="update.user?.profile_picture_url">
+            <img :src="update.user.profile_picture_url" alt="Profile Picture" class="w-full h-full object-cover rounded-full" />
+        </template>
+        
+        <!-- Display h1 only if there is no profile_picture_url -->
+        <template v-else>
+            <h1 class="py-3 w-fit text-5xl px-6 border-2 mr-2 border-white text-white rounded-full bg-blue-300">
+                {{ update.user?.user_name ? update.user.user_name.charAt(0) : "?" }}
+            </h1>
+        </template>
                                                                 <div>
                                                                     <div
                                                                         class="flex"
@@ -1199,7 +1510,7 @@ onUnmounted(() => {
                                                                         <h1
                                                                             class="font-extralight hover:underline cursor-pointer"
                                                                         >
-                                                                            Kaleab
+                                                                {{ update.user.user_name }}
                                                                         </h1>
                                                                         <span
                                                                             class="w-3 h-3 rounded-full bg-green-400 ml-2"
@@ -1208,7 +1519,7 @@ onUnmounted(() => {
                                                                     <h1
                                                                         class="mt-4 p-1 bg-blue-100 flex items-center justify-center rounded-lg"
                                                                     >
-                                                                        Admin
+                                                                        {{update.user.role}}
                                                                     </h1>
                                                                 </div>
                                                             </div>
@@ -1969,331 +2280,567 @@ onUnmounted(() => {
                                     </div>
                                 </div>
                             </SideDetail>
-                            <tr
-                                class="border w-fit group flex bg-white hover:bg-gray-100"
-                            >
-                                <span
-                                    class="absolute z-10 -left-72 items-center hidden group-hover:block"
-                                >
-                                    <i
-                                        class="fa fa-ellipsis-h text-xl p-2 text-black hover:bg-gray-100 cursor-pointer"
-                                        aria-hidden="true"
-                                    ></i>
-                                </span>
-                                <td
-                                    class="p-4 py-2 w-fit flex items-center justify-center border-l-8 border-l-blue-300 border border-gray-100"
-                                >
-                                    <input
-                                        type="checkbox"
-                                        class="h-4 w-4 text-blue-600"
-                                    />
-                                </td>
-                                <td
-                                    class="px-6 hover:px-2 py-1 group w-56 border flex items-center"
+                            <div v-for="task in filteredTasks" :key="task.id">
+                                <tr
+                                    class="border w-fit group flex bg-white hover:bg-gray-100"
                                 >
                                     <span
-                                        v-if="!subItem"
-                                        @click="subItem = !subItem"
-                                        class="hidden group-hover:block"
+                                        class="absolute z-10 -left-72 items-center hidden group-hover:block"
                                     >
                                         <i
-                                            class="fa fa-chevron-right mr-4 text-xs"
-                                            aria-hidden="true"
+                                            class="fa fa-ellipsis-h text-xl p-2 text-black hover:bg-gray-100 cursor-pointer"
                                         ></i>
                                     </span>
-                                    <span
-                                        v-if="subItem"
-                                        @click="subItem = !subItem"
-                                        class="hidden group-hover:block"
+                                    <td
+                                        class="p-4 py-2 w-fit flex items-center justify-center border-l-8 border-l-blue-300 border border-gray-100"
                                     >
-                                        <i
-                                            class="fa fa-chevron-down mr-4 text-xs"
-                                            aria-hidden="true"
-                                        ></i>
-                                    </span>
-                                    <span
-                                        @click="taskUpdate = !taskUpdate"
-                                        @click.stop
-                                        class="w-full cursor-pointer justify-between h-full flex items-center"
+                                        <input
+                                            type="checkbox"
+                                            class="h-4 w-4 text-blue-600"
+                                        />
+                                    </td>
+                                    <td
+                                        class="px-6 py-1 group w-56 border flex items-center"
                                     >
-                                        Task 1
-                                        <span class="flex items-end">
+                                        <span
+                                            @click="toggleSubItem(task.id)"
+                                            class="hidden group-hover:block"
+                                        >
                                             <i
-                                                class="far fa-comment text-xl text-blue-700"
+                                                :class="{
+                                                    'fa fa-chevron-right mr-4':
+                                                        !task.subItemVisible,
+                                                    'fa fa-chevron-down mr-4':
+                                                        task.subItemVisible,
+                                                }"
+                                                aria-hidden="true"
                                             ></i>
-                                            <span
-                                                class="text-xs text-white px-1 rounded-full bg-blue-700"
-                                                >3</span
-                                            >
                                         </span>
-                                    </span>
-                                </td>
-                                <td
-                                    v-if="showOwner || showAll || showTasks"
-                                    class="px-6 py-1 flex w-24 justify-center border items-center"
-                                >
-                                    <h1
-                                        class="py-1 px-2.5 border-2 border-white text-white rounded-full bg-blue-300"
+
+                                        <span
+                                            @click="
+                                                taskUpdate = !taskUpdate;
+                                                filterTasksById(task.id);
+                                            "
+                                            @click.stop
+                                            class="w-full cursor-pointer justify-between h-full flex items-center"
+                                        >
+                                            {{ task.task_name }}
+                                            <span class="flex items-end">
+                                                <i
+                                                    class="far fa-comment text-xl text-blue-700"
+                                                ></i>
+                                                <span
+                                                    class="text-xs text-white px-1 rounded-full bg-blue-700"
+                                                    >3</span
+                                                >
+                                            </span>
+                                        </span>
+                                    </td>
+                                    <td
+                                        @click.stop
+                                        @click="toggleOwner(task)"
+                                        v-if="showOwner || showAll || showTasks"
+                                        class="px-6 py-1 relative flex w-24 justify-center border items-center"
                                     >
-                                        K
-                                    </h1>
-                                </td>
-                                <td
-                                    v-if="showStatus || showAll || showTasks"
-                                    class="w-36 bg-orange-400 flex justify-center items-center"
-                                >
-                                    <h1 class="px-2 text-white">
-                                        Working on it
-                                    </h1>
-                                </td>
-                                <td
-                                    v-if="showDueDate || showAll || showTasks"
-                                    class="px-2 py-1 w-36 flex items-center justify-start border"
-                                >
-                                    <div>
+                                        <template
+                                            v-if="
+                                                task.assigned_user
+                                                    ?.profile_picture_url
+                                            "
+                                        >
+                                            <img
+                                                :src="
+                                                    task.assigned_user
+                                                        .profile_picture_url
+                                                "
+                                                alt="Profile Picture"
+                                                class="w-full h-full object-cover rounded-full"
+                                            />
+                                        </template>
+
+                                        <!-- Display h1 only if there is no profile_picture_url -->
+                                        <template v-else>
+                                            <h1
+                                                class="py-1 px-2.5 border-2 border-white text-white rounded-full bg-blue-300"
+                                            >
+                                                {{
+                                                    task.assigned_user
+                                                        ?.user_name
+                                                        ? task.assigned_user.user_name.charAt(
+                                                              0
+                                                          )
+                                                        : "?"
+                                                }}
+                                            </h1>
+                                        </template>
+                                        <div
+                                            v-if="task.selectOwner"
+                                            class="absolute justify-center flex flex-col items-start z-20 top-10 overflow-y-auto bg-white shadow-lg rounded-lg w-52 h-fit"
+                                        >
+                                            <div
+                                                v-for="user in filteredTasks"
+                                                :key="task.id"
+                                                class="flex relative items-center cursor-pointer w-44 mb-2 hover:bg-gray-100 px-3 py-2"
+                                            >
+                                                <h1
+                                                    class="py-1 px-2.5 border-2 border-white text-white rounded-full bg-blue-300"
+                                                >
+                                                    {{
+                                                        task.assigned_user
+                                                            ?.user_name
+                                                            ? task.assigned_user.user_name.charAt(
+                                                                  0
+                                                              )
+                                                            : "?"
+                                                    }}
+                                                </h1>
+                                                <h1>
+                                                    {{
+                                                        user.assigned_user
+                                                            .user_name
+                                                    }}
+                                                </h1>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td
+                                        @click.stop
+                                        @click="toggleStatus(task)"
+                                        :class="{
+                                            'bg-gray-400':
+                                                task.status === 'Not Started',
+                                            'bg-orange-400':
+                                                task.status === 'In Progress',
+                                            'bg-green-400':
+                                                task.status === 'Completed',
+                                        }"
+                                        v-if="
+                                            showStatus || showAll || showTasks
+                                        "
+                                        class="w-36 relative flex justify-center items-center"
+                                    >
+                                        <h1 class="px-2 text-white">
+                                            {{ task.status }}
+                                        </h1>
+                                        <div
+                                            v-if="task.selectStatus"
+                                            class="absolute text-white justify-center flex flex-col items-center z-10 top-10 overflow-y-auto bg-white shadow-lg rounded-lg w-52 max-h-40"
+                                        >
+                                            <div
+                                                class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-green-500 bg-green-400 px-3 py-2"
+                                            >
+                                                <h1>Completed</h1>
+                                            </div>
+                                            <div
+                                                class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-orange-500 bg-orange-400 px-3 py-2"
+                                            >
+                                                <h1>In Progress</h1>
+                                            </div>
+                                            <div
+                                                class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-gray-500 bg-gray-400 px-3 py-2"
+                                            >
+                                                <h1>Not Started</h1>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td
+                                        v-if="
+                                            showDueDate || showAll || showTasks
+                                        "
+                                        class="px-2 py-1 w-40 flex items-center justify-start border"
+                                    >
+                                        <div>
+                                            <i
+                                                :class="{
+                                                    'bg-red-500 fa-exclamation py-1 px-2.5':
+                                                        task.status ===
+                                                        'Not Started',
+                                                    'bg-gray-400 fa-spinner p-1':
+                                                        task.status ===
+                                                        'In Progress',
+                                                    'bg-green-400 fa-check p-1':
+                                                        task.status ===
+                                                        'Completed',
+                                                }"
+                                                class="fa mr-4 text-sm rounded-full text-white"
+                                                aria-hidden="true"
+                                            ></i>
+                                            {{
+                                                formatDateForDisplay(
+                                                    task.due_date
+                                                )
+                                            }}
+                                        </div>
+                                    </td>
+                                    <td
+                                        @click="togglePriority(task)"
+                                        @click.stop
+                                        :class="{
+                                            'bg-purple-800':
+                                                task.priority === 'High',
+                                            'bg-blue-700 ':
+                                                task.priority === 'Medium',
+                                            'bg-blue-400 ':
+                                                task.priority === 'Low',
+                                        }"
+                                        v-if="
+                                            showPriority || showAll || showTasks
+                                        "
+                                        class="px-6 py-1 relative border w-28 flex items-center justify-center text-white"
+                                    >
+                                        {{ task.priority }}
+                                        <div
+                                            v-if="task.selectPriority"
+                                            class="absolute pt-10 text-white justify-center flex flex-col items-center z-10 top-10 overflow-y-auto bg-white shadow-lg rounded-lg w-52 max-h-40"
+                                        >
+                                            <div
+                                                class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-gray-900 bg-gray-700 px-3 py-2"
+                                            >
+                                                <h1>Critical</h1>
+                                            </div>
+                                            <div
+                                                class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-purple-900 bg-purple-800 px-3 py-2"
+                                            >
+                                                <h1>High</h1>
+                                            </div>
+                                            <div
+                                                class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-blue-800 bg-blue-700 px-3 py-2"
+                                            >
+                                                <h1>Medium</h1>
+                                            </div>
+                                            <div
+                                                class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-blue-500 bg-blue-400 px-3 py-2"
+                                            >
+                                                <h1>Low</h1>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td
+                                        v-if="showNotes || showAll || showTasks"
+                                        class="px-6 py-1 border w-36"
+                                    >
+                                        {{ task.notes }}
+                                    </td>
+                                    <td
+                                        v-if="
+                                            showBudget || showAll || showTasks
+                                        "
+                                        class="px-6 py-1 border w-24 flex items-center justify-center"
+                                    >
+                                        ${{ task.budget }}
+                                    </td>
+                                    <td
+                                        v-if="showFiles || showAll || showTasks"
+                                        class="px-6 py-1 flex items-center justify-center border w-36"
+                                    >
                                         <i
-                                            class="fa fa-exclamation mr-4 text-sm bg-red-500 py-1 px-2.5 rounded-full text-white"
+                                            class="fa fa-file text-blue-700"
                                             aria-hidden="true"
                                         ></i>
-                                        18 Aug
-                                    </div>
-                                </td>
-                                <td
-                                    v-if="showPriority || showAll || showTasks"
-                                    class="px-6 py-1 border w-28 flex items-center justify-center bg-purple-800 text-white"
-                                >
-                                    High
-                                </td>
-                                <td
-                                    v-if="showNotes || showAll || showTasks"
-                                    class="px-6 py-1 border w-36"
-                                >
-                                    Action items
-                                </td>
-                                <td
-                                    v-if="showBudget || showAll || showTasks"
-                                    class="px-6 py-1 border w-24 flex items-center justify-center"
-                                >
-                                    $100
-                                </td>
-                                <td
-                                    v-if="showFiles || showAll || showTasks"
-                                    class="px-6 py-1 flex items-center justify-center border w-36"
-                                >
-                                    <i
-                                        class="fa fa-file text-blue-700"
-                                        aria-hidden="true"
-                                    ></i>
-                                </td>
-                                <td
-                                    v-if="showTimeLine || showAll || showTasks"
-                                    class="px-2 py-1 flex items-center justify-center border"
-                                >
-                                    <span
-                                        class="inline-block rounded-xl bg-blue-400 px-2 text-white"
+                                    </td>
+                                    <td
+                                        v-if="
+                                            showTimeLine || showAll || showTasks
+                                        "
+                                        class="px-2 py-1 flex items-center justify-center border w-40"
                                     >
-                                        18 - 19 Aug
-                                    </span>
-                                </td>
-                                <td
-                                    v-if="
-                                        showLastUpdate || showAll || showTasks
-                                    "
-                                    class="px-6 py-1 w-44 border flex items-center justify-center"
-                                >
-                                    <span class="text-gray-600"
-                                        >7 minutes ago</span
-                                    >
-                                </td>
-                            </tr>
+                                        <div
+                                            class="relative w-full h-6 rounded-xl overflow-hidden bg-black"
+                                        >
+                                            <!-- Blue Portion -->
+                                            <div
+                                                class="absolute top-0 left-0 h-full bg-blue-400"
+                                                :style="{
+                                                    width: `${elapsedPercentage2(
+                                                        task.created_at,
+                                                        task.due_date
+                                                    )}%`,
+                                                }"
+                                            ></div>
 
-                            <!-- Subitem -->
-                            <tr
-                                v-if="subItem"
-                                class="bg-white border m-4 mb-0 rounded-md flex border-l-8 border-l-blue-300 z-5"
-                            >
-                                <th
-                                    class="pl-4 pr-4 w-fit flex items-center border border-gray-100"
+                                            <!-- Date Overlay -->
+                                            <div
+                                                class="absolute inset-0 flex items-center justify-center text-white font-bold"
+                                            >
+                                                <span>
+                                                    {{
+                                                        formatDateForDisplay(
+                                                            task.created_at
+                                                        )
+                                                    }}
+                                                    -
+                                                    {{
+                                                        formatDateForDisplay(
+                                                            task.due_date
+                                                        )
+                                                    }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    <td
+                                        v-if="
+                                            showLastUpdate ||
+                                            showAll ||
+                                            showTasks
+                                        "
+                                        class="px-6 py-1 w-44 border flex items-center justify-center"
+                                    >
+                                        <span class="text-gray-600"
+                                            >7 minutes ago</span
+                                        >
+                                    </td>
+                                </tr>
+
+                                <!-- Subitem -->
+
+                                <tr
+                                    v-if="task.subItemVisible"
+                                    class="bg-white border m-4 mb-0 rounded-md flex border-l-8 border-l-blue-300 z-5"
                                 >
-                                    <input
-                                        type="checkbox"
-                                        class="h-4 w-4 text-blue-600"
-                                    />
-                                </th>
-                                <th
-                                    class="px-6 py-2 border flex items-center justify-center w-52"
+                                    <th
+                                        colspan="12"
+                                        class="pl-4 pr-4 w-fit flex items-center border border-gray-100"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            class="h-4 w-4 text-blue-600"
+                                        />
+                                    </th>
+                                    <th
+                                        class="px-6 py-2 border flex items-center justify-center w-52"
+                                    >
+                                        Sub task
+                                    </th>
+                                    <th
+                                        v-if="
+                                            showOwnerS ||
+                                            showAll ||
+                                            showSubTasks
+                                        "
+                                        class="px-6 py-1 flex items-center justify-center border"
+                                    >
+                                        Owner
+                                    </th>
+                                    <th
+                                        v-if="
+                                            showStatusS ||
+                                            showAll ||
+                                            showSubTasks
+                                        "
+                                        class="px-6 py-1 w-36 flex items-center justify-center border"
+                                    >
+                                        Status
+                                    </th>
+                                    <th
+                                        v-if="
+                                            showDueDateS ||
+                                            showAll ||
+                                            showSubTasks
+                                        "
+                                        class="px-6 py-1 flex items-center w-40 justify-center border"
+                                    >
+                                        Due date
+                                    </th>
+                                    <th
+                                        v-if="
+                                            showPriorityS ||
+                                            showAll ||
+                                            showSubTasks
+                                        "
+                                        class="px-6 py-1 flex items-center w-28 justify-center border"
+                                    >
+                                        Priority
+                                    </th>
+                                    <th
+                                        v-if="
+                                            showNotesS ||
+                                            showAll ||
+                                            showSubTasks
+                                        "
+                                        class="px-6 py-1 w-36 flex items-center justify-center border"
+                                    >
+                                        Notes
+                                    </th>
+                                    <th
+                                        v-if="
+                                            showBudgetS ||
+                                            showAll ||
+                                            showSubTasks
+                                        "
+                                        class="px-6 py-1 flex items-center justify-center border"
+                                    >
+                                        Budget
+                                    </th>
+                                    <th
+                                        v-if="
+                                            showFilesS ||
+                                            showAll ||
+                                            showSubTasks
+                                        "
+                                        class="px-6 py-1 w-36 flex items-center justify-center border"
+                                    >
+                                        Files
+                                    </th>
+                                    <th
+                                        v-if="
+                                            showTimeLineS ||
+                                            showAll ||
+                                            showSubTasks
+                                        "
+                                        class="px-6 py-1 flex items-center justify-center border"
+                                    >
+                                        Timeline
+                                    </th>
+                                    <th
+                                        v-if="
+                                            showLastUpdateS ||
+                                            showAll ||
+                                            showSubTasks
+                                        "
+                                        class="px-6 py-1 flex items-center justify-center border w-44"
+                                    >
+                                        Last updated
+                                    </th>
+                                    <th
+                                        class="flex items-center justify-center p-3"
+                                    >
+                                        <i
+                                            class="fa fa-plus p-1 hover:bg-gray-100"
+                                        ></i>
+                                    </th>
+                                </tr>
+                                <tr
+                                    v-if="task.subItemVisible"
+                                    class="bg-white border w-fit hover:bg-gray-100 m-4 mt-0 rounded-md flex border-l-8 border-l-blue-300 z-5"
                                 >
-                                    Sub task
-                                </th>
-                                <th
-                                    v-if="showOwnerS || showAll || showSubTasks"
-                                    class="px-6 py-1 flex items-center justify-center border"
-                                >
-                                    Owner
-                                </th>
-                                <th
-                                    v-if="
-                                        showStatusS || showAll || showSubTasks
-                                    "
-                                    class="px-6 py-1 w-36 flex items-center justify-center border"
-                                >
-                                    Status
-                                </th>
-                                <th
-                                    v-if="
-                                        showDueDateS || showAll || showSubTasks
-                                    "
-                                    class="px-6 py-1 flex items-center w-36 justify-center border"
-                                >
-                                    Due date
-                                </th>
-                                <th
-                                    v-if="
-                                        showPriorityS || showAll || showSubTasks
-                                    "
-                                    class="px-6 py-1 flex items-center w-28 justify-center border"
-                                >
-                                    Priority
-                                </th>
-                                <th
-                                    v-if="showNotesS || showAll || showSubTasks"
-                                    class="px-6 py-1 w-36 flex items-center justify-center border"
-                                >
-                                    Notes
-                                </th>
-                                <th
-                                    v-if="
-                                        showBudgetS || showAll || showSubTasks
-                                    "
-                                    class="px-6 py-1 flex items-center justify-center border"
-                                >
-                                    Budget
-                                </th>
-                                <th
-                                    v-if="showFilesS || showAll || showSubTasks"
-                                    class="px-6 py-1 w-36 flex items-center justify-center border"
-                                >
-                                    Files
-                                </th>
-                                <th
-                                    v-if="
-                                        showTimeLineS || showAll || showSubTasks
-                                    "
-                                    class="px-6 py-1 flex items-center justify-center border"
-                                >
-                                    Timeline
-                                </th>
-                                <th
-                                    v-if="
-                                        showLastUpdateS ||
-                                        showAll ||
-                                        showSubTasks
-                                    "
-                                    class="px-6 py-1 flex items-center justify-center border w-44"
-                                >
-                                    Last updated
-                                </th>
-                                <th
-                                    class="flex items-center justify-center p-3"
-                                >
-                                    <i
-                                        class="fa fa-plus p-1 hover:bg-gray-100"
-                                    ></i>
-                                </th>
-                            </tr>
+                                    <td
+                                        class="p-4 py-2 w-fit flex items-center justify-center border border-gray-100"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            class="h-4 w-4 text-blue-600"
+                                        />
+                                    </td>
+                                    <td
+                                        class="group px-6 py-1 w-52 border flex items-center"
+                                    >
+                                        Task 3
+                                    </td>
+                                    <td
+                                        v-if="
+                                            showOwnerS ||
+                                            showAll ||
+                                            showSubTasks
+                                        "
+                                        class="px-6 py-1 flex w-24 justify-center border items-center"
+                                    >
+                                        <h1
+                                            class="py-1 px-2.5 border-2 border-white text-white rounded-full bg-blue-300"
+                                        >
+                                            K
+                                        </h1>
+                                    </td>
+                                    <td
+                                        v-if="
+                                            showStatusS ||
+                                            showAll ||
+                                            showSubTasks
+                                        "
+                                        class="w-36 bg-green-400 flex justify-center items-center"
+                                    >
+                                        <h1 class="px-2 text-white">Done</h1>
+                                    </td>
+                                    <td
+                                        v-if="
+                                            showDueDateS ||
+                                            showAll ||
+                                            showSubTasks
+                                        "
+                                        class="px-2 py-1 w-40 flex items-center justify-start border"
+                                    >
+                                        <div>
+                                            <i
+                                                class="fa fa-check mr-4 text-sm bg-green-500 py-1 px-1 rounded-full text-white"
+                                                aria-hidden="true"
+                                            ></i>
+                                            18 Aug
+                                        </div>
+                                    </td>
+                                    <td
+                                        v-if="
+                                            showPriorityS ||
+                                            showAll ||
+                                            showSubTasks
+                                        "
+                                        class="px-6 py-1 border w-28 flex items-center justify-center bg-purple-800 text-white"
+                                    >
+                                        High
+                                    </td>
+                                    <td
+                                        v-if="
+                                            showNotesS ||
+                                            showAll ||
+                                            showSubTasks
+                                        "
+                                        class="px-6 py-1 border w-36"
+                                    >
+                                        Action items
+                                    </td>
+                                    <td
+                                        v-if="
+                                            showBudgetS ||
+                                            showAll ||
+                                            showSubTasks
+                                        "
+                                        class="px-6 py-1 border w-24 flex items-center justify-center"
+                                    >
+                                        $100
+                                    </td>
+                                    <td
+                                        v-if="
+                                            showFilesS ||
+                                            showAll ||
+                                            showSubTasks
+                                        "
+                                        class="px-6 py-1 flex items-center justify-center border w-36"
+                                    >
+                                        <i
+                                            class="fa fa-file text-blue-700"
+                                            aria-hidden="true"
+                                        ></i>
+                                    </td>
+                                    <td
+                                        v-if="
+                                            showTimeLineS ||
+                                            showAll ||
+                                            showSubTasks
+                                        "
+                                        class="px-2 py-1 flex items-center justify-center border"
+                                    >
+                                        <span
+                                            class="inline-block rounded-xl bg-blue-400 px-2 text-white"
+                                        >
+                                            18 - 19 Aug
+                                        </span>
+                                    </td>
+                                    <td
+                                        v-if="
+                                            showLastUpdateS ||
+                                            showAll ||
+                                            showSubTasks
+                                        "
+                                        class="px-6 py-1 w-44 border flex items-center justify-center"
+                                    >
+                                        <span class="text-gray-600"
+                                            >7 minutes ago</span
+                                        >
+                                    </td>
+                                </tr>
+                            </div>
                         </section>
-
-                        <tr
-                            v-if="subItem"
-                            class="bg-white border w-fit hover:bg-gray-100 m-4 mt-0 rounded-md flex border-l-8 border-l-blue-300 z-5"
-                        >
-                            <td
-                                class="p-4 py-2 w-fit flex items-center justify-center border border-gray-100"
-                            >
-                                <input
-                                    type="checkbox"
-                                    class="h-4 w-4 text-blue-600"
-                                />
-                            </td>
-                            <td
-                                class="group px-6 py-1 w-52 border flex items-center"
-                            >
-                                Task 3
-                            </td>
-                            <td
-                                v-if="showOwnerS || showAll || showSubTasks"
-                                class="px-6 py-1 flex w-24 justify-center border items-center"
-                            >
-                                <h1
-                                    class="py-1 px-2.5 border-2 border-white text-white rounded-full bg-blue-300"
-                                >
-                                    K
-                                </h1>
-                            </td>
-                            <td
-                                v-if="showStatusS || showAll || showSubTasks"
-                                class="w-36 bg-green-400 flex justify-center items-center"
-                            >
-                                <h1 class="px-2 text-white">Done</h1>
-                            </td>
-                            <td
-                                v-if="showDueDateS || showAll || showSubTasks"
-                                class="px-2 py-1 w-36 flex items-center justify-start border"
-                            >
-                                <div>
-                                    <i
-                                        class="fa fa-check mr-4 text-sm bg-green-500 py-1 px-1 rounded-full text-white"
-                                        aria-hidden="true"
-                                    ></i>
-                                    18 Aug
-                                </div>
-                            </td>
-                            <td
-                                v-if="showPriorityS || showAll || showSubTasks"
-                                class="px-6 py-1 border w-28 flex items-center justify-center bg-purple-800 text-white"
-                            >
-                                High
-                            </td>
-                            <td
-                                v-if="showNotesS || showAll || showSubTasks"
-                                class="px-6 py-1 border w-36"
-                            >
-                                Action items
-                            </td>
-                            <td
-                                v-if="showBudgetS || showAll || showSubTasks"
-                                class="px-6 py-1 border w-24 flex items-center justify-center"
-                            >
-                                $100
-                            </td>
-                            <td
-                                v-if="showFilesS || showAll || showSubTasks"
-                                class="px-6 py-1 flex items-center justify-center border w-36"
-                            >
-                                <i
-                                    class="fa fa-file text-blue-700"
-                                    aria-hidden="true"
-                                ></i>
-                            </td>
-                            <td
-                                v-if="showTimeLineS || showAll || showSubTasks"
-                                class="px-2 py-1 flex items-center justify-center border"
-                            >
-                                <span
-                                    class="inline-block rounded-xl bg-blue-400 px-2 text-white"
-                                >
-                                    18 - 19 Aug
-                                </span>
-                            </td>
-                            <td
-                                v-if="
-                                    showLastUpdateS || showAll || showSubTasks
-                                "
-                                class="px-6 py-1 w-44 border flex items-center justify-center"
-                            >
-                                <span class="text-gray-600">7 minutes ago</span>
-                            </td>
-                        </tr>
 
                         <tr
                             v-if="showGroup"
@@ -2321,7 +2868,7 @@ onUnmounted(() => {
                             </td>
                         </tr>
                         <tr
-                            class="border- flex pl-72 bg-white hover:bg-gray-100"
+                            class="border- flex pl-[280px] bg-white hover:bg-gray-100"
                         >
                             <td
                                 v-if="showOwner || showAll || showTasks"
@@ -2329,32 +2876,92 @@ onUnmounted(() => {
                             ></td>
                             <td
                                 v-if="showStatus || showAll || showTasks"
-                                :class="{
-                                    '  ': showOwner === false,
-                                }"
                                 class="w-36 flex justify-center items-center"
                             >
-                                <span class="w-1/3 h-full bg-orange-400"></span>
-                                <span class="w-1/3 h-full bg-red-500"></span>
-                                <span class="w-1/3 h-full bg-green-500"></span>
+                                <div class="flex w-full h-full">
+                                    <span
+                                        v-for="(task, index) in filteredTasks"
+                                        :key="task.id"
+                                        :style="{ width: segmentWidth }"
+                                        :class="{
+                                            'bg-gray-400':
+                                                task.status === 'Not Started',
+                                            'bg-orange-400':
+                                                task.status === 'In Progress',
+                                            'bg-green-400':
+                                                task.status === 'Completed',
+                                        }"
+                                        class="h-full"
+                                    >
+                                    </span>
+                                </div>
                             </td>
+
                             <td
                                 v-if="showDueDate || showAll || showTasks"
-                                class="px-2 py-1 w-36 flex items-center justify-center border"
+                                class="px-1 py-1 flex items-center justify-center border w-40"
                             >
-                                <span
-                                    class="inline-block rounded-xl bg-blue-400 px-2 text-white"
+                                <div
+                                    class="relative w-full h-6 rounded-xl overflow-hidden bg-black"
                                 >
-                                    18 - 19 Aug
-                                </span>
+                                    <div
+                                        class="absolute top-0 left-0 h-full bg-blue-400"
+                                        :style="{
+                                            width: `${elapsedPercentage2(
+                                                getEarliestAndLatestDates(
+                                                    filteredTasks
+                                                ).earliest,
+                                                getEarliestAndLatestDates(
+                                                    filteredTasks
+                                                ).latest
+                                            )}%`,
+                                        }"
+                                    ></div>
+
+                                    <div
+                                        class="absolute inset-0 flex items-center justify-center text-white font-bold"
+                                    >
+                                        <span>
+                                            {{
+                                                formatDateForDisplay(
+                                                    getEarliestAndLatestDates(
+                                                        filteredTasks
+                                                    ).earliest
+                                                )
+                                            }}
+                                            -
+                                            {{
+                                                formatDateForDisplay(
+                                                    getEarliestAndLatestDates(
+                                                        filteredTasks
+                                                    ).latest
+                                                )
+                                            }}
+                                        </span>
+                                    </div>
+                                </div>
                             </td>
                             <td
                                 v-if="showPriority || showAll || showTasks"
                                 class="border w-28 flex items-center justify-start text-white"
                             >
-                                <span class="w-1/3 h-full bg-purple-800"></span>
-                                <span class="w-1/3 h-full bg-blue-700"></span>
-                                <span class="w-1/3 h-full bg-blue-300"></span>
+                                <div class="flex w-full h-full">
+                                    <span
+                                        v-for="(task, index) in filteredTasks"
+                                        :key="task.id"
+                                        :style="{ width: segmentWidth }"
+                                        :class="{
+                                            'bg-purple-800':
+                                                task.priority === 'High',
+                                            'bg-blue-700 ':
+                                                task.priority === 'Medium',
+                                            'bg-blue-400 ':
+                                                task.priority === 'Low',
+                                        }"
+                                        class="h-full"
+                                    >
+                                    </span>
+                                </div>
                             </td>
                             <td
                                 v-if="showNotes || showAll || showTasks"
@@ -2364,24 +2971,63 @@ onUnmounted(() => {
                                 v-if="showBudget || showAll || showTasks"
                                 class="px-6 py-1 border w-24 flex items-center justify-center"
                             >
-                                $300
+                                ${{ totalBudget.toFixed(2) }}
                             </td>
+
                             <td
                                 v-if="showFiles || showAll || showTasks"
                                 class="px-6 py-1 flex items-center justify-center border w-36"
                             >
                                 3 files
                             </td>
+
                             <td
                                 v-if="showTimeLine || showAll || showTasks"
-                                class="px-2 py-1 flex items-center justify-center border"
+                                class="px-2 py-1 flex items-center justify-center border w-40"
                             >
-                                <span
-                                    class="inline-block rounded-xl bg-blue-400 px-2 text-white"
+                                <div
+                                    class="relative w-full h-6 rounded-xl overflow-hidden bg-black"
                                 >
-                                    18 - 19 Aug
-                                </span>
+                                    <!-- Blue Portion -->
+                                    <div
+                                        class="absolute top-0 left-0 h-full bg-blue-400"
+                                        :style="{
+                                            width: `${elapsedPercentage2(
+                                                getEarliestAndLatestDates(
+                                                    filteredTasks
+                                                ).earliest2,
+                                                getEarliestAndLatestDates(
+                                                    filteredTasks
+                                                ).latest
+                                            )}%`,
+                                        }"
+                                    ></div>
+
+                                    <!-- Date Overlay -->
+                                    <div
+                                        class="absolute inset-0 flex items-center justify-center text-white font-bold"
+                                    >
+                                        <span>
+                                            {{
+                                                formatDateForDisplay(
+                                                    getEarliestAndLatestDates(
+                                                        filteredTasks
+                                                    ).earliest2
+                                                )
+                                            }}
+                                            -
+                                            {{
+                                                formatDateForDisplay(
+                                                    getEarliestAndLatestDates(
+                                                        filteredTasks
+                                                    ).latest
+                                                )
+                                            }}
+                                        </span>
+                                    </div>
+                                </div>
                             </td>
+
                             <td
                                 v-if="showLastUpdate || showAll || showTasks"
                                 class="px-6 py-1 w-44 border flex items-center justify-center"
@@ -2393,7 +3039,7 @@ onUnmounted(() => {
             <div v-if="showCard" class="rounded-md">
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-4 p-4">
                     <div
-                        v-for="(task, index) in tasks"
+                        v-for="(task, index) in filteredTasks"
                         :key="index"
                         class="bg-white rounded-lg shadow p-4"
                     >
@@ -2415,7 +3061,7 @@ onUnmounted(() => {
                         </div>
                         <div class="p-4">
                             <h3 class="text-lg font-semibold mb-2">
-                                {{ task.title }}
+                                {{ task.task_name }}
                             </h3>
                             <div class="flex items-center text-gray-600 mb-2">
                                 <i class="fas fa-user mr-2"></i>Owner
@@ -2423,24 +3069,41 @@ onUnmounted(() => {
                             <div class="mb-2 flex items-center justify-between">
                                 <label class="text-gray-600">Status</label>
                                 <div
-                                    class="w-36 bg-green-400 flex justify-center items-center"
+                                    :class="{
+                                        'bg-gray-400':
+                                            task.status === 'Not Started',
+                                        'bg-orange-400':
+                                            task.status === 'In Progress',
+                                        'bg-green-400':
+                                            task.status === 'Completed',
+                                    }"
+                                    class="w-36 flex justify-center items-center"
                                 >
-                                    <h1 class="px-2 text-white">Done</h1>
+                                    <h1 class="px-2 text-white">
+                                        {{ task.status }}
+                                    </h1>
                                 </div>
                             </div>
                             <div class="mb-2 flex items-center justify-between">
                                 <label class="text-gray-600">Priority</label>
                                 <div
-                                    class="w-36 bg-blue-400 flex justify-center items-center"
+                                    :class="{
+                                        'bg-purple-800':
+                                            task.priority === 'High',
+                                        'bg-blue-700 ':
+                                            task.priority === 'Medium',
+                                        'bg-blue-400 ': task.priority === 'Low',
+                                    }"
+                                    class="w-36 flex justify-center items-center"
                                 >
-                                    <h1 class="px-2 text-white">High</h1>
+                                    <h1 class="px-2 text-white">
+                                        {{ task.priority }}
+                                    </h1>
                                 </div>
                             </div>
                             <div class="flex items-center text-gray-600 mt-4">
                                 <i class="fas fa-calendar-alt mr-2"></i>
-                                <span :class="task.dueDateClass">{{
-                                    task.dueDate
-                                }}</span>
+                                {{ formatDateForDisplay(task.due_date) }}
                             </div>
                         </div>
                     </div>

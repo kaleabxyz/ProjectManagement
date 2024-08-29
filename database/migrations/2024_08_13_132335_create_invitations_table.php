@@ -19,7 +19,7 @@ return new class extends Migration
             $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
             $table->bigInteger('team_id')->index()->unsigned();
             $table->foreign('team_id')->references('id')->on('teams')->onDelete('cascade')->onUpdate('cascade');
-            $table->string('role')->nullable();
+            $table->string('status');
             $table->string('email');
             $table->string('token')->unique();
         });

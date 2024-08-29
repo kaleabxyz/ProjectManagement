@@ -1,5 +1,5 @@
 <script setup>
-import { Head, Link } from "@inertiajs/vue3";
+
 import SideDetail from "@/Components/SideDetail.vue";
 import Navbar from "@/Components/Navbar.vue";
 import TextInput from "@/Components/TextInput.vue";
@@ -53,7 +53,7 @@ const showSide = (val) => {
                         <h2 class="font-bold text-lg">Recently visited</h2>
                     </div>
                     <div v-if="showRecentVisited" class="flex flex-wrap">
-                        <a href="project">
+                        <router-link to="/project">
                             <div
                                 class="m-2 border-blue-200 border border-solid rounded-lg p-2 hover:shadow-xl transition-shadow duration-300"
                             >
@@ -114,7 +114,7 @@ const showSide = (val) => {
                                     </h3>
                                 </div>
                             </div>
-                        </a>
+                        </router-link>
                         <div
                             class="m-2 border-blue-200 border border-solid rounded-lg p-2 hover:shadow-xl transition-shadow duration-300"
                         >

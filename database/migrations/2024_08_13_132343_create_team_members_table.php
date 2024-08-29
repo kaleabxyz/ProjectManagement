@@ -14,13 +14,15 @@ return new class extends Migration
         Schema::disableForeignKeyConstraints();
 
         Schema::create('team_members', function (Blueprint $table) {
-        
-            $table->bigInteger('user_id')->primary()->unsigned();
-            $table->foreign('user_id')->references('id')->on('users')->onUpdate('cascade');
-            $table->bigInteger('team_id')->unsigned();
-            $table->foreign('team_id')->references('id')->on('teams')->onUpdate('cascade')->onDelete('cascade');
+            $table->id();
+            $table->bigInteger('member')->unsigned();
+            $table->foreign('member')->references('id')->on('users')->onUpdate('cascade');
+            $table->bigInteger('board')->unsigned();
+            $table->foreign('board')->references('id')->on('boards')->onUpdate('cascade')->onDelete('cascade');
             $table->string('role')->nullable();
-            $table->index(['team_id', 'user_id']);
+            $table->index(['board', 'member']);
+            $table->timestamps();
+
         });
 
         Schema::enableForeignKeyConstraints();

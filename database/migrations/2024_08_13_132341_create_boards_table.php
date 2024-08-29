@@ -15,9 +15,25 @@ return new class extends Migration
 
         Schema::create('boards', function (Blueprint $table) {
             $table->id();
-            $table->bigInteger('project_id')->unsigned();  // Foreign key for projects
-            $table->foreign('project_id')->references('id')->on('projects')->onUpdate('cascade'); 
+            $table->bigInteger('workspace_id')->unsigned();  // Foreign key for projects
+            $table->foreign('workspace_id')->references('id')->on('workspaces')->onUpdate('cascade'); 
+            $table->bigInteger('folder_id')->unsigned()->nullable();  
+            $table->foreign('folder_id')->references('id')->on('folders')->onUpdate('cascade'); 
+            $table->bigInteger('team')->unsigned();  // Foreign key for projects
+            $table->foreign('team')->references('id')->on('teams')->onUpdate('cascade'); 
+            $table->boolean('is_favorite')->default(false);
+            $table->boolean('is_archived')->default(false);
             $table->string('board_name')->index();
+            $table->longText('discription')->nullable();
+            $table->boolean('showOptions')->default(false);
+            $table->bigInteger('owner')->unsigned()->nullable();
+            $table->foreign('owner')->references('id')->on('users')->onUpdate('cascade');
+            $table->boolean('is_trashed')->default(false);
+            $table->timestamp('trashed_at')->nullable();
+            $table->bigInteger('created_by')->unsigned()->nullable();
+            $table->foreign('created_by')->references('id')->on('users')->onUpdate('cascade');
+            $table->bigInteger('trashed_by')->unsigned()->nullable();
+            $table->foreign('trashed_by')->references('id')->on('users')->onUpdate('cascade');
             $table->timestamps();
         });
 

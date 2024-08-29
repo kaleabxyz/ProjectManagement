@@ -1443,12 +1443,12 @@ onUnmounted(() => {
                 </g>
             </svg>
 
-            <a href="/">
+            <router-link to="/">
                 <img
                     class="w-24"
-                    src="images/image-removebg-preview.png"
-                    alt=""
-            /></a>
+                    src="../../../public/images/image-removebg-preview.png"
+                    alt="F" 
+            /></router-link>
             <h1 class="font-sans">work management</h1>
         </div>
         <div class="flex items-center pr-4">
@@ -1486,7 +1486,7 @@ onUnmounted(() => {
                 @click.stop
                 class="bg-custom-gray hover:bg-gray-200 cursor-pointer relative flex items-center rounded-r-full"
             >
-                <img class="ml-2 w-6" src="images/logo-s.png" alt="" />
+                <img class="ml-2 w-6" src="../../../public/images/logo-s.png" alt="" />
                 <span>
                     <i class="fa fa-user-circle ml-4 fa-2x"></i>
                 </span>

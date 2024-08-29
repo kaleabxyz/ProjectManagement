@@ -15,11 +15,18 @@ return new class extends Migration
 
         Schema::create('updates', function (Blueprint $table) {
             $table->id();
-            $table->bigInteger('task_id')->index()->unsigned();
+            $table->bigInteger('task_id')->index()->unsigned()->nullable();
             $table->foreign('task_id')->references('id')->on('tasks')->onUpdate('cascade')->onDelete('cascade');
-            $table->bigInteger('user_id')->unsigned();
+            $table->bigInteger('user_id')->unsigned()->nullable();
             $table->foreign('user_id')->references('id')->on('users')->onUpdate('cascade')->onDelete('cascade');
             $table->longText('content');
+            $table->boolean('reply')->default(false);
+
+            $table->boolean('read')->nullable();
+            $table->bigInteger('board_id')->unsigned();
+            $table->foreign('board_id')->references('id')->on('boards')->onUpdate('cascade')->onDelete('cascade');
+            $table->timestamps();
+
         });
 
         Schema::enableForeignKeyConstraints();

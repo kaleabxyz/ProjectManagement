@@ -18,10 +18,10 @@ return new class extends Migration
             $table->bigInteger('user_id')->unsigned();
             $table->foreign('user_id')->references('id')->on('users')->onUpdate('cascade')->onDelete('cascade');
             $table->bigInteger('icon');
-            $table->bigInteger('body');
+            $table->text('body');
             $table->bigInteger('action_url');
             $table->dateTime('created_at');
-            $table->tinyInteger('read');
+            $table->boolean('read')->default(false);
             $table->index(['user_id', 'created_at']);
         });
 
