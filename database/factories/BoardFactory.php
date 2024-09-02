@@ -23,12 +23,13 @@ class BoardFactory extends Factory
             'team' => Team::factory(), // Creates a new team
             'is_favorite' => $this->faker->boolean(),
             'discription' => $this->faker->paragraphs(5, true),
-            'owner' => $userId,
+            
             'is_archived' => $this->faker->boolean(),
             'board_name' => $this->faker->word(),
             'is_trashed' => $this->faker->boolean(),
             'trashed_at' => $this->faker->boolean() ? $this->faker->dateTimeThisYear() : null,
-            'trashed_by' => $this->faker->boolean() ? User::factory() : null, // User who trashed the board
+            'trashed_by' => $this->faker->boolean() ? $userId : null, // User who trashed the board
+            'owner' => $userId,
         ];
     }
 }

@@ -13,6 +13,8 @@ class Update extends Model
         'task_id',
         'user_id',
         'content',
+        'reply',
+        'parent_id',
         'read',
         'board_id',
     ];
@@ -39,5 +41,21 @@ class Update extends Model
     public function board()
     {
         return $this->belongsTo(Board::class);
+    }
+
+    /**
+     * Get the replies for this update.
+     */
+    public function replies()
+    {
+        return $this->hasMany(Update::class, 'parent_id');
+    }
+
+    /**
+     * Get the parent update if this is a reply.
+     */
+    public function parent()
+    {
+        return $this->belongsTo(Update::class, 'parent_id');
     }
 }

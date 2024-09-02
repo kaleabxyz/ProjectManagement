@@ -13,7 +13,13 @@ class UpdateController extends Controller
      */
     public function index()
     {
-        $updates = Update::with('user', 'task', 'board')->get();
+        $updates = Update::with(['user', 'task', 'user.teamMembers','replies'])->get()
+        ->map(function ($update) {
+            // Fetch the role of the user from team_members table
+            $teamMember = $update->user->teamMembers->where('board', $update->board_id)->first();
+            $update->user_role = $teamMember ? $teamMember->role : 'Not Assigned';
+            return $update;
+        });
         return response()->json($updates);
     }
 
@@ -27,17 +33,19 @@ class UpdateController extends Controller
                 'task_id' => 'nullable|exists:tasks,id',
                 'user_id' => 'nullable|exists:users,id',
                 'content' => 'required|string',
+                'reply' => 'nullable|boolean',
+                'parent_id' => 'nullable|exists:updates,id',
                 'read' => 'nullable|boolean',
                 'board_id' => 'required|exists:boards,id',
             ]);
-    
+
             $update = Update::create($validatedData);
-    
+
             return response()->json($update, 201);
         } catch (\Illuminate\Validation\ValidationException $e) {
             // Log validation errors to the Laravel log
             Log::error('Validation Error:', $e->errors());
-    
+
             // Return validation errors to the client
             return response()->json(['errors' => $e->errors()], 422);
         }
@@ -60,6 +68,8 @@ class UpdateController extends Controller
             'task_id' => 'nullable|exists:tasks,id',
             'user_id' => 'nullable|exists:users,id',
             'content' => 'required|string',
+            'reply' => 'nullable|boolean',
+            'parent_id' => 'nullable|exists:updates,id',
             'read' => 'nullable|boolean',
             'board_id' => 'required|exists:boards,id',
         ]);

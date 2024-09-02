@@ -14,8 +14,18 @@ const route = useRoute();
 
 const updates = ref([]);
 const tasks = ref([]);
+const team = ref([]);
+const selectedTaskId = ref(null);
+
 const filteredTasks = ref([]);
+const filteredTeam = ref([]);
+const filteredUpdates = ref([]);
+const replyContent = ref("");
+
+const showReplyInput = ref(filteredUpdates.value.map(() => false));
+
 const filteredTasksId = ref([]);
+
 
 const board = ref([]);
 const workspaces = ref([]);
@@ -87,7 +97,7 @@ const fetchUpdates = async () => {
         const response = await axios.get("/api/updates");
 
         updates.value = response.data;
-
+        filterUpdatesByBoard();
         console.log("Fetched Updates:", updates.value);
     } catch (error) {
         console.error("There was an error fetching updates!", error);
@@ -99,11 +109,24 @@ const fetchBoard = async (boardId) => {
         board.value = response.data;
         console.log("Fetched Board:", board.value);
         filterTasksByBoard();
+        filterTeamByBoard();
+        filterUpdatesByBoard();
     } catch (error) {
         console.error(
             `There was an error fetching board with ID ${boardId}!`,
             error
         );
+    }
+};
+const fetchTeam = async () => {
+    try {
+        const response = await axios.get("/api/team-members");
+
+        teams.value = response.data;
+
+        filterTeamByBoard();
+    } catch (error) {
+        console.error("There was an error fetching tasks!", error);
     }
 };
 
@@ -125,10 +148,36 @@ const filterTasksByBoard = () => {
         filteredTasks.value = tasks.value; // Show all tasks if no board is fetched
     }
 };
+const filterUpdatesByBoard = () => {
+    if (board.value) {
+        // Filter updates by board_id and exclude those with null task_id values
+        filteredUpdates.value = updates.value.filter(
+            (update) =>
+                update.board_id === board.value.id && update.task_id !== null
+        );
+        console.log("Filtered updates", filteredUpdates.value);
+    } else {
+        // If no board is selected, show all updates (including those with null task_id values)
+        filteredUpdates.value = updates.value.filter(
+            (update) => update.task_id === null
+        );
+    }
+};
+const filterTeamByBoard = () => {
+    if (board.value) {
+        filteredTeam.value = teams.value.filter(
+            (member) => member.board.id === board.value.id
+        );
+    } else {
+        filteredTeam.value = teams.value; // Show all team members if no board is fetched
+    }
+};
 
 const filterTasksById = (task_id) => {
     filteredTasksId.value = tasks.value.filter((task) => task.id === task_id);
     console.log("Selected task id", task_id);
+
+    console.log("task id and selected task", selectedTaskId.value);
     console.log("Filtered task", filteredTasksId.value);
 
     // Set the selected task name if a task is found
@@ -185,6 +234,40 @@ const postUpdate = async () => {
         // Handle error (e.g., show an error message)
         console.error("Failed to post update:", error);
     }
+};
+const toggleReplyInput = (index) => {
+    showReplyInput.value[index] = !showReplyInput.value[index];
+};
+
+// Function to handle reply submission
+const submitReply = (update, index) => {
+    if (replyContent.value.trim() === "") return; // Do not post if the input is empty
+
+    // Prepare the data for the reply
+    const replyData = {
+        content: replyContent.value,
+        user_id: 1,
+        board_id: board.value.id,
+        task_id: selectedTaskId.value,
+        parent_id: update, // Set the parent ID of the update where the reply button was clicked
+        reply: 1, // Mark as reply
+    };
+    console.log("Reply to be posted:", replyData);
+
+    // Make an API call to create the reply
+    axios
+        .post("/api/updates", replyData)
+        .then((response) => {
+            // Handle successful reply submission
+            console.log("Reply posted:", response.data);
+            filteredUpdates.push(response.data);
+            replyContent.value = ""; // Clear the input after posting
+            showReplyInput.value = false; // Hide the input after posting
+        })
+        .catch((error) => {
+            // Handle errors
+            console.error("Error posting reply:", error);
+        });
 };
 
 const toggleOwner = (task) => {
@@ -272,6 +355,7 @@ onMounted(() => {
 
     fetchTasks();
     fetchWorkspaces();
+    fetchTeam();
     fetchUpdates();
 });
 
@@ -364,6 +448,13 @@ const toggleSubItem = (taskId) => {
         task.subItemVisible = !task.subItemVisible;
     }
 };
+const toggleTaskUpdate = (taskId) => {
+    taskUpdate.value = !taskUpdate.value; // Toggle task updates
+    console.log("🚀 ~ toggleTaskUpdate ~ taskId:", taskId);
+
+    selectedTaskId.value = taskId; // Set the selected task ID
+    filterTasksById(taskId); // Call to filter tasks by the selected ID
+};
 const segmentWidth = computed(() => {
     const numTasks = filteredTasks.value.length;
     return numTasks > 0 ? `${(100 / numTasks).toFixed(2)}%` : "0%";
@@ -400,24 +491,29 @@ watch(isEditing, (newValue) => {
     }
 });
 
-const showFullDescription = ref(false);
+const showFullDescription = ref(filteredUpdates.value.map(() => false));
 
-const toggleFullDescription = () => {
-    showFullDescription.value = !showFullDescription.value;
-};
 
-const truncatedDescription = computed(() => {
-    if (showFullDescription.value || updateContent.value.length <= 190) {
-        return updateContent.value;
-    } else {
-        return updateContent.value.substring(0, 190) + "...";
-    }
-});
+const truncatedDescription = (update) => {
+            const content = update.content; // Accessing content from the update
+            const index = filteredUpdates.value.indexOf(update); // Find the index of the update
+            if (showFullDescription.value[index] || content.length <= 100) {
+                return content;
+            } else {
+                return content.substring(0, 100) + "...";
+            }
+        };
+
+        // Function to toggle the description between truncated and full for each update
+        const toggleFullDescription = (index) => {
+            showFullDescription.value[index] = !showFullDescription.value[index];
+        };
 const hidesideDetail = () => {
     discussionActive.value = false;
     ProjectDetail.value = false;
     taskUpdate.value = false;
     showHide.value = false;
+    showReplyInput.value = false;
 };
 const handleClickOutside = (event) => {
     if (
@@ -425,7 +521,7 @@ const handleClickOutside = (event) => {
         (discussionActive.value ||
             ProjectDetail.value ||
             taskUpdate.value ||
-            showHide.value)
+            showHide.value || showReplyInput.value)
     ) {
         hidesideDetail();
     }
@@ -1421,12 +1517,7 @@ onUnmounted(() => {
                                         class="fa fa-times fa-font-extralight text-gray-500 text-2xl p-1 hover:bg-gray-200 cursor-pointer"
                                         aria-hidden="true"
                                     ></i>
-                                    {{
-                                        console.log(
-                                            "task name",
-                                            selectedTaskName
-                                        )
-                                    }}
+
                                     <input
                                         type="text"
                                         v-model="selectedTaskName"
@@ -1464,818 +1555,571 @@ onUnmounted(() => {
                                         @keyup.enter="postUpdate"
                                     ></TextInput>
                                 </div>
-                                <div
-                                    v-for="update in updates"
-                                    class="flex w-full h-full mt-8 text-black overflow-y-auto"
-                                >
-                                    <div class="w-full px-6 overflow-y-auto">
+                                <div v-for="(update, index) in filteredUpdates">
+                                    <div
+                                        v-if="update.task_id === selectedTaskId && update.reply === 0"
+                                        class="flex w-full h-full mt-8 text-black overflow-y-auto"
+                                    >
+                                        {{
+                                            console.log(
+                                                "task id and selected task",
+                                                update.task_id
+                                            )
+                                        }}
                                         <div
-                                            class="w-full flex flex-col relative justify-between bg-white border rounded-lg p-0"
+                                            class="w-full px-6 overflow-y-auto"
                                         >
-                                            <div>
-                                                <div class="flex p-4">
-                                                    <div
-                                                        class="rounded-full group/detail relative"
-                                                    >
-                                                    <template v-if="update.user?.profile_picture_url">
-            <img :src="update.user.profile_picture_url" alt="Profile Picture" class="w-full h-full object-cover rounded-full" />
-        </template>
-        
-        <!-- Display h1 only if there is no profile_picture_url -->
-        <template v-else>
-            <h1 class="py-1 w-fit text-3xl px-3.5 border-2 mr-2 border-white text-white rounded-full bg-blue-300">
-                {{ update.user?.user_name ? update.user.user_name.charAt(0) : "?" }}
-            </h1>
-        </template>
+                                            <div
+                                                class="w-full flex flex-col relative justify-between bg-white border rounded-lg p-0"
+                                            >
+                                                <div>
+                                                    <div class="flex p-4">
                                                         <div
-                                                            class="w-64 transition-opacity hidden group-hover/detail:flex duration-1000 ease-in-out opacity-0 group-hover/detail:opacity-100 rounded-lg shadow-lg px-0 py-6 pb-0 -top-1 flex-col justify-between left-14 h-44 absolute bg-white"
+                                                            class="rounded-full group/detail relative"
                                                         >
-                                                            <div
-                                                                class="flex px-8"
+                                                            <template
+                                                                v-if="
+                                                                    update.user
+                                                                        ?.profile_picture_url
+                                                                "
                                                             >
-                                                            <template v-if="update.user?.profile_picture_url">
-            <img :src="update.user.profile_picture_url" alt="Profile Picture" class="w-full h-full object-cover rounded-full" />
-        </template>
-        
-        <!-- Display h1 only if there is no profile_picture_url -->
-        <template v-else>
-            <h1 class="py-3 w-fit text-5xl px-6 border-2 mr-2 border-white text-white rounded-full bg-blue-300">
-                {{ update.user?.user_name ? update.user.user_name.charAt(0) : "?" }}
-            </h1>
-        </template>
-                                                                <div>
-                                                                    <div
-                                                                        class="flex"
+                                                                <img
+                                                                    :src="
+                                                                        update
+                                                                            .user
+                                                                            .profile_picture_url
+                                                                    "
+                                                                    alt="Profile Picture"
+                                                                    class="w-full h-full object-cover rounded-full"
+                                                                />
+                                                            </template>
+
+                                                            <!-- Display h1 only if there is no profile_picture_url -->
+                                                            <template v-else>
+                                                                <h1
+                                                                    class="py-1 w-fit text-3xl px-3.5 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
+                                                                >
+                                                                    {{
+                                                                        update
+                                                                            .user
+                                                                            ?.user_name
+                                                                            ? update.user.user_name.charAt(
+                                                                                  0
+                                                                              )
+                                                                            : "?"
+                                                                    }}
+                                                                </h1>
+                                                            </template>
+                                                            <div
+                                                                class="w-64 transition-opacity hidden group-hover/detail:flex duration-1000 ease-in-out opacity-0 group-hover/detail:opacity-100 rounded-lg shadow-lg px-0 py-6 pb-0 -top-1 flex-col justify-between left-14 h-44 absolute bg-white"
+                                                            >
+                                                                <div
+                                                                    class="flex px-8"
+                                                                >
+                                                                    <template
+                                                                        v-if="
+                                                                            update
+                                                                                .user
+                                                                                ?.profile_picture_url
+                                                                        "
+                                                                    >
+                                                                        <img
+                                                                            :src="
+                                                                                update
+                                                                                    .user
+                                                                                    .profile_picture_url
+                                                                            "
+                                                                            alt="Profile Picture"
+                                                                            class="w-full h-full object-cover rounded-full"
+                                                                        />
+                                                                    </template>
+
+                                                                    <!-- Display h1 only if there is no profile_picture_url -->
+                                                                    <template
+                                                                        v-else
                                                                     >
                                                                         <h1
-                                                                            class="font-extralight hover:underline cursor-pointer"
+                                                                            class="py-3 w-fit text-5xl px-6 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
                                                                         >
-                                                                {{ update.user.user_name }}
+                                                                            {{
+                                                                                update
+                                                                                    .user
+                                                                                    ?.user_name
+                                                                                    ? update.user.user_name.charAt(
+                                                                                          0
+                                                                                      )
+                                                                                    : "?"
+                                                                            }}
                                                                         </h1>
-                                                                        <span
-                                                                            class="w-3 h-3 rounded-full bg-green-400 ml-2"
-                                                                        ></span>
+                                                                    </template>
+                                                                    <div>
+                                                                        <div
+                                                                            class="flex"
+                                                                        >
+                                                                            <h1
+                                                                                class="font-extralight hover:underline cursor-pointer"
+                                                                            >
+                                                                                {{
+                                                                                    update
+                                                                                        .user
+                                                                                        .user_name
+                                                                                }}
+                                                                            </h1>
+                                                                            <span
+                                                                                class="w-3 h-3 rounded-full bg-green-400 ml-2"
+                                                                            ></span>
+                                                                        </div>
+                                                                        <h1
+                                                                            class="mt-4 p-1 bg-blue-100 flex items-center justify-center rounded-lg"
+                                                                        >
+                                                                            {{
+                                                                                update.user_role
+                                                                            }}
+                                                                        </h1>
                                                                     </div>
-                                                                    <h1
-                                                                        class="mt-4 p-1 bg-blue-100 flex items-center justify-center rounded-lg"
-                                                                    >
-                                                                        {{update.user.role}}
-                                                                    </h1>
                                                                 </div>
-                                                            </div>
-                                                            <div
-                                                                class="border-t group/contact w-full relative border-gray-500 hover:bg-gray-100 cursor-pointer flex items-center justify-center border-b-0 py-4"
-                                                            >
-                                                                <h1>
-                                                                    Contact
-                                                                    Details
-                                                                </h1>
-                                                                <i
-                                                                    class="fa fa-chevron-down ml-2 text-xs"
-                                                                    aria-hidden="true"
-                                                                ></i>
                                                                 <div
-                                                                    class="w-64 gr transition-opacity duration-1000 ease-in-out opacity-0 group-hover/contact:opacity-100 rounded-lg px-4 shadow-lg py-2 top-12 flex items-center left-0 h-16 absolute bg-white"
+                                                                    class="border-t group/contact w-full relative border-gray-500 hover:bg-gray-100 cursor-pointer flex items-center justify-center border-b-0 py-4"
                                                                 >
-                                                                    <i
-                                                                        class="far fa-envelope mr-2 font-extralight text-gray-500"
-                                                                    ></i>
-                                                                    <h1
-                                                                        class="text-gray-500"
-                                                                    >
-                                                                        kaleab@email.com
+                                                                    <h1>
+                                                                        Contact
+                                                                        Details
                                                                     </h1>
-                                                                    <h1
-                                                                        class="bg-blue-400 text-sm ml-4 rounded-md hover:bg-blue-500 p-1"
-                                                                    >
-                                                                        Copy
-                                                                    </h1>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    <div class="w-full">
-                                                        <div
-                                                            class="flex items-center justify-between"
-                                                        >
-                                                            <div
-                                                                class="flex items-center"
-                                                            >
-                                                                <h1
-                                                                    class="font-extralight hover:underline cursor-pointer"
-                                                                >
-                                                                    Kaleab
-                                                                </h1>
-                                                                <span
-                                                                    class="w-3 h-3 rounded-full bg-green-400 ml-2"
-                                                                ></span>
-                                                            </div>
-                                                            <div
-                                                                class="flex items-center text-gray-600"
-                                                            >
-                                                                <i
-                                                                    class="far fa-clock"
-                                                                >
-                                                                </i>
-                                                                <h1
-                                                                    class="ml-1 hover:underline cursor-pointer mr-1"
-                                                                >
-                                                                    3h
-                                                                </h1>
-                                                                <span
-                                                                    @click="
-                                                                        toggleSideDetail
-                                                                    "
-                                                                    @click.stop
-                                                                    class="h-full hover:bg-gray-100"
-                                                                >
                                                                     <i
-                                                                        class="far fa-bell m-1 text-sm"
-                                                                    ></i>
-                                                                </span>
-                                                                <span>
-                                                                    <i
-                                                                        class="fa fa-ellipsis-h text-lg py-1 px-1 hover:bg-gray-100 cursor-pointer"
+                                                                        class="fa fa-chevron-down ml-2 text-xs"
                                                                         aria-hidden="true"
                                                                     ></i>
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                        <div
-                                                            class="flex items-center text-gray-500 text-sm"
-                                                        >
-                                                            <a
-                                                                href="#"
-                                                                class="hover:text-blue-600"
-                                                            >
-                                                                <h1>
-                                                                    Project
-                                                                    management >
-                                                                </h1>
-                                                            </a>
-                                                            <a
-                                                                href="#"
-                                                                class="hover:text-blue-600"
-                                                            >
-                                                                <h1>To do ></h1>
-                                                            </a>
-                                                            <a
-                                                                href="#"
-                                                                class="hover:text-blue-600"
-                                                            >
-                                                                <h1>Task1</h1>
-                                                            </a>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div
-                                                    class="mt-4 p-4 flex items-center flex-col"
-                                                >
-                                                    <p>
-                                                        {{
-                                                            truncatedDescription
-                                                        }}
-                                                    </p>
-                                                    <button
-                                                        @click="
-                                                            toggleFullDescription
-                                                        "
-                                                        class="text-green-500 hover:text-green-600 hover:shadow-lg w-full bg-white"
-                                                    >
-                                                        {{
-                                                            showFullDescription
-                                                                ? "Less"
-                                                                : "More"
-                                                        }}
-                                                    </button>
-                                                </div>
-                                            </div>
-                                            <div
-                                                class="w-full flex mt-8 border-t items-center"
-                                            >
-                                                <div
-                                                    class="w-1/2 flex justify-center items-center p-3 border-r hover:bg-gray-100"
-                                                >
-                                                    <i
-                                                        class="far fa-thumbs-up text-gray-400 mr-2"
-                                                        aria-hidden="true"
-                                                    ></i>
-                                                    Like
-                                                </div>
-                                                <div
-                                                    class="w-1/2 flex justify-center items-center p-3 hover:bg-gray-100"
-                                                >
-                                                    <i
-                                                        class="fa mr-2 text-gray-400 fa-reply"
-                                                        aria-hidden="true"
-                                                    ></i>
-                                                    Reply
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div
-                                            class="w-full flex flex-col justify-between relative bg-white border rounded-lg p-0"
-                                        >
-                                            <div>
-                                                <div class="flex p-4">
-                                                    <div
-                                                        class="rounded-full group/detail relative"
-                                                    >
-                                                        <h1
-                                                            class="py-1 w-fit text-3xl px-3.5 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
-                                                        >
-                                                            K
-                                                        </h1>
-                                                        <div
-                                                            class="w-64 transition-opacity hidden group-hover/detail:flex duration-1000 ease-in-out opacity-0 group-hover/detail:opacity-100 rounded-lg shadow-lg px-0 py-6 pb-0 -top-20 flex-col justify-between left-14 h-44 absolute bg-white"
-                                                        >
-                                                            <div
-                                                                class="flex px-8"
-                                                            >
-                                                                <h1
-                                                                    class="py-3 w-fit text-5xl px-6 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
-                                                                >
-                                                                    K
-                                                                </h1>
-                                                                <div>
                                                                     <div
-                                                                        class="flex"
+                                                                        class="w-64 gr transition-opacity duration-1000 ease-in-out opacity-0 group-hover/contact:opacity-100 rounded-lg px-4 shadow-lg py-2 top-12 flex items-center left-0 h-16 absolute bg-white"
                                                                     >
+                                                                        <i
+                                                                            class="far fa-envelope mr-2 font-extralight text-gray-500"
+                                                                        ></i>
                                                                         <h1
-                                                                            class="font-extralight hover:underline cursor-pointer"
+                                                                            class="text-gray-500"
                                                                         >
-                                                                            Kaleab
+                                                                            {{
+                                                                                update
+                                                                                    .user
+                                                                                    .email
+                                                                            }}
                                                                         </h1>
-                                                                        <span
-                                                                            class="w-3 h-3 rounded-full bg-green-400 ml-2"
-                                                                        ></span>
+                                                                        <h1
+                                                                            class="bg-blue-400 text-sm ml-4 rounded-md hover:bg-blue-500 p-1"
+                                                                        >
+                                                                            Copy
+                                                                        </h1>
                                                                     </div>
-                                                                    <h1
-                                                                        class="mt-4 p-1 bg-blue-100 flex items-center justify-center rounded-lg"
-                                                                    >
-                                                                        Admin
-                                                                    </h1>
-                                                                </div>
-                                                            </div>
-                                                            <div
-                                                                class="border-t group/contact w-full relative border-gray-500 hover:bg-gray-100 cursor-pointer flex items-center justify-center border-b-0 py-4"
-                                                            >
-                                                                <h1>
-                                                                    Contact
-                                                                    Details
-                                                                </h1>
-                                                                <i
-                                                                    class="fa fa-chevron-down ml-2 text-xs"
-                                                                    aria-hidden="true"
-                                                                ></i>
-                                                                <div
-                                                                    class="w-64 gr transition-opacity duration-1000 ease-in-out opacity-0 group-hover/contact:opacity-100 rounded-lg px-4 shadow-lg py-2 top-12 flex items-center left-0 h-16 absolute bg-white"
-                                                                >
-                                                                    <i
-                                                                        class="far fa-envelope mr-2 font-extralight text-gray-500"
-                                                                    ></i>
-                                                                    <h1
-                                                                        class="text-gray-500"
-                                                                    >
-                                                                        kaleab@email.com
-                                                                    </h1>
-                                                                    <h1
-                                                                        class="bg-blue-400 text-sm ml-4 rounded-md hover:bg-blue-500 p-1"
-                                                                    >
-                                                                        Copy
-                                                                    </h1>
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
 
-                                                    <div class="w-full">
-                                                        <div class="">
+                                                        <div class="w-full">
                                                             <div
-                                                                class="bg-gray-100 rounded-lg"
+                                                                class="flex items-center justify-between"
                                                             >
-                                                                <h1
-                                                                    class="font-extralight text-blue-500 px-4 py-2 hover:underline cursor-pointer"
-                                                                >
-                                                                    Kaleab
-                                                                </h1>
                                                                 <div
-                                                                    class="mt-1 p-4 flex items-center flex-col"
-                                                                >
-                                                                    <p>
-                                                                        {{
-                                                                            truncatedDescription
-                                                                        }}
-                                                                    </p>
-                                                                    <button
-                                                                        @click="
-                                                                            toggleFullDescription
-                                                                        "
-                                                                        class="text-green-500 hover:text-green-600 hover:shadow-lg w-full bg-white"
-                                                                    >
-                                                                        {{
-                                                                            showFullDescription
-                                                                                ? "Less"
-                                                                                : "More"
-                                                                        }}
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-                                                            <div
-                                                                class="flex items-center text-gray-600"
-                                                            >
-                                                                <i
-                                                                    class="far fa-clock"
-                                                                >
-                                                                </i>
-                                                                <h1
-                                                                    class="ml-1 mt-2 hover:underline cursor-pointer mr-1"
-                                                                >
-                                                                    3h
-                                                                </h1>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div
-                                                class="w-full flex mt-2 px-4 py-2 items-center"
-                                            >
-                                                <div
-                                                    class="rounded-full group/detail relative"
-                                                >
-                                                    <h1
-                                                        class="py-1 w-fit text-3xl px-3.5 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
-                                                    >
-                                                        K
-                                                    </h1>
-                                                    <div
-                                                        class="w-64 transition-opacity hidden group-hover/detail:flex duration-1000 ease-in-out opacity-0 group-hover/detail:opacity-100 rounded-lg shadow-lg px-0 py-6 pb-0 -top-20 flex-col justify-between left-14 h-44 absolute bg-white"
-                                                    >
-                                                        <div class="flex px-8">
-                                                            <h1
-                                                                class="py-3 w-fit text-5xl px-6 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
-                                                            >
-                                                                K
-                                                            </h1>
-                                                            <div>
-                                                                <div
-                                                                    class="flex"
+                                                                    class="flex items-center"
                                                                 >
                                                                     <h1
                                                                         class="font-extralight hover:underline cursor-pointer"
                                                                     >
-                                                                        Kaleab
+                                                                        {{
+                                                                            update
+                                                                                .user
+                                                                                .user_name
+                                                                        }}
                                                                     </h1>
                                                                     <span
                                                                         class="w-3 h-3 rounded-full bg-green-400 ml-2"
                                                                     ></span>
                                                                 </div>
-                                                                <h1
-                                                                    class="mt-4 p-1 bg-blue-100 flex items-center justify-center rounded-lg"
-                                                                >
-                                                                    Admin
-                                                                </h1>
-                                                            </div>
-                                                        </div>
-                                                        <div
-                                                            class="border-t group/contact w-full relative border-gray-500 hover:bg-gray-100 cursor-pointer flex items-center justify-center border-b-0 py-4"
-                                                        >
-                                                            <h1>
-                                                                Contact Details
-                                                            </h1>
-                                                            <i
-                                                                class="fa fa-chevron-down ml-2 text-xs"
-                                                                aria-hidden="true"
-                                                            ></i>
-                                                            <div
-                                                                class="w-64 gr transition-opacity duration-1000 ease-in-out opacity-0 group-hover/contact:opacity-100 rounded-lg px-4 shadow-lg py-2 top-12 flex items-center left-0 h-16 absolute bg-white"
-                                                            >
-                                                                <i
-                                                                    class="far fa-envelope mr-2 font-extralight text-gray-500"
-                                                                ></i>
-                                                                <h1
-                                                                    class="text-gray-500"
-                                                                >
-                                                                    kaleab@email.com
-                                                                </h1>
-                                                                <h1
-                                                                    class="bg-blue-400 text-sm ml-4 rounded-md hover:bg-blue-500 p-1"
-                                                                >
-                                                                    Copy
-                                                                </h1>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <TextInput
-                                                    class="w-full"
-                                                    placeholder="Write a reply..."
-                                                ></TextInput>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div
-                                    class="flex w-full h-full mt-8 text-black overflow-y-auto"
-                                >
-                                    <div class="w-full px-6 overflow-y-auto">
-                                        <div
-                                            class="w-full flex flex-col relative justify-between bg-white border rounded-lg p-0"
-                                        >
-                                            <div>
-                                                <div class="flex p-4">
-                                                    <div
-                                                        class="rounded-full group/detail relative"
-                                                    >
-                                                        <h1
-                                                            class="py-1 w-fit text-3xl px-3.5 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
-                                                        >
-                                                            K
-                                                        </h1>
-                                                        <div
-                                                            class="w-64 transition-opacity hidden group-hover/detail:flex duration-1000 ease-in-out opacity-0 group-hover/detail:opacity-100 rounded-lg shadow-lg px-0 py-6 pb-0 -top-20 flex-col justify-between left-14 h-44 absolute bg-white"
-                                                        >
-                                                            <div
-                                                                class="flex px-8"
-                                                            >
-                                                                <h1
-                                                                    class="py-3 w-fit text-5xl px-6 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
-                                                                >
-                                                                    K
-                                                                </h1>
-                                                                <div>
-                                                                    <div
-                                                                        class="flex"
-                                                                    >
-                                                                        <h1
-                                                                            class="font-extralight hover:underline cursor-pointer"
-                                                                        >
-                                                                            Kaleab
-                                                                        </h1>
-                                                                        <span
-                                                                            class="w-3 h-3 rounded-full bg-green-400 ml-2"
-                                                                        ></span>
-                                                                    </div>
-                                                                    <h1
-                                                                        class="mt-4 p-1 bg-blue-100 flex items-center justify-center rounded-lg"
-                                                                    >
-                                                                        Admin
-                                                                    </h1>
-                                                                </div>
-                                                            </div>
-                                                            <div
-                                                                class="border-t group/contact w-full relative border-gray-500 hover:bg-gray-100 cursor-pointer flex items-center justify-center border-b-0 py-4"
-                                                            >
-                                                                <h1>
-                                                                    Contact
-                                                                    Details
-                                                                </h1>
-                                                                <i
-                                                                    class="fa fa-chevron-down ml-2 text-xs"
-                                                                    aria-hidden="true"
-                                                                ></i>
                                                                 <div
-                                                                    class="w-64 gr transition-opacity duration-1000 ease-in-out opacity-0 group-hover/contact:opacity-100 rounded-lg px-4 shadow-lg py-2 top-12 flex items-center left-0 h-16 absolute bg-white"
+                                                                    class="flex items-center text-gray-600"
                                                                 >
                                                                     <i
-                                                                        class="far fa-envelope mr-2 font-extralight text-gray-500"
-                                                                    ></i>
+                                                                        class="far fa-clock"
+                                                                    >
+                                                                    </i>
                                                                     <h1
-                                                                        class="text-gray-500"
+                                                                        class="ml-1 hover:underline cursor-pointer mr-1"
                                                                     >
-                                                                        kaleab@email.com
-                                                                    </h1>
-                                                                    <h1
-                                                                        class="bg-blue-400 text-sm ml-4 rounded-md hover:bg-blue-500 p-1"
-                                                                    >
-                                                                        Copy
-                                                                    </h1>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    <div class="w-full">
-                                                        <div
-                                                            class="flex items-center justify-between"
-                                                        >
-                                                            <div
-                                                                class="flex items-center"
-                                                            >
-                                                                <h1
-                                                                    class="font-extralight hover:underline cursor-pointer"
-                                                                >
-                                                                    Kaleab
-                                                                </h1>
-                                                                <span
-                                                                    class="w-3 h-3 rounded-full bg-green-400 ml-2"
-                                                                ></span>
-                                                            </div>
-                                                            <div
-                                                                class="flex items-center text-gray-600"
-                                                            >
-                                                                <i
-                                                                    class="far fa-clock"
-                                                                >
-                                                                </i>
-                                                                <h1
-                                                                    class="ml-1 hover:underline cursor-pointer mr-1"
-                                                                >
-                                                                    3h
-                                                                </h1>
-                                                                <span
-                                                                    @click="
-                                                                        toggleSideDetail
-                                                                    "
-                                                                    @click.stop
-                                                                    class="h-full hover:bg-gray-100"
-                                                                >
-                                                                    <i
-                                                                        class="far fa-bell m-1 text-sm"
-                                                                    ></i>
-                                                                </span>
-                                                                <span>
-                                                                    <i
-                                                                        class="fa fa-ellipsis-h text-lg py-1 px-1 hover:bg-gray-100 cursor-pointer"
-                                                                        aria-hidden="true"
-                                                                    ></i>
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                        <div
-                                                            class="flex items-center text-gray-500 text-sm"
-                                                        >
-                                                            <a
-                                                                href="#"
-                                                                class="hover:text-blue-600"
-                                                            >
-                                                                <h1>
-                                                                    Project
-                                                                    management >
-                                                                </h1>
-                                                            </a>
-                                                            <a
-                                                                href="#"
-                                                                class="hover:text-blue-600"
-                                                            >
-                                                                <h1>To do ></h1>
-                                                            </a>
-                                                            <a
-                                                                href="#"
-                                                                class="hover:text-blue-600"
-                                                            >
-                                                                <h1>Task1</h1>
-                                                            </a>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div
-                                                    class="mt-4 p-4 flex items-center flex-col"
-                                                >
-                                                    <p>
-                                                        {{
-                                                            truncatedDescription
-                                                        }}
-                                                    </p>
-                                                    <button
-                                                        @click="
-                                                            toggleFullDescription
-                                                        "
-                                                        class="text-green-500 hover:text-green-600 hover:shadow-lg w-full bg-white"
-                                                    >
-                                                        {{
-                                                            showFullDescription
-                                                                ? "Less"
-                                                                : "More"
-                                                        }}
-                                                    </button>
-                                                </div>
-                                            </div>
-                                            <div
-                                                class="w-full flex mt-8 border-t items-center"
-                                            >
-                                                <div
-                                                    class="w-1/2 flex justify-center items-center p-3 border-r hover:bg-gray-100"
-                                                >
-                                                    <i
-                                                        class="far fa-thumbs-up text-gray-400 mr-2"
-                                                        aria-hidden="true"
-                                                    ></i>
-                                                    Like
-                                                </div>
-                                                <div
-                                                    class="w-1/2 flex justify-center items-center p-3 hover:bg-gray-100"
-                                                >
-                                                    <i
-                                                        class="fa mr-2 text-gray-400 fa-reply"
-                                                        aria-hidden="true"
-                                                    ></i>
-                                                    Reply
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div
-                                            class="w-full flex flex-col justify-between relative bg-white border rounded-lg p-0"
-                                        >
-                                            <div>
-                                                <div class="flex p-4">
-                                                    <div
-                                                        class="rounded-full group/detail relative"
-                                                    >
-                                                        <h1
-                                                            class="py-1 w-fit text-3xl px-3.5 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
-                                                        >
-                                                            K
-                                                        </h1>
-                                                        <div
-                                                            class="w-64 transition-opacity hidden group-hover/detail:flex duration-1000 ease-in-out opacity-0 group-hover/detail:opacity-100 rounded-lg shadow-lg px-0 py-6 pb-0 -top-20 flex-col justify-between left-14 h-44 absolute bg-white"
-                                                        >
-                                                            <div
-                                                                class="flex px-8"
-                                                            >
-                                                                <h1
-                                                                    class="py-3 w-fit text-5xl px-6 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
-                                                                >
-                                                                    K
-                                                                </h1>
-                                                                <div>
-                                                                    <div
-                                                                        class="flex"
-                                                                    >
-                                                                        <h1
-                                                                            class="font-extralight hover:underline cursor-pointer"
-                                                                        >
-                                                                            Kaleab
-                                                                        </h1>
-                                                                        <span
-                                                                            class="w-3 h-3 rounded-full bg-green-400 ml-2"
-                                                                        ></span>
-                                                                    </div>
-                                                                    <h1
-                                                                        class="mt-4 p-1 bg-blue-100 flex items-center justify-center rounded-lg"
-                                                                    >
-                                                                        Admin
-                                                                    </h1>
-                                                                </div>
-                                                            </div>
-                                                            <div
-                                                                class="border-t group/contact w-full relative border-gray-500 hover:bg-gray-100 cursor-pointer flex items-center justify-center border-b-0 py-4"
-                                                            >
-                                                                <h1>
-                                                                    Contact
-                                                                    Details
-                                                                </h1>
-                                                                <i
-                                                                    class="fa fa-chevron-down ml-2 text-xs"
-                                                                    aria-hidden="true"
-                                                                ></i>
-                                                                <div
-                                                                    class="w-64 gr transition-opacity duration-1000 ease-in-out opacity-0 group-hover/contact:opacity-100 rounded-lg px-4 shadow-lg py-2 top-12 flex items-center left-0 h-16 absolute bg-white"
-                                                                >
-                                                                    <i
-                                                                        class="far fa-envelope mr-2 font-extralight text-gray-500"
-                                                                    ></i>
-                                                                    <h1
-                                                                        class="text-gray-500"
-                                                                    >
-                                                                        kaleab@email.com
-                                                                    </h1>
-                                                                    <h1
-                                                                        class="bg-blue-400 text-sm ml-4 rounded-md hover:bg-blue-500 p-1"
-                                                                    >
-                                                                        Copy
-                                                                    </h1>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    <div class="w-full">
-                                                        <div class="">
-                                                            <div
-                                                                class="bg-gray-100 rounded-lg"
-                                                            >
-                                                                <h1
-                                                                    class="font-extralight text-blue-500 px-4 py-2 hover:underline cursor-pointer"
-                                                                >
-                                                                    Kaleab
-                                                                </h1>
-                                                                <div
-                                                                    class="mt-1 p-4 flex items-center flex-col"
-                                                                >
-                                                                    <p>
-                                                                        {{
-                                                                            truncatedDescription
-                                                                        }}
-                                                                    </p>
-                                                                    <button
-                                                                        @click="
-                                                                            toggleFullDescription
-                                                                        "
-                                                                        class="text-green-500 hover:text-green-600 hover:shadow-lg w-full bg-white"
-                                                                    >
-                                                                        {{
-                                                                            showFullDescription
-                                                                                ? "Less"
-                                                                                : "More"
-                                                                        }}
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-                                                            <div
-                                                                class="flex items-center text-gray-600"
-                                                            >
-                                                                <i
-                                                                    class="far fa-clock"
-                                                                >
-                                                                </i>
-                                                                <h1
-                                                                    class="ml-1 mt-2 hover:underline cursor-pointer mr-1"
-                                                                >
-                                                                    3h
-                                                                </h1>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div
-                                                class="w-full flex mt-2 px-4 py-2 items-center"
-                                            >
-                                                <div
-                                                    class="rounded-full group/detail relative"
-                                                >
-                                                    <h1
-                                                        class="py-1 w-fit text-3xl px-3.5 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
-                                                    >
-                                                        K
-                                                    </h1>
-                                                    <div
-                                                        class="w-64 transition-opacity hidden group-hover/detail:flex duration-1000 ease-in-out opacity-0 group-hover/detail:opacity-100 rounded-lg shadow-lg px-0 py-6 pb-0 -top-20 flex-col justify-between left-14 h-44 absolute bg-white"
-                                                    >
-                                                        <div class="flex px-8">
-                                                            <h1
-                                                                class="py-3 w-fit text-5xl px-6 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
-                                                            >
-                                                                K
-                                                            </h1>
-                                                            <div>
-                                                                <div
-                                                                    class="flex"
-                                                                >
-                                                                    <h1
-                                                                        class="font-extralight hover:underline cursor-pointer"
-                                                                    >
-                                                                        Kaleab
+                                                                        3h
                                                                     </h1>
                                                                     <span
-                                                                        class="w-3 h-3 rounded-full bg-green-400 ml-2"
-                                                                    ></span>
+                                                                        @click="
+                                                                            toggleSideDetail
+                                                                        "
+                                                                        @click.stop
+                                                                        class="h-full hover:bg-gray-100"
+                                                                    >
+                                                                        <i
+                                                                            class="far fa-bell m-1 text-sm"
+                                                                        ></i>
+                                                                    </span>
+                                                                    <span>
+                                                                        <i
+                                                                            class="fa fa-ellipsis-h text-lg py-1 px-1 hover:bg-gray-100 cursor-pointer"
+                                                                            aria-hidden="true"
+                                                                        ></i>
+                                                                    </span>
                                                                 </div>
-                                                                <h1
-                                                                    class="mt-4 p-1 bg-blue-100 flex items-center justify-center rounded-lg"
+                                                            </div>
+                                                            <div
+                                                                class="flex items-center text-gray-500 text-sm"
+                                                            >
+                                                                <a
+                                                                    href="#"
+                                                                    class="hover:text-blue-600"
                                                                 >
-                                                                    Admin
-                                                                </h1>
+                                                                    <h1>
+                                                                        {{
+                                                                            board.board_name
+                                                                        }}>
+                                                                    </h1>
+                                                                </a>
+                                                                <a
+                                                                    href="#"
+                                                                    class="hover:text-blue-600"
+                                                                >
+                                                                    <h1>
+                                                                        To do >
+                                                                    </h1>
+                                                                </a>
+                                                                <a
+                                                                    href="#"
+                                                                    class="hover:text-blue-600"
+                                                                >
+                                                                    <h1>
+                                                                        {{
+                                                                            update
+                                                                                .task
+                                                                                .task_name
+                                                                        }}
+                                                                    </h1>
+                                                                </a>
                                                             </div>
                                                         </div>
-                                                        <div
-                                                            class="border-t group/contact w-full relative border-gray-500 hover:bg-gray-100 cursor-pointer flex items-center justify-center border-b-0 py-4"
+                                                    </div>
+                                                    <div
+                                                        class="mt-4 p-4 flex items-center flex-col"
+                                                    >
+                                                        <p>
+                                                            {{  truncatedDescription(update)}}
+                                                        </p>
+                                                        <button
+                                                            @click="
+                                                                toggleFullDescription(index)
+                                                            "
+                                                            class="text-green-500 hover:text-green-600 hover:shadow-lg w-full bg-white"
                                                         >
-                                                            <h1>
-                                                                Contact Details
-                                                            </h1>
-                                                            <i
-                                                                class="fa fa-chevron-down ml-2 text-xs"
-                                                                aria-hidden="true"
-                                                            ></i>
-                                                            <div
-                                                                class="w-64 gr transition-opacity duration-1000 ease-in-out opacity-0 group-hover/contact:opacity-100 rounded-lg px-4 shadow-lg py-2 top-12 flex items-center left-0 h-16 absolute bg-white"
+                                                            {{
+                                                                showFullDescription[index]
+                                                                    ? "Less"
+                                                                    : "More"
+                                                            }}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <div
+                                                    class="w-full flex mt-8 border-t items-center"
+                                                >
+                                                    <div
+                                                        class="w-1/2 flex justify-center items-center p-3 border-r hover:bg-gray-100"
+                                                    >
+                                                        <i
+                                                            class="far fa-thumbs-up text-gray-400 mr-2"
+                                                            aria-hidden="true"
+                                                        ></i>
+                                                        Like
+                                                    </div>
+                                                    <div
+                                                        @click="
+                                                            toggleReplyInput(index)
+                                                        "
+                                                        class="w-1/2 flex justify-center items-center p-3 hover:bg-gray-100"
+                                                    >
+                                                        <i
+                                                            class="fa mr-2 text-gray-400 fa-reply"
+                                                            aria-hidden="true"
+                                                        ></i>
+                                                        Reply
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <!-- Reply Input -->
+                                            <div
+                                                v-if="showReplyInput[index]"
+                                                class="w-full flex flex-col justify-between relative bg-white border rounded-lg p-0"
+                                            >
+                                                <TextInput
+                                                    class="w-full"
+                                                    placeholder="Write a reply..."
+                                                    v-model="replyContent"
+                                                    @keyup.enter="
+                                                        submitReply(update.id, index)
+                                                    "
+                                                ></TextInput>
+                                            </div>
+                                            <div v-for ="reply in filteredUpdates">
+
+                                            
+                                            <div
+                                                v-if="reply.reply && reply.parent_id === update.id "
+                                                class="w-full flex flex-col justify-between relative bg-white border rounded-lg p-0"
+                                            >
+                                                <div>
+                                                    <div class="flex p-4">
+                                                        <div
+                                                            class="rounded-full group/detail relative"
+                                                        >
+                                                            <template
+                                                                v-if="
+                                                                    update.user
+                                                                        ?.profile_picture_url
+                                                                "
                                                             >
-                                                                <i
-                                                                    class="far fa-envelope mr-2 font-extralight text-gray-500"
-                                                                ></i>
+                                                                <img
+                                                                    :src="
+                                                                        update
+                                                                            .user
+                                                                            .profile_picture_url
+                                                                    "
+                                                                    alt="Profile Picture"
+                                                                    class="w-full h-full object-cover rounded-full"
+                                                                />
+                                                            </template>
+
+                                                            <!-- Display h1 only if there is no profile_picture_url -->
+                                                            <template v-else>
                                                                 <h1
-                                                                    class="text-gray-500"
+                                                                    class="py-1 w-fit text-3xl px-3.5 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
                                                                 >
-                                                                    kaleab@email.com
+                                                                    {{
+                                                                        update
+                                                                            .user
+                                                                            ?.user_name
+                                                                            ? update.user.user_name.charAt(
+                                                                                  0
+                                                                              )
+                                                                            : "?"
+                                                                    }}
                                                                 </h1>
+                                                            </template>
+                                                            <div
+                                                                class="w-64 transition-opacity hidden group-hover/detail:flex duration-1000 ease-in-out opacity-0 group-hover/detail:opacity-100 rounded-lg shadow-lg px-0 py-6 pb-0 -top-20 flex-col justify-between left-14 h-44 absolute bg-white"
+                                                            >
+                                                                <div
+                                                                    class="flex px-8"
+                                                                >
                                                                 <h1
-                                                                    class="bg-blue-400 text-sm ml-4 rounded-md hover:bg-blue-500 p-1"
+                                                                            class="py-3 w-fit text-5xl px-6 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
+                                                                        >
+                                                                            {{
+                                                                                update
+                                                                                    .user
+                                                                                    ?.user_name
+                                                                                    ? update.user.user_name.charAt(
+                                                                                          0
+                                                                                      )
+                                                                                    : "?"
+                                                                            }}
+                                                                        </h1>
+                                                                    <div>
+                                                                        <div
+                                                                            class="flex"
+                                                                        >
+                                                                        <h1
+                                                                                class="font-extralight hover:underline cursor-pointer"
+                                                                            >
+                                                                                {{
+                                                                                    update
+                                                                                        .user
+                                                                                        .user_name
+                                                                                }}
+                                                                            </h1>
+                                                                            <span
+                                                                                class="w-3 h-3 rounded-full bg-green-400 ml-2"
+                                                                            ></span>
+                                                                        </div>
+                                                                        <h1
+                                                                            class="mt-4 p-1 bg-blue-100 flex items-center justify-center rounded-lg"
+                                                                        >
+                                                                            {{
+                                                                                update.user_role
+                                                                            }}
+                                                                        </h1>
+                                                                    </div>
+                                                                </div>
+                                                                <div
+                                                                    class="border-t group/contact w-full relative border-gray-500 hover:bg-gray-100 cursor-pointer flex items-center justify-center border-b-0 py-4"
                                                                 >
-                                                                    Copy
-                                                                </h1>
+                                                                    <h1>
+                                                                        Contact
+                                                                        Details
+                                                                    </h1>
+                                                                    <i
+                                                                        class="fa fa-chevron-down ml-2 text-xs"
+                                                                        aria-hidden="true"
+                                                                    ></i>
+                                                                    <div
+                                                                        class="w-64 gr transition-opacity duration-1000 ease-in-out opacity-0 group-hover/contact:opacity-100 rounded-lg px-4 shadow-lg py-2 top-12 flex items-center left-0 h-16 absolute bg-white"
+                                                                    >
+                                                                        <i
+                                                                            class="far fa-envelope mr-2 font-extralight text-gray-500"
+                                                                        ></i>
+                                                                        <h1
+                                                                            class="text-gray-500"
+                                                                        >
+                                                                            {{
+                                                                                update
+                                                                                    .user
+                                                                                    .email
+                                                                            }}
+                                                                        </h1>
+                                                                        <h1
+                                                                            class="bg-blue-400 text-sm ml-4 rounded-md hover:bg-blue-500 p-1"
+                                                                        >
+                                                                            Copy
+                                                                        </h1>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        <div class="w-full">
+                                                            <div class="">
+                                                                <div
+                                                                    class="bg-gray-100 rounded-lg"
+                                                                >
+                                                                    <h1
+                                                                        class="font-extralight text-blue-500 px-4 py-2 hover:underline cursor-pointer"
+                                                                    >
+                                                                    {{
+                                                                                    update
+                                                                                        .user
+                                                                                        .user_name
+                                                                                }}
+                                                                    </h1>
+                                                                    <div
+                                                                        class="mt-1 p-4 flex items-center flex-col"
+                                                                    >
+                                                                        <p>
+                                                                            {{
+                                                                                truncatedDescription(reply) 
+                                                                            }}
+                                                                        </p>
+                                                                        <button
+                                                                            @click="
+                                                                                toggleFullDescription(index)
+                                                                            "
+                                                                            class="text-green-500 hover:text-green-600 hover:shadow-lg w-full bg-white"
+                                                                        >
+                                                                            {{
+                                                                                showFullDescription[index]
+                                                                                    ? "Less"
+                                                                                    : "More"
+                                                                            }}
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                                <div
+                                                                    class="flex items-center text-gray-600"
+                                                                >
+                                                                    <i
+                                                                        class="far fa-clock"
+                                                                    >
+                                                                    </i>
+                                                                    <h1
+                                                                        class="ml-1 mt-2 hover:underline cursor-pointer mr-1"
+                                                                    >
+                                                                        3h
+                                                                    </h1>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </div>
                                                 </div>
-                                                <TextInput
-                                                    class="w-full"
-                                                    placeholder="Write a reply..."
-                                                ></TextInput>
+                                                <div
+                                                    class="w-full flex mt-2 px-4 py-2 items-center"
+                                                >
+                                                    <div
+                                                        class="rounded-full group/detail relative"
+                                                    >
+                                                        <h1
+                                                            class="py-1 w-fit text-3xl px-3.5 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
+                                                        >
+                                                            K
+                                                        </h1>
+                                                        <div
+                                                            class="w-64 transition-opacity hidden group-hover/detail:flex duration-1000 ease-in-out opacity-0 group-hover/detail:opacity-100 rounded-lg shadow-lg px-0 py-6 pb-0 -top-20 flex-col justify-between left-14 h-44 absolute bg-white"
+                                                        >
+                                                            <div
+                                                                class="flex px-8"
+                                                            >
+                                                                <h1
+                                                                    class="py-3 w-fit text-5xl px-6 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
+                                                                >
+                                                                    K
+                                                                </h1>
+                                                                <div>
+                                                                    <div
+                                                                        class="flex"
+                                                                    >
+                                                                        <h1
+                                                                            class="font-extralight hover:underline cursor-pointer"
+                                                                        >
+                                                                            Kaleab
+                                                                        </h1>
+                                                                        <span
+                                                                            class="w-3 h-3 rounded-full bg-green-400 ml-2"
+                                                                        ></span>
+                                                                    </div>
+                                                                    <h1
+                                                                        class="mt-4 p-1 bg-blue-100 flex items-center justify-center rounded-lg"
+                                                                    >
+                                                                        Admin
+                                                                    </h1>
+                                                                </div>
+                                                            </div>
+                                                            <div
+                                                                class="border-t group/contact w-full relative border-gray-500 hover:bg-gray-100 cursor-pointer flex items-center justify-center border-b-0 py-4"
+                                                            >
+                                                                <h1>
+                                                                    Contact
+                                                                    Details
+                                                                </h1>
+                                                                <i
+                                                                    class="fa fa-chevron-down ml-2 text-xs"
+                                                                    aria-hidden="true"
+                                                                ></i>
+                                                                <div
+                                                                    class="w-64 gr transition-opacity duration-1000 ease-in-out opacity-0 group-hover/contact:opacity-100 rounded-lg px-4 shadow-lg py-2 top-12 flex items-center left-0 h-16 absolute bg-white"
+                                                                >
+                                                                    <i
+                                                                        class="far fa-envelope mr-2 font-extralight text-gray-500"
+                                                                    ></i>
+                                                                    <h1
+                                                                        class="text-gray-500"
+                                                                    >
+                                                                        kaleab@email.com
+                                                                    </h1>
+                                                                    <h1
+                                                                        class="bg-blue-400 text-sm ml-4 rounded-md hover:bg-blue-500 p-1"
+                                                                    >
+                                                                        Copy
+                                                                    </h1>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <TextInput
+                                                        class="w-full"
+                                                        placeholder="Write a reply..."
+                                                    ></TextInput>
+                                                </div>
                                             </div>
+                                        </div>
                                         </div>
                                     </div>
                                 </div>
@@ -2318,10 +2162,7 @@ onUnmounted(() => {
                                         </span>
 
                                         <span
-                                            @click="
-                                                taskUpdate = !taskUpdate;
-                                                filterTasksById(task.id);
-                                            "
+                                            @click="toggleTaskUpdate(task.id)"
                                             @click.stop
                                             class="w-full cursor-pointer justify-between h-full flex items-center"
                                         >
@@ -2378,29 +2219,36 @@ onUnmounted(() => {
                                             v-if="task.selectOwner"
                                             class="absolute justify-center flex flex-col items-start z-20 top-10 overflow-y-auto bg-white shadow-lg rounded-lg w-52 h-fit"
                                         >
-                                            <div
-                                                v-for="user in filteredTasks"
-                                                :key="task.id"
-                                                class="flex relative items-center cursor-pointer w-44 mb-2 hover:bg-gray-100 px-3 py-2"
-                                            >
-                                                <h1
-                                                    class="py-1 px-2.5 border-2 border-white text-white rounded-full bg-blue-300"
+                                            <div>
+                                                <div
+                                                    v-for="user in filteredTeam"
+                                                    :key="user.id"
+                                                    class="flex relative items-center cursor-pointer w-44 mb-2 hover:bg-gray-100 px-3 py-2"
                                                 >
-                                                    {{
-                                                        task.assigned_user
-                                                            ?.user_name
-                                                            ? task.assigned_user.user_name.charAt(
-                                                                  0
-                                                              )
-                                                            : "?"
-                                                    }}
-                                                </h1>
-                                                <h1>
-                                                    {{
-                                                        user.assigned_user
-                                                            .user_name
-                                                    }}
-                                                </h1>
+                                                    <!-- Conditional rendering: show initials if no profile picture -->
+                                                    <h1
+                                                        v-if="
+                                                            !user.user
+                                                                ?.profile_picture_url
+                                                        "
+                                                        class="py-1 px-2.5 border-2 border-white text-white rounded-full bg-blue-300"
+                                                    >
+                                                        {{
+                                                            user.member
+                                                                ?.user_name
+                                                                ? user.user.user_name.charAt(
+                                                                      0
+                                                                  )
+                                                                : "?"
+                                                        }}
+                                                    </h1>
+                                                    <!-- Show user name -->
+                                                    <h1 class="ml-2">
+                                                        {{
+                                                            user.user?.user_name
+                                                        }}
+                                                    </h1>
+                                                </div>
                                             </div>
                                         </div>
                                     </td>
@@ -2983,7 +2831,7 @@ onUnmounted(() => {
 
                             <td
                                 v-if="showTimeLine || showAll || showTasks"
-                                class="px-2 py-1 flex items-center justify-center border w-40"
+                                class="px-1 py-1 flex items-center justify-center border w-40"
                             >
                                 <div
                                     class="relative w-full h-6 rounded-xl overflow-hidden bg-black"
