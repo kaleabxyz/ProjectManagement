@@ -19,7 +19,7 @@ return new class extends Migration
             $table->foreign('workspace_id')->references('id')->on('workspaces')->onUpdate('cascade'); 
             $table->bigInteger('folder_id')->unsigned()->nullable();  
             $table->foreign('folder_id')->references('id')->on('folders')->onUpdate('cascade'); 
-            $table->bigInteger('team')->unsigned();  // Foreign key for projects
+            $table->bigInteger('team')->unsigned()->nullable();  // Foreign key for projects
             $table->foreign('team')->references('id')->on('team_members')->onUpdate('cascade'); 
             $table->boolean('is_favorite')->default(false);
             $table->boolean('is_archived')->default(false);

@@ -13,6 +13,7 @@ class Board extends Model
         'folder_id',
         'team',
         'owner',
+        'created_by',
         'is_favorite',
         'is_archived',
         'board_name',

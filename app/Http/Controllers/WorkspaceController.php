@@ -16,6 +16,10 @@ class WorkspaceController extends Controller
         return response()->json($workspaces);
     }
 
+    public function create()
+    {
+        // You may not need this for an API. For web apps, return a view.
+    }
     /**
      * Store a newly created workspace in storage.
      */
@@ -28,6 +32,7 @@ class WorkspaceController extends Controller
             'is_trashed' => 'boolean',
             'trashed_at' => 'nullable|date',
             'trashed_by' => 'nullable|exists:users,id',
+            'created_by' => 'nullable|exists:users,id',
         ]);
 
         $workspace = Workspace::create($request->all());

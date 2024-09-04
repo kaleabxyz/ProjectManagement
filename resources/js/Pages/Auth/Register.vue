@@ -1,4 +1,5 @@
 <script setup>
+import { useRouter } from 'vue-router';
 import GuestLayout from '@/Layouts/GuestLayout.vue';
 import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
@@ -8,8 +9,9 @@ import axios from 'axios'; // Import axios
 import { ref } from 'vue';
 
 // Form data
+const router = useRouter();
 const form = ref({
-    name: '',
+    user_name: '',
     email: '',
     password: '',
     password_confirmation: '',
@@ -27,12 +29,15 @@ const submit = async () => {
     try {
         // Make a POST request to the backend API endpoint
         const response = await axios.post('/api/register', form.value);
-        
+        if (response.status === 201) {
+          // Redirect to /home
+          router.push('/home');
+        }
         // Handle success (e.g., redirect, show message, etc.)
         console.log('User registered successfully:', response.data);
 
         // Optionally, reset the form after successful submission
-        form.value.name = '';
+        form.value.user_name = '';
         form.value.email = '';
         form.value.password = '';
         form.value.password_confirmation = '';
@@ -52,23 +57,23 @@ const submit = async () => {
 
 <template>
     <GuestLayout>
-        <Head title="Register" />
+       
 
         <form @submit.prevent="submit">
             <div>
-                <InputLabel for="name" value="Name" />
+                <InputLabel for="user_name" value="Name" />
 
                 <TextInput
                     id="name"
                     type="text"
                     class="mt-1 block w-full"
-                    v-model="form.name"
+                    v-model="form.user_name"
                     required
                     autofocus
-                    autocomplete="name"
+                    autocomplete="user_name"
                 />
 
-                <InputError class="mt-2" :message="formErrors.name" />
+                <InputError class="mt-2" :message="formErrors.user_name" />
             </div>
 
             <div class="mt-4">
@@ -83,7 +88,8 @@ const submit = async () => {
                     autocomplete="username"
                 />
 
-                <InputError class="mt-2" :message="formErrors.email" />
+                <InputError class="mt-2" :message="formErrors.email ? formErrors.email[0] : ''" />
+
             </div>
 
             <div class="mt-4">
@@ -98,7 +104,7 @@ const submit = async () => {
                     autocomplete="new-password"
                 />
 
-                <InputError class="mt-2" :message="formErrors.password" />
+                <InputError class="mt-2" :message="formErrors.password ? formErrors.password[0] : ''" />
             </div>
 
             <div class="mt-4">

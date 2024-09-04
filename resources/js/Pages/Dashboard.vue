@@ -5,7 +5,7 @@ import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
 </script>
 
 <template>
-    <Head title="Dashboard" />
+    
     <head>
         <link
             href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap"
@@ -21,7 +21,9 @@ import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
                     <h2>.com</h2>
                 </div>
                 <div class="flex items-center">
-                    <h1 class="text-gray-600 mx-2">Login</h1>
+                    <router-link to="/login">
+                    <h1 class="text-gray-600 mx-2 px-2 py-1 cursor-pointer rounded-lg hover:bg-gray-300">Login</h1>
+                </router-link>
                     <router-link to="/register">
                     <div
                         class="group border flex text-white border-blue-300 mx-2 items-center px-4 py-2 rounded-3xl bg-blue-600 hover:bg-blue-700"

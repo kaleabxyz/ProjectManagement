@@ -16,7 +16,10 @@ class BoardController extends Controller
        
         return response()->json($boards);
     }
-
+    public function create()
+    {
+        // You may not need this for an API. For web apps, return a view.
+    }
     /**
      * Store a newly created board in storage.
      */
@@ -28,6 +31,7 @@ class BoardController extends Controller
             'team' => 'required|exists:teams,id',
             'board_name' => 'required|string|max:255',
             'owner' => 'required|integer|exists:users,id',
+            'created_by' => 'nullable|exists:users,id',
         ]);
 
         $board = Board::create($request->all());

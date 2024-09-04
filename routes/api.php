@@ -12,7 +12,7 @@ use App\Http\Controllers\SubTaskController;
 use App\Http\Controllers\WorkspaceController;
 use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\TeamMemberController;
-use App\Http\Controllers\Auth\RegisterController;
+use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 
 
@@ -21,7 +21,7 @@ Route::get('/user', function (Request $request) {
     return $request->user();
 })->middleware('auth:sanctum');
 
-Route::post('/register', [RegisterController::class, 'register']);
+Route::post('/register', [RegisteredUserController::class, 'register']);
 Route::apiResource('tasks', TaskController::class);
 Route::apiResource('boards', BoardController::class);
 Route::apiResource('teams', TeamController::class);

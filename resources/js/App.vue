@@ -20,7 +20,7 @@ const sideDetail = ref(false);
 const route = useRoute();
 const isDashboardRoute = computed(() => {
   const currentPath = route.path;
-  return currentPath === '/dashboard' || currentPath === '/register' || currentPath === '/login';
+  return currentPath === '/' || currentPath === '/register' || currentPath === '/login';
 });
 const showSide = (val) => {
     side.value = val;
