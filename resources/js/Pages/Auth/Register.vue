@@ -27,8 +27,10 @@ const submit = async () => {
     form.value.processing = true; // Show loading state
 
     try {
+        console.log("🚀 ~ submit ~ form:", form)
         // Make a POST request to the backend API endpoint
         const response = await axios.post('/api/register', form.value);
+        
         if (response.status === 201) {
           // Redirect to /home
           router.push('/home');

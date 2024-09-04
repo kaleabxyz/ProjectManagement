@@ -48,35 +48,35 @@ class RegisteredUserController extends Controller
 
         Auth::login($user);
 
-         // Create a new workspace for the user
-         $workspace = Workspace::create([
-            'workspace_name' => 'Main workspace',
-            'created_by' => $user->id,
-        ]);
-
-        // Create a new board for the workspace
-        $board = Board::create([
-            'workspace_id' => $workspace->id,
-            'board_name' => 'First project',
-            'owner' => $user->id,
-            'created_by' => $user->id,
-        ]);
-
-        // Create 4 tasks for the board
-        for ($i = 1; $i <= 4; $i++) {
-            Task::create([
-                'task_name' => 'Task ' . $i,
-                'board_id' => $board->id,
-                'assigned_to' => $user->id,
+        //  Create a new workspace for the user
+             $workspace = Workspace::create([
+                'workspace_name' => 'Main workspace',
+                'created_by' => $user->id,
             ]);
-        }
 
-        // Return a JSON response to handle with Vue
-        return response()->json([
-            'message' => 'User registered successfully',
-            'user' => $user
-        ], 201);
+            // Create a new board for the workspace
+            $board = Board::create([
+                'workspace_id' => $workspace->id,
+                'board_name' => 'First project',
+                'owner' => $user->id,
+                'created_by' => $user->id,
+            ]);
+
+            // Create 4 tasks for the board
+            for ($i = 1; $i <= 4; $i++) {
+                Task::create([
+                    'task_name' => 'Task ' . $i,
+                    'board_id' => $board->id,
+                    'assigned_to' => $user->id,
+                ]);
+            }
+
+            // Return a JSON response to handle with Vue
+            return response()->json([
+                'message' => 'User registered successfully',
+                'user' => $user
+            ], 201);
+            
         
-    
     }
 }

@@ -21,7 +21,7 @@ Route::get('/user', function (Request $request) {
     return $request->user();
 })->middleware('auth:sanctum');
 
-Route::post('/register', [RegisteredUserController::class, 'register']);
+Route::post('/register', [RegisteredUserController::class, 'store']);
 Route::apiResource('tasks', TaskController::class);
 Route::apiResource('boards', BoardController::class);
 Route::apiResource('teams', TeamController::class);

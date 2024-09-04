@@ -16,6 +16,7 @@ class Workspace extends Model
         'is_trashed',
         'trashed_at',
         'trashed_by',
+        'created_by',
     ];
 
     /**
