@@ -20,6 +20,7 @@ return new class extends Migration
             $table->boolean('selectOwner')->default(false);
             $table->boolean('selectPriority')->default(false);
             $table->boolean('showUpdates')->default(false);
+            
 
             $table->string('status');
             $table->string('priority');

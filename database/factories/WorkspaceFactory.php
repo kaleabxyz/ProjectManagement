@@ -18,7 +18,8 @@ class WorkspaceFactory extends Factory
             'is_archived' => $this->faker->boolean(),
             'is_trashed' => $this->faker->boolean(),
             'trashed_at' => $this->faker->boolean() ? $this->faker->dateTimeThisYear() : null,
-            'trashed_by' => $this->faker->boolean() ? User::factory() : null, // User who trashed the workspace
+            'trashed_by' => $this->faker->boolean() ? User::inRandomOrder()->first()->id : null, // Pick a random user for trashed_by
+            'created_by' => User::inRandomOrder()->first()->id,
         ];
     }
 }

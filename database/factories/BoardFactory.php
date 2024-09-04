@@ -30,6 +30,8 @@ class BoardFactory extends Factory
             'trashed_at' => $this->faker->boolean() ? $this->faker->dateTimeThisYear() : null,
             'trashed_by' => $this->faker->boolean() ? $userId : null, // User who trashed the board
             'owner' => $userId,
+            'created_by' => $userId,
+
         ];
     }
 }

@@ -4,19 +4,49 @@ import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import axios from 'axios'; // Import axios
+import { ref } from 'vue';
 
-const form = useForm({
+// Form data
+const form = ref({
     name: '',
     email: '',
     password: '',
     password_confirmation: '',
+    processing: false
 });
 
-const submit = () => {
-    form.post(route('register'), {
-        onFinish: () => form.reset('password', 'password_confirmation'),
-    });
+// Form errors
+const formErrors = ref({});
+
+// Function to handle form submission
+const submit = async () => {
+    formErrors.value = {}; // Clear previous errors
+    form.value.processing = true; // Show loading state
+
+    try {
+        // Make a POST request to the backend API endpoint
+        const response = await axios.post('/api/register', form.value);
+        
+        // Handle success (e.g., redirect, show message, etc.)
+        console.log('User registered successfully:', response.data);
+
+        // Optionally, reset the form after successful submission
+        form.value.name = '';
+        form.value.email = '';
+        form.value.password = '';
+        form.value.password_confirmation = '';
+        
+    } catch (error) {
+        // Handle errors (e.g., display errors in the form)
+        if (error.response && error.response.data.errors) {
+            formErrors.value = error.response.data.errors;
+        } else {
+            console.error('Error during registration:', error);
+        }
+    } finally {
+        form.value.processing = false; // Hide loading state
+    }
 };
 </script>
 
@@ -38,7 +68,7 @@ const submit = () => {
                     autocomplete="name"
                 />
 
-                <InputError class="mt-2" :message="form.errors.name" />
+                <InputError class="mt-2" :message="formErrors.name" />
             </div>
 
             <div class="mt-4">
@@ -53,7 +83,7 @@ const submit = () => {
                     autocomplete="username"
                 />
 
-                <InputError class="mt-2" :message="form.errors.email" />
+                <InputError class="mt-2" :message="formErrors.email" />
             </div>
 
             <div class="mt-4">
@@ -68,7 +98,7 @@ const submit = () => {
                     autocomplete="new-password"
                 />
 
-                <InputError class="mt-2" :message="form.errors.password" />
+                <InputError class="mt-2" :message="formErrors.password" />
             </div>
 
             <div class="mt-4">
@@ -83,16 +113,15 @@ const submit = () => {
                     autocomplete="new-password"
                 />
 
-                <InputError class="mt-2" :message="form.errors.password_confirmation" />
+                <InputError class="mt-2" :message="formErrors.password_confirmation" />
             </div>
 
             <div class="flex items-center justify-end mt-4">
-                <Link
-                    :href="route('login')"
+                <router-link to="/login"
                     class="underline text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800"
                 >
                     Already registered?
-                </Link>
+                </router-link>
 
                 <PrimaryButton class="ms-4" :class="{ 'opacity-25': form.processing }" :disabled="form.processing">
                     Register

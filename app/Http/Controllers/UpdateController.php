@@ -69,6 +69,8 @@ class UpdateController extends Controller
             'user_id' => 'nullable|exists:users,id',
             'content' => 'required|string',
             'reply' => 'nullable|boolean',
+            'has_reply' => 'nullable|boolean',
+
             'parent_id' => 'nullable|exists:updates,id',
             'read' => 'nullable|boolean',
             'board_id' => 'required|exists:boards,id',

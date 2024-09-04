@@ -1,13 +1,15 @@
 <script setup>
+import { ref } from 'vue';
+import axios from 'axios';
 import Checkbox from '@/Components/Checkbox.vue';
 import GuestLayout from '@/Layouts/GuestLayout.vue';
 import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
-import { Head, Link, useForm } from '@inertiajs/vue3';
 
-defineProps({
+// Define props
+const props = defineProps({
     canResetPassword: {
         type: Boolean,
     },
@@ -16,18 +18,35 @@ defineProps({
     },
 });
 
-const form = useForm({
+// Form data
+const form = ref({
     email: '',
     password: '',
     remember: false,
 });
 
+// Form errors
+const formErrors = ref({});
+const processing = ref(false);
+
+// Function to handle form submission
 const submit = () => {
-    form.post(route('login'), {
-        onFinish: () => form.reset('password'),
-    });
+    console.log("🚀 ~ submit ~ form:", form)
+    axios.post('/api/login', form)
+        .then(response => {
+            // Handle successful authentication
+            window.location.href = response.data.redirect;
+        })
+        .catch(error => {
+            // Handle errors, like invalid credentials
+            if (error.response && error.response.data) {
+                form.errors = error.response.data.errors;
+            }
+        });
 };
+    
 </script>
+
 
 <template>
     <GuestLayout>
@@ -51,7 +70,7 @@ const submit = () => {
                     autocomplete="username"
                 />
 
-                <InputError class="mt-2" :message="form.errors.email" />
+                <InputError class="mt-2" :message="formErrors.email" />
             </div>
 
             <div class="mt-4">
@@ -66,7 +85,7 @@ const submit = () => {
                     autocomplete="current-password"
                 />
 
-                <InputError class="mt-2" :message="form.errors.password" />
+                <InputError class="mt-2" :message="formErrors.password" />
             </div>
 
             <div class="block mt-4">
@@ -85,10 +104,11 @@ const submit = () => {
                     Forgot your password?
                 </Link>
 
-                <PrimaryButton class="ms-4" :class="{ 'opacity-25': form.processing }" :disabled="form.processing">
+                <PrimaryButton class="ms-4" :class="{ 'opacity-25': processing.value }" :disabled="processing.value">
                     Log in
                 </PrimaryButton>
             </div>
         </form>
     </GuestLayout>
 </template>
+

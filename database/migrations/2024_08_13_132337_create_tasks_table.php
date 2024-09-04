@@ -21,14 +21,14 @@ return new class extends Migration
             $table->boolean('selectOwner')->default(false);
             $table->boolean('selectPriority')->default(false);
             $table->boolean('showUpdates')->default(false);
-
+            
             $table->string('priority')->default("Medium");
             $table->dateTime('due_date')->nullable();
             $table->bigInteger('board_id')->unsigned();
             $table->foreign('board_id')->references('id')->on('boards')->onUpdate('cascade');
             $table->bigInteger('assigned_to')->nullable()->unsigned();
             $table->foreign('assigned_to')->references('id')->on('users')->onUpdate('cascade');
-            $table->bigInteger('budget')->nullable();
+            $table->bigInteger('budget')->default(0);
             $table->longText('notes')->nullable();
             $table->boolean('is_trashed')->nullable();
             $table->timestamp('trashed_at')->nullable();

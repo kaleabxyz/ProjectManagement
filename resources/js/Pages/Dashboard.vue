@@ -13,7 +13,7 @@ import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
         />
     </head>
     
-        <body>
+        <body class="w-full">
             <div class="nav px-52 py-6 flex justify-between">
                 <div class="flex items-end">
                     <img class="ml-2 w-10" src="images/logo-s.png" alt="" />
@@ -22,6 +22,7 @@ import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
                 </div>
                 <div class="flex items-center">
                     <h1 class="text-gray-600 mx-2">Login</h1>
+                    <router-link to="/register">
                     <div
                         class="group border flex text-white border-blue-300 mx-2 items-center px-4 py-2 rounded-3xl bg-blue-600 hover:bg-blue-700"
                     >
@@ -50,6 +51,7 @@ import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
                             </g>
                         </svg>
                     </div>
+                </router-link>
                 </div>
             </div>
         </body>

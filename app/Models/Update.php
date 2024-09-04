@@ -14,6 +14,7 @@ class Update extends Model
         'user_id',
         'content',
         'reply',
+        'has_reply',
         'parent_id',
         'read',
         'board_id',

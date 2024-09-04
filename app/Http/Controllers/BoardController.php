@@ -13,6 +13,7 @@ class BoardController extends Controller
     public function index()
     {
         $boards = Board::all();
+       
         return response()->json($boards);
     }
 
@@ -38,11 +39,11 @@ class BoardController extends Controller
      * Display the specified board.
      */
     public function show($id)
-    {
-        $board = Board::findOrFail($id);
-        return response()->json($board);
-    }
+{
+    $board = Board::with(['owner', 'createdBy', 'workspace', 'folder', 'team', 'trashedBy'])->findOrFail($id);
 
+    return response($board);
+}
     /**
      * Update the specified board in storage.
      */
@@ -53,6 +54,7 @@ class BoardController extends Controller
             'folder_id' => 'sometimes|exists:folders,id',
             'team' => 'sometimes|exists:teams,id',
             'board_name' => 'sometimes|string|max:255',
+            'description' => 'nullable|string',
         ]);
 
         $board = Board::findOrFail($id);

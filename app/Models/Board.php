@@ -21,12 +21,22 @@ class Board extends Model
         'trashed_by',
     ];
 
+    public function owner()
+    {
+        return $this->belongsTo(User::class, 'owner');
+    }
+
+    // Define the relationship with the 'creator' (User model)
+    public function createdBy()
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
     /**
      * Get the workspace that owns the board.
      */
     public function workspace()
     {
-        return $this->belongsTo(Workspace::class);
+        return $this->belongsTo(Workspace::class, 'workspace_id');
     }
 
     /**
@@ -34,7 +44,7 @@ class Board extends Model
      */
     public function folder()
     {
-        return $this->belongsTo(Folder::class);
+        return $this->belongsTo(Folder::class,'folder_id');
     }
 
     /**

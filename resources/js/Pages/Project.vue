@@ -10,75 +10,66 @@ import { useRoute } from "vue-router";
 
 import { ref, watch, onMounted, computed, onUnmounted } from "vue";
 
-const route = useRoute();
-
-const updates = ref([]);
-const tasks = ref([]);
-const team = ref([]);
-const selectedTaskId = ref(null);
-
+const addTask = ref("+ AddTask");
+const board = ref([]);
+const discussionActive = ref(false);
 const filteredTasks = ref([]);
+const filteredTasksId = ref([]);
 const filteredTeam = ref([]);
 const filteredUpdates = ref([]);
+const isEditing = ref(false);
+const projectName = ref("Project managemnt");
+const ProjectDetail = ref(false);
 const replyContent = ref("");
-
-const showReplyInput = ref(filteredUpdates.value.map(() => false));
-
-const filteredTasksId = ref([]);
-
-
-const board = ref([]);
-const workspaces = ref([]);
-const users = ref([]);
-const teams = ref([]);
-const updateContent = ref("");
-
-const showTable = ref(true);
+const route = useRoute();
+const selectedTaskId = ref(null);
+const selectedTaskName = ref("");
+const showAll = ref(false);
+const showBudget = ref(true);
+const showBudgetS = ref(true);
 const showCard = ref(false);
+const showDueDate = ref(true);
+const showDueDateS = ref(true);
+const showFiles = ref(true);
+const showFilesS = ref(true);
+const showGroup = ref(true);
+const showHide = ref(false);
+const showLastUpdate = ref(false);
+const showLastUpdateS = ref(true);
+const showNotes = ref(true);
+const showNotesS = ref(true);
+const showOwner = ref(true);
+const showOwnerS = ref(true);
+const showPriority = ref(true);
+const showPriorityS = ref(true);
+const showReplyInput = ref(filteredUpdates.value.map(() => false));
 const showSelector = ref(false);
 const showSelectorId = ref(null);
-const showSelectorSId = ref(null);
 const showSelectorPId = ref(null);
-
+const showSelectorSId = ref(null);
+const showStatus = ref(true);
+const showStatusS = ref(true);
+const showSubTasks = ref(false);
+const showTable = ref(true);
+const showTasks = ref(false);
+const showTimeLine = ref(true);
+const showTimeLineS = ref(true);
 const side = ref("active");
 const subItem = ref(false);
-const showGroup = ref(true);
-const addTask = ref("+ AddTask");
-const discussionActive = ref(false);
-const ProjectDetail = ref(false);
 const taskUpdate = ref(false);
-const projectName = ref("Project managemnt");
-// Reactive state
-const isEditing = ref(false);
-const selectedTaskName = ref("");
-const projectDiscription = ref(
-    "Filter by Board Lorem ipsum dolor sit amet, consectetur adipisicing elit. Voluptatum, ratione. Molestias perferendis incidunt quisquam eveniet harum"
-);
+const tasks = ref([]);
+const team = ref([]);
+const teams = ref([]);
+const updateContent = ref("");
+const updates = ref([]);
+const users = ref([]);
+const workspaces = ref([]);
 
-const showHide = ref(false);
 
-const showTasks = ref(false);
-const showAll = ref(false);
-const showOwner = ref(true);
-const showStatus = ref(true);
-const showDueDate = ref(true);
-const showPriority = ref(true);
-const showNotes = ref(true);
-const showBudget = ref(true);
-const showFiles = ref(true);
-const showTimeLine = ref(true);
-const showLastUpdate = ref(false);
+//previous
 
-const showSubTasks = ref(false);
-const showOwnerS = ref(true);
-const showStatusS = ref(true);
-const showDueDateS = ref(true);
-const showPriorityS = ref(true);
-const showNotesS = ref(true);
-const showBudgetS = ref(true);
-const showFilesS = ref(true);
-const showTimeLineS = ref(true);
-const showLastUpdateS = ref(true);
+
+
 
 const fetchTasks = async () => {
     try {
@@ -203,6 +194,26 @@ const updateTaskName = async () => {
         console.error("Error updating task name:", error);
     }
 };
+const updateBoardName = async () => {
+  try {
+    await axios.put(`http://127.0.0.1:8000/api/boards/${board.value.id}`, {
+      board_name: board.value.board_name,
+    });
+  } catch (error) {
+    console.error('Error updating board name:', error);
+  }
+};
+
+// Method to update the board description
+const updateBoardDescription = async () => {
+  try {
+    await axios.put(`http://127.0.0.1:8000/api/boards/${board.value.id}`, {
+      description: board.value.description,
+    });
+  } catch (error) {
+    console.error('Error updating board description:', error);
+  }
+};
 
 const postUpdate = async () => {
     console.log("content update", updateContent.value);
@@ -260,14 +271,36 @@ const submitReply = (update, index) => {
         .then((response) => {
             // Handle successful reply submission
             console.log("Reply posted:", response.data);
-            filteredUpdates.push(response.data);
+            filteredUpdates.value.push(response.data);
             replyContent.value = ""; // Clear the input after posting
             showReplyInput.value = false; // Hide the input after posting
+
+            updateTaskHasReply(update);
         })
         .catch((error) => {
             // Handle errors
             console.error("Error posting reply:", error);
         });
+
+        const updateTaskHasReply = (updateId) => {
+    axios
+        .patch(`/api/updates/${updateId}`,
+            {
+                has_reply: true,
+                
+            }) // Adjust the endpoint and method as needed
+        .then((response) => {
+            console.log("Task updated with has_reply set to true:", response.data);
+            // Find and update the task in filteredTasks
+            const taskIndex = filteredUpdates.value.findIndex(task => task.id === taskId);
+            if (taskIndex !== -1) {
+                filteredUpdates.value[taskIndex] = { ...filteredUpdates.value[taskIndex], has_reply: true };
+            }
+        })
+        .catch((error) => {
+            console.error("Error updating task:", error);
+        });
+};
 };
 
 const toggleOwner = (task) => {
@@ -961,15 +994,15 @@ onUnmounted(() => {
                             class="border-0 text-lg px-0"
                             type="text"
                             v-model="board.board_name"
+                            @input="updateBoardName"
                         />
 
                         <textarea
                             type="text"
                             rows="5"
-                            v-model="projectDiscription"
+                            v-model="board.description"
                             ref="editableInput"
-                            @blur="disableEditing"
-                            @keyup.enter="disableEditing"
+                            @input="updateBoardDiscription"
                             class="border-0 h-fit border-gray-300 text-sm rounded p-2 w-full"
                         />
 
@@ -987,21 +1020,80 @@ onUnmounted(() => {
                                 <div
                                     class="flex items-center px-2 py-1 hover:bg-gray-100"
                                 >
-                                    <h1
-                                        class="w-fit text-xl px-2 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
-                                    >
-                                        K
-                                    </h1>
-                                    <h1 class="mr-8">Kaleab</h1>
+                                <template
+                                                                        v-if="
+                                                                            board
+                                                                                .owner
+                                                                                ?.profile_picture_url
+                                                                        "
+                                                                    >
+                                                                        <img
+                                                                            :src="
+                                                                                board
+                                                                                    .user
+                                                                                    .profile_picture_url
+                                                                            "
+                                                                            alt="Profile Picture"
+                                                                            class="w-full h-full object-cover rounded-full"
+                                                                        />
+                                                                    </template>
+
+                                                                    <!-- Display h1 only if there is no profile_picture_url -->
+                                                                    <template
+                                                                        v-else
+                                                                    >
+                                                                        <h1
+                                                                            class="py-1 w-fit text-lg px-3.5 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
+                                                                        >
+                                                                            {{
+                                                                                board
+                                                                                    .owner
+                                                                                    ?.user_name
+                                                                                    ? board.owner.user_name.charAt(
+                                                                                          0
+                                                                                      )
+                                                                                    : "?"
+                                                                            }}
+                                                                        </h1>
+                                                                    </template>
+                                    <h1 class="mr-8">{{board.owner.user_name}}</h1>
                                 </div>
                                 <div
                                     class="flex items-center px-2 py-1 hover:bg-gray-100"
                                 >
-                                    <h1
-                                        class="w-fit text-xl px-2 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
-                                    >
-                                        K
-                                    </h1>
+                                <template
+                                                                v-if="
+                                                                    board.created_by
+                                                                        ?.profile_picture_url
+                                                                "
+                                                            >
+                                                                <img
+                                                                    :src="
+                                                                        board
+                                                                            .created_by
+                                                                            .profile_picture_url
+                                                                    "
+                                                                    alt="Profile Picture"
+                                                                    class="w-full h-full object-cover rounded-full"
+                                                                />
+                                                            </template>
+
+                                                            <!-- Display h1 only if there is no profile_picture_url -->
+                                                            <template v-else>
+                                                                <h1
+                                                                    class="py-1 w-fit text-md px-3.5 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
+                                                                >
+                                                                    {{
+                                                                        board
+                                                                            .owner
+                                                                            ?.user_name
+                                                                            ? board.created_by.user_name.charAt(
+                                                                                  0
+                                                                              )
+                                                                            : "?"
+                                                                    }}
+                                                                </h1>
+                                                            </template>
                                     <h1>on</h1>
                                     <h1 class="ml-2">
                                         {{
@@ -1821,7 +1913,7 @@ onUnmounted(() => {
                                                         </button>
                                                     </div>
                                                 </div>
-                                                <div
+                                                <div v-if= " update.has_reply == false"
                                                     class="w-full flex mt-8 border-t items-center"
                                                 >
                                                     <div
@@ -1849,7 +1941,7 @@ onUnmounted(() => {
                                             </div>
                                             <!-- Reply Input -->
                                             <div
-                                                v-if="showReplyInput[index]"
+                                                v-if="showReplyInput[index] && update.has_reply == false"
                                                 class="w-full flex flex-col justify-between relative bg-white border rounded-lg p-0"
                                             >
                                                 <TextInput
@@ -2043,7 +2135,7 @@ onUnmounted(() => {
                                                 <div
                                                     class="w-full flex mt-2 px-4 py-2 items-center"
                                                 >
-                                                    <div
+                                                    <!-- <div
                                                         class="rounded-full group/detail relative"
                                                     >
                                                         <h1
@@ -2112,7 +2204,7 @@ onUnmounted(() => {
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
+                                                    </div> -->
                                                     <TextInput
                                                         class="w-full"
                                                         placeholder="Write a reply..."

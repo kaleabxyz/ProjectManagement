@@ -1,8 +1,9 @@
 <template>
-    <body class="bg-custom-blue min-h-screen w-full flex items-center ">
+    <body class="bg-custom-blue min-h-screen w-full   "
+    :class="bodyClass">
 
-        <Navbar/>
-        <Sidebar @nav="showSide" />
+        <Navbar v-if="!isDashboardRoute"/>
+        <Sidebar v-if="!isDashboardRoute" @nav="showSide" />
     <router-view/> <!-- This will render the matched component -->
     </body>
   </template>
@@ -11,15 +12,22 @@
   // You can handle global logic here if needed
   import Navbar from '@/Components/Navbar.vue'
 import Sidebar from '@/Components/Sidebar.vue'
-  import { ref } from "vue";
+  import { ref,computed } from "vue";
+  import { useRoute } from 'vue-router';
 
   const side = ref("active");
 const sideDetail = ref(false);
-
-
+const route = useRoute();
+const isDashboardRoute = computed(() => {
+  const currentPath = route.path;
+  return currentPath === '/dashboard' || currentPath === '/register' || currentPath === '/login';
+});
 const showSide = (val) => {
     side.value = val;
 };
+const bodyClass = computed(() =>
+  isDashboardRoute.value ? 'items-start ' : 'items-center flex'
+);
   </script>
   
   <style>

@@ -48,4 +48,17 @@ class User extends Authenticatable
     {
         return $this->hasMany(TeamMember::class, 'member');
     }
+    public function boardsOwned()
+    {
+        return $this->hasMany(Board::class, 'owner');
+    }
+
+    public function boardsCreated()
+    {
+        return $this->hasMany(Board::class, 'created_by');
+    }
+    public function boardsTrashed()
+    {
+        return $this->hasMany(Board::class, 'trashed_by');
+    }
 }
