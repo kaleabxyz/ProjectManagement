@@ -167,7 +167,16 @@ return response()->json(['error' => 'Invalid Credentials'], 400);
 catch (Exception $e) {
 return response()->json(['error' => 'Could not create token'], 500);
 }
-$user = Auth::user()->load(['boardsCreated','boardsOwned','boardsTrashed']);
+$user = Auth::user()->load([
+    'teams.members',
+    'teams.board',
+    'teams.board.discussions',
+
+    'teams.board.tasks',
+    'teams.board.tasks.updates',    
+    'boardsCreated',
+    'boardsOwned',
+    'boardsTrashed']);
 return response()->json([
 'status' => 'success',
 'user' => $user,

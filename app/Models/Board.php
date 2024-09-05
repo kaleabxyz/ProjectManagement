@@ -59,7 +59,14 @@ public function trashedBy()
     {
         return $this->belongsTo(Team::class);
     }
-
+    public function tasks()
+    {
+        return $this->hasMany(Task::class);
+    }
+    public function discussions()
+    {
+        return $this->hasMany(Update::class);
+    }
     /**
      * Get the user who trashed the board.
      */

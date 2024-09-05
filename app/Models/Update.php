@@ -25,7 +25,7 @@ class Update extends Model
      */
     public function task()
     {
-        return $this->belongsTo(Task::class);
+        return $this->belongsTo(Task::class,'task_id');
     }
 
     /**
@@ -33,15 +33,16 @@ class Update extends Model
      */
     public function user()
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class,'user_id');
     }
+    
 
     /**
      * Get the board associated with the update.
      */
     public function board()
     {
-        return $this->belongsTo(Board::class);
+        return $this->belongsTo(Board::class,'board_id');
     }
 
     /**

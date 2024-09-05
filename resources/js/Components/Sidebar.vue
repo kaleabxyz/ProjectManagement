@@ -22,7 +22,7 @@ const boards = ref([]);
 const filteredFavorites = ref([]);
 const route = useRoute();
 const boardId = ref(route.params.boardId);
-
+const option3 = ref(false);
 const router = useRouter();
 const showNav = ref("active");
 const showTrash = ref(false);
@@ -36,8 +36,11 @@ const workSpaces = ref(false);
 
 
 const user = JSON.parse(localStorage.getItem('user'));
-console.log("🚀 ~ user:", user)
-
+console.log("🚀 ~ user:", user);
+const showBoardOptions = ref(user.teams.map(() => false));
+const toggleBoardOption = (index) => {
+    showBoardOptions.value[index] = !showBoardOptions.value[index];
+};
 
 const toggleOn = () => {
     showNav.value = "active";
@@ -225,17 +228,18 @@ onMounted(fetchBoards);
                         </span>
                     </div>
                 </div>
-                {{ console.log("favorites", filteredFavorites) }}
+                
                 <div
                     v-if="showFavorites"
-                    v-for="board in filteredFavorites"
-                    :key="board.id"
+                    v-for="boards in user.teams"
+                    :key="boards.id"
                     class="group/project relative"
                 >
-                    <router-link
+                
+                    <router-link v-if="boards.board.is_favorite"
                         :to="{
                             name: 'project',
-                            params: { boardId: board.id },
+                            params: { boardId: boards.id },
                         }"
                     >
                         <div
@@ -266,11 +270,11 @@ onMounted(fetchBoards);
                                     ></path>
                                 </g>
                             </svg>
-                            <h2 class="ml-2 text-sm">{{ board.board_name }}</h2>
+                            <h2 class="ml-2 text-sm">{{ boards.board_name }}</h2>
 
                             <div
-                                @mouseleave="option2 = !option2"
-                                v-if="option2"
+                                @mouseleave="toggleBoardOption(index)"
+                                v-if="showBoardOptions[index]"
                                 class="absolute z-50 text-sm font-light shadow-xl top-0 w-72 left-64 bg-white p-1 py-4 rounded-lg"
                             >
                                 <div
@@ -309,7 +313,7 @@ onMounted(fetchBoards);
                                     <h1 class="w-40">Add to favorites</h1>
                                 </div>
                                 <div
-                                    v-if="false"
+                                   
                                     class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
                                 >
                                     <i
@@ -681,60 +685,16 @@ onMounted(fetchBoards);
                                 class="absolute left-2 top-6 fa fa-search text-xs text-gray-400"
                             ></i>
                         </div>
+                            <span @click ="option3 = true" class = "cursor-pointer">
 
-                        <i
+                            
+                        <i 
                             class="fa text-white bg-blue-600 fa-plus text-2xl font-thin border border-white p-1 px-1 rounded-md ml-2"
                         ></i>
-                    </div>
-                    <div
-                        v-for="board in boards"
-                        :key="board.id"
-                        class="group/project relative"
-                    >
-                        <router-link
-                            :to="{
-                                name: 'project',
-                                params: { boardId: board.id },
-                            }"
-                        >
-                            <div
-                                :class="
-                                    board.id === +boardId
-                                        ? 'bg-blue-100'
-                                        : 'bg-gray-200'
-                                "
-                                class="flex my-2 mx-1 items-center group-hover/project:bg-blue-100 cursor-pointer p-2 rounded-md"
-                            >
-                                {{ console.log(boardId) }}
-                                <svg
-                                    fill="#bfbbbb"
-                                    width="24px"
-                                    height="24px"
-                                    viewBox="0 0 56 56"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                >
-                                    <g
-                                        id="SVGRepo_bgCarrier"
-                                        stroke-width="0"
-                                    ></g>
-                                    <g
-                                        id="SVGRepo_tracerCarrier"
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                    ></g>
-                                    <g id="SVGRepo_iconCarrier">
-                                        <path
-                                            d="M 13.7851 49.5742 L 42.2382 49.5742 C 47.1366 49.5742 49.5743 47.1367 49.5743 42.3086 L 49.5743 13.6914 C 49.5743 8.8633 47.1366 6.4258 42.2382 6.4258 L 13.7851 6.4258 C 8.9101 6.4258 6.4257 8.8398 6.4257 13.6914 L 6.4257 42.3086 C 6.4257 47.1602 8.9101 49.5742 13.7851 49.5742 Z M 13.8554 45.8008 C 11.5117 45.8008 10.1992 44.5586 10.1992 42.1211 L 10.1992 13.8789 C 10.1992 11.4414 11.5117 10.1992 13.8554 10.1992 L 26.0429 10.1992 L 26.0429 45.8008 Z M 42.1679 10.1992 C 44.4882 10.1992 45.8007 11.4414 45.8007 13.8789 L 45.8007 42.1211 C 45.8007 44.5586 44.4882 45.8008 42.1679 45.8008 L 29.9804 45.8008 L 29.9804 10.1992 Z"
-                                        ></path>
-                                    </g>
-                                </svg>
-                                <h2 class="ml-2 text-sm">
-                                    {{ board.board_name }}
-                                </h2>
-
-                                <div
-                                    @mouseleave="option2 = !option2"
-                                    v-if="option2"
+                    </span>
+                        <div
+                                    @mouseleave="option3=!option3"
+                                    v-if="option3"
                                     class="absolute z-50 text-sm font-light shadow-xl top-0 w-72 left-64 bg-white p-1 py-4 rounded-lg"
                                 >
                                     <div
@@ -764,13 +724,154 @@ onMounted(fetchBoards);
                                         <i class="fa fa-chevron-right"></i>
                                     </div>
                                     <div
-                                        v-if="true"
+                                        v-if="!boards.board.is_favorite"
                                         class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
                                     >
                                         <i
                                             class="far fa-star mr-2 text-gray-500"
                                         ></i>
                                         <h1 class="w-40">Add to favorites</h1>
+                                    </div>
+                                    <div
+                                        v-if="boards.board.is_favorite"
+                                        class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
+                                    >
+                                        <i
+                                            class="far fa-star mr-2 text-gray-500"
+                                        ></i>
+                                        <h1 class="w-40">Remove from favorites</h1>
+                                    </div>
+                                    <div
+                                        v-if="false"
+                                        class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
+                                    >
+                                        <i
+                                            class="far fa-star mr-2 text-gray-500"
+                                        ></i>
+                                        <h1 class="w-40">
+                                            Remove from favorites
+                                        </h1>
+                                    </div>
+                                    <div
+                                        class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
+                                    >
+                                        <i
+                                            class="far fa-file mr-2 text-gray-500"
+                                        ></i>
+                                        <h1 class="w-40">Duplicate</h1>
+                                    </div>
+                                    <div
+                                        class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
+                                    >
+                                        <i
+                                            class="fa fa-trash mr-2 text-gray-500"
+                                        ></i>
+                                        <h1 class="w-40">Delete</h1>
+                                    </div>
+                                    <div
+                                        class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
+                                    >
+                                        <i
+                                            class="fa fa-suitcase mr-2 text-gray-500"
+                                        ></i>
+                                        <h1 class="w-40">Archive</h1>
+                                    </div>
+                                </div>
+                    </div>
+                    <div
+                        v-for="(boards, index) in user.teams"
+                        :key="boards.id"
+                        class="group/project relative"
+                    >
+                        <router-link
+                            :to="{
+                                name: 'project',
+                                params: { boardId: boards.board.id },
+                            }"
+                        >
+                            <div
+                                :class="
+                                    boards.id === +boardId
+                                        ? 'bg-blue-100'
+                                        : 'bg-gray-200'
+                                "
+                                class="flex my-2 mx-1 items-center group-hover/project:bg-blue-100 cursor-pointer p-2 rounded-md"
+                            >
+                                {{ console.log(boardId) }}
+                                <svg
+                                    fill="#bfbbbb"
+                                    width="24px"
+                                    height="24px"
+                                    viewBox="0 0 56 56"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                >
+                                    <g
+                                        id="SVGRepo_bgCarrier"
+                                        stroke-width="0"
+                                    ></g>
+                                    <g
+                                        id="SVGRepo_tracerCarrier"
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                    ></g>
+                                    <g id="SVGRepo_iconCarrier">
+                                        <path
+                                            d="M 13.7851 49.5742 L 42.2382 49.5742 C 47.1366 49.5742 49.5743 47.1367 49.5743 42.3086 L 49.5743 13.6914 C 49.5743 8.8633 47.1366 6.4258 42.2382 6.4258 L 13.7851 6.4258 C 8.9101 6.4258 6.4257 8.8398 6.4257 13.6914 L 6.4257 42.3086 C 6.4257 47.1602 8.9101 49.5742 13.7851 49.5742 Z M 13.8554 45.8008 C 11.5117 45.8008 10.1992 44.5586 10.1992 42.1211 L 10.1992 13.8789 C 10.1992 11.4414 11.5117 10.1992 13.8554 10.1992 L 26.0429 10.1992 L 26.0429 45.8008 Z M 42.1679 10.1992 C 44.4882 10.1992 45.8007 11.4414 45.8007 13.8789 L 45.8007 42.1211 C 45.8007 44.5586 44.4882 45.8008 42.1679 45.8008 L 29.9804 45.8008 L 29.9804 10.1992 Z"
+                                        ></path>
+                                    </g>
+                                </svg>
+                                <h2 class="ml-2 text-sm">
+                                    {{ boards.board.board_name }}
+                                </h2>
+
+                                <div
+                                    @mouseleave="toggleBoardOption(index)"
+                                    v-if="showBoardOptions[index]"
+                                    class="absolute z-50 text-sm font-light shadow-xl top-0 w-72 left-64 bg-white p-1 py-4 rounded-lg"
+                                >
+                                    <div
+                                        class="flex w-full py-2 border-b hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
+                                    >
+                                        <h1 class="w-40">
+                                            Open board in a new tab
+                                        </h1>
+                                    </div>
+                                    <div
+                                        class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
+                                    >
+                                        <i
+                                            class="fa fa-pencil mr-2 text-gray-500"
+                                        ></i>
+                                        <h1 class="w-40">Rename board</h1>
+                                    </div>
+                                    <div
+                                        class="flex w-full py-2 hover:bg-gray-100 justify-between cursor-pointer rounded-md px-4 items-center"
+                                    >
+                                        <div class="flex">
+                                            <i
+                                                class="fa fa-arrow-right mr-2 text-gray-500"
+                                            ></i>
+                                            <h1 class="w-40">Move to</h1>
+                                        </div>
+                                        <i class="fa fa-chevron-right"></i>
+                                    </div>
+                                    <div
+                                        v-if="!boards.board.is_favorite"
+                                        class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
+                                    >
+                                        <i
+                                            class="far fa-star mr-2 text-gray-500"
+                                        ></i>
+                                        <h1 class="w-40">Add to favorites</h1>
+                                    </div>
+                                    <div
+                                        v-if="boards.board.is_favorite"
+                                        class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
+                                    >
+                                        <i
+                                            class="far fa-star mr-2 text-gray-500"
+                                        ></i>
+                                        <h1 class="w-40">Remove from favorites</h1>
                                     </div>
                                     <div
                                         v-if="false"
@@ -814,7 +915,7 @@ onMounted(fetchBoards);
                             class="group-hover/project:block hidden absolute top-3.5 right-5"
                         >
                             <i
-                                @click="option2 = !option2"
+                                @click="toggleBoardOption(index)"
                                 class="fa fa-ellipsis-h text-xl ml-4 p-1 rounded-md hover:bg-blue-300 cursor-pointer"
                                 aria-hidden="true"
                             ></i>

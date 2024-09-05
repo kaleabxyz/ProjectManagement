@@ -28,6 +28,10 @@ class Task extends Model
     {
         return $this->belongsTo(Board::class);
     }
+    public function updates()
+    {
+        return $this->hasMany(Update::class,);
+    }
 
     public function assignedUser()
     {

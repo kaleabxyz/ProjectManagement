@@ -12,6 +12,7 @@ class Team extends Model
     protected $fillable = [
         'team_name',
         'owner_id',
+        'board',
     ];
 
     /**
@@ -28,5 +29,10 @@ class Team extends Model
     public function board()
     {
         return $this->belongsTo(Board::class, 'board');
+    }
+
+    public function members()
+    {
+        return $this->belongsToMany(User::class, 'team_members', 'team', 'member')->withPivot('role');
     }
 }

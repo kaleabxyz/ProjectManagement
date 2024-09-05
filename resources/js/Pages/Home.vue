@@ -28,8 +28,8 @@ const showSide = (val) => {
 
             <div
                 :class="{
-                    ' ml-72': side === 'active',
-                    'ml-7': side === 'inactive',
+                    ' pl-72': side === 'active',
+                    'pl-7': side === 'inactive',
                 }"
                 class="h-full flex-1 w-full overflow-hidden mt-14 bg-white rounded-lg pt-4"
             >

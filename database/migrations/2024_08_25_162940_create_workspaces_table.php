@@ -17,8 +17,7 @@ return new class extends Migration
             $table->boolean('is_favorite')->default(false);
             $table->boolean('is_archived')->default(false);
             $table->bigInteger('created_by')->unsigned(); // Add this line
-    $table->foreign('created_by')->references('id')->on('users')->onUpdate('cascade'); // Add this line 
-           
+            $table->foreign('created_by')->references('id')->on('users')->onUpdate('cascade'); // Add this line      
             $table->boolean('is_trashed')->default(false);
             $table->timestamp('trashed_at')->nullable();
             $table->bigInteger('trashed_by')->unsigned()->nullable();

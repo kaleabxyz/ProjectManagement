@@ -969,8 +969,8 @@ onUnmounted(() => {
 
         <div
             :class="{
-                'ml-72': side === 'active',
-                'ml-8': side === 'inactive',
+                'pl-72': side === 'active',
+                'pl-8': side === 'inactive',
             }"
             class="h-full flex-1 w-98 overflow-x-hidden-hidden overflow-y-auto pr-8 mt-14 bg-white rounded-lg pl-10 pt-4"
         >

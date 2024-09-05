@@ -12,7 +12,7 @@ class TeamMember extends Model
     
     protected $fillable = [
         'member',
-        'board',
+        'team',
         'role',
     ];
 
@@ -27,8 +27,8 @@ class TeamMember extends Model
     /**
      * Get the board associated with the team member.
      */
-    public function board()
+    public function team()
     {
-        return $this->belongsTo(Board::class, 'board');
+        return $this->belongsTo(Team::class, 'team');
     }
 }

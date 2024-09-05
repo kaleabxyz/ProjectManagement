@@ -20,7 +20,7 @@ return new class extends Migration
             $table->bigInteger('team')->unsigned();
             $table->foreign('team')->references('id')->on('teams')->onUpdate('cascade')->onDelete('cascade');
             $table->string('role')->default('Member');
-            $table->index(['board', 'member']);
+            $table->index(['team', 'member']);
             $table->timestamps();
 
         });

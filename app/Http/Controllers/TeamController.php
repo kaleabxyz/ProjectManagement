@@ -14,7 +14,7 @@ class TeamController extends Controller
      */
     public function index(): JsonResponse
     {
-        $teams = Team::with(['owner', 'board'])->get();
+        $teams = Team::with(['owner', 'board','members.user'])->get();
         return response()->json($teams);
     }
 
@@ -43,7 +43,7 @@ class TeamController extends Controller
      */
     public function show($id): JsonResponse
     {
-        $team = Team::with(['owner', 'board'])->findOrFail($id);
+        $team = Team::with(['owner', 'board','members.user'])->findOrFail($id);
 
         return response()->json($team);
     }
