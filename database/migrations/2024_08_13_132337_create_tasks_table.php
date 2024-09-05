@@ -16,7 +16,7 @@ return new class extends Migration
         Schema::create('tasks', function (Blueprint $table) {
             $table->id();
             $table->string('task_name')->index();
-            $table->string('status')->default("In Progress");
+            $table->string('status')->default("Not Started");
             $table->boolean('selectStatus')->default(false);
             $table->boolean('selectOwner')->default(false);
             $table->boolean('selectPriority')->default(false);

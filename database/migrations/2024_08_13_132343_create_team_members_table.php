@@ -17,8 +17,8 @@ return new class extends Migration
             $table->id();
             $table->bigInteger('member')->unsigned();
             $table->foreign('member')->references('id')->on('users')->onUpdate('cascade');
-            $table->bigInteger('board')->unsigned();
-            $table->foreign('board')->references('id')->on('boards')->onUpdate('cascade')->onDelete('cascade');
+            $table->bigInteger('team')->unsigned();
+            $table->foreign('team')->references('id')->on('teams')->onUpdate('cascade')->onDelete('cascade');
             $table->string('role')->default('Member');
             $table->index(['board', 'member']);
             $table->timestamps();

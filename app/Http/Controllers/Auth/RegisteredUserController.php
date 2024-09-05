@@ -68,6 +68,7 @@ class RegisteredUserController extends Controller
                     'task_name' => 'Task ' . $i,
                     'board_id' => $board->id,
                     'assigned_to' => $user->id,
+                    
                 ]);
             }
 

@@ -4,8 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 
 class UserController extends Controller
@@ -72,14 +73,37 @@ class UserController extends Controller
      */
     public function show($id): JsonResponse
     {
-        $user = User::find($id);
+        $user = User::with(['boardsCreated', 'boardsOwned', 'boardsTrashed'])->findOrFail($id);
 
-        if ($user) {
-            return response()->json($user);
-        }
+    // Check if the user was found
+    if ($user) {
+        // Structure the response data
+        $data = [
+            'user' => [
+                'id' => $user->id,
+                'user_name' => $user->user_name,
+                'profile_picture_url' => $user->profile_picture_url,
+                'email' => $user->email,
+                'location' => $user->location,
+                'birthday' => $user->birthday,
+                'skype' => $user->skype,
+                'job_title' => $user->job_title,
+                'phone' => $user->phone,
+                'mobile_phone' => $user->mobile_phone,
+                'working_status' => $user->working_status,
+            ],
+            'boards' => [
+                'owned' => $user->boardsOwned,
+                'created' => $user->boardsCreated,
+                'trashed' => $user->boardsTrashed,
+            ],
+        ];
+
+        return response()->json($data);
 
         return response()->json(['message' => 'User not found'], 404);
     }
+}
     /**
      * Show the form for editing the specified user.
      */
@@ -131,6 +155,28 @@ class UserController extends Controller
 
         return response()->json($user);
     }
+    public function login(Request $request)
+{
+$credentials = $request->only('email', 'password');
+try {
+$token = Auth::attempt($credentials);
+if (!$token) {
+return response()->json(['error' => 'Invalid Credentials'], 400);
+}
+}
+catch (Exception $e) {
+return response()->json(['error' => 'Could not create token'], 500);
+}
+$user = Auth::user()->load(['boardsCreated','boardsOwned','boardsTrashed']);
+return response()->json([
+'status' => 'success',
+'user' => $user,
+'authorisation' => [
+'token' => $token,
+'type' => 'bearer',
+]
+]);
+}
 
     /**
      * Remove the specified user from storage.

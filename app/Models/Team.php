@@ -17,16 +17,16 @@ class Team extends Model
     /**
      * Get the user who owns the team.
      */
-    // public function owner()
-    // {
-    //     return $this->belongsTo(User::class, 'owner_id');
-    // }
+    public function owner()
+    {
+        return $this->belongsTo(User::class, 'owner_id');
+    }
 
-    // /**
-    //  * Get the boards associated with the team.
-    //  */
-    // public function boards()
-    // {
-    //     return $this->hasMany(Board::class);
-    // }
+   /**
+     * Get the board associated with the team.
+     */
+    public function board()
+    {
+        return $this->belongsTo(Board::class, 'board');
+    }
 }

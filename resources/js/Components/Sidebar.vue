@@ -34,6 +34,11 @@ const showFavorites = ref(false);
 const manuallyActivated = ref(true);
 const workSpaces = ref(false);
 
+
+const user = JSON.parse(localStorage.getItem('user'));
+console.log("🚀 ~ user:", user)
+
+
 const toggleOn = () => {
     showNav.value = "active";
     manuallyActivated.value = true;

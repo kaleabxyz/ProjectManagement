@@ -13,7 +13,7 @@ class TeamMemberController extends Controller
      */
     public function index()
     {
-        $teamMembers = TeamMember::with(['user', 'board'])->get();
+        $teamMembers = TeamMember::with(['user', 'team'])->get();
         return response()->json($teamMembers);
     }
 
@@ -24,7 +24,7 @@ class TeamMemberController extends Controller
     {
         $validatedData = $request->validate([
             'member' => 'required|exists:users,id',
-            'board' => 'required|exists:boards,id',
+            'team' => 'required|exists:boards,id',
             'role' => 'nullable|string',
         ]);
 
@@ -38,7 +38,7 @@ class TeamMemberController extends Controller
      */
     public function show(TeamMember $teamMember)
     {
-        $teamMember->load(['user', 'board']);
+        $teamMember->load(['user', 'team']);
         return response()->json($teamMember);
     }
 
@@ -49,7 +49,7 @@ class TeamMemberController extends Controller
     {
         $validatedData = $request->validate([
             'member' => 'nullable|exists:users,id',
-            'board' => 'nullable|exists:boards,id',
+            'team' => 'nullable|exists:boards,id',
             'role' => 'nullable|string',
         ]);
 

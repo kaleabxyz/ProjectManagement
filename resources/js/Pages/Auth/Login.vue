@@ -25,38 +25,51 @@ const form = ref({
     remember: false,
 });
 
+
 // Form errors
 const formErrors = ref({});
 const processing = ref(false);
 
-// Function to handle form submission
-const submit = () => {
-    console.log("🚀 ~ submit ~ form:", form)
-    axios.post('/api/login', form)
-        .then(response => {
-            // Handle successful authentication
-            window.location.href = response.data.redirect;
-        })
-        .catch(error => {
-            // Handle errors, like invalid credentials
-            if (error.response && error.response.data) {
-                form.errors = error.response.data.errors;
-            }
-        });
-};
+const showErrorEmail = ref(false);
+const showErrorPassword = ref(false);
+const validateAndLogin = async () => {
+showErrorEmail.value = !email.value;
+showErrorPassword.value = !password.value;
+if (showErrorEmail.value || showErrorPassword.value) {
+return;
+}
+try {
+const response = await axios.post('/api/login', {
+email: email.value,
+password: password.value
+});
+console.log(response.data.authorisation.token); // Access token from the 'authorisation' object
+const token = response.data.authorisation.token; // Access token from the 'authorisation' object
+const user = response.data.user; // User object
+if(token){
+localStorage.setItem('token', token);
+localStorage.setItem('user', JSON.stringify(user));
+window.location.href = '/home';
+} else {
+console.error('Token not received');
+}
+} catch (error) {
+console.error(error);
+}
+}
+
     
 </script>
 
 
 <template>
     <GuestLayout>
-        <Head title="Log in" />
-
+        
         <div v-if="status" class="mb-4 font-medium text-sm text-green-600">
             {{ status }}
         </div>
 
-        <form @submit.prevent="submit">
+        <form @submit.prevent="validateAndLogin">
             <div>
                 <InputLabel for="email" value="Email" />
 
@@ -88,21 +101,21 @@ const submit = () => {
                 <InputError class="mt-2" :message="formErrors.password" />
             </div>
 
-            <div class="block mt-4">
+            <!-- <div class="block mt-4">
                 <label class="flex items-center">
                     <Checkbox name="remember" v-model:checked="form.remember" />
                     <span class="ms-2 text-sm text-gray-600 dark:text-gray-400">Remember me</span>
                 </label>
-            </div>
+            </div> -->
 
             <div class="flex items-center justify-end mt-4">
-                <Link
+                <router-link
                     v-if="canResetPassword"
-                    :href="route('password.request')"
+                    :to="route('password.request')"
                     class="underline text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800"
                 >
                     Forgot your password?
-                </Link>
+                </router-link>
 
                 <PrimaryButton class="ms-4" :class="{ 'opacity-25': processing.value }" :disabled="processing.value">
                     Log in

@@ -32,6 +32,5 @@ Route::apiResource('invitations', InvitationController::class);
 Route::apiResource('sub-tasks', SubTaskController::class);
 Route::apiResource('updates', UpdateController::class);
 Route::apiResource('team-members', TeamMemberController::class);
-Route::get('/login', [AuthenticatedSessionController::class, 'create'])->name('login');
-Route::post('/login', [AuthenticatedSessionController::class, 'store']);
-Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
+
+Route::post('login', [UserController::class, 'login']);

@@ -23,15 +23,19 @@ class Board extends Model
     ];
 
     public function owner()
-    {
-        return $this->belongsTo(User::class, 'owner');
-    }
+{
+    return $this->belongsTo(User::class, 'owner');
+}
 
-    // Define the relationship with the 'creator' (User model)
-    public function createdBy()
-    {
-        return $this->belongsTo(User::class, 'created_by');
-    }
+public function creator()
+{
+    return $this->belongsTo(User::class, 'created_by');
+}
+
+public function trashedBy()
+{
+    return $this->belongsTo(User::class, 'trashed_by');
+}
     /**
      * Get the workspace that owns the board.
      */
@@ -59,9 +63,6 @@ class Board extends Model
     /**
      * Get the user who trashed the board.
      */
-    public function trashedBy()
-    {
-        return $this->belongsTo(User::class, 'trashed_by');
-    }
+   
 
 }
