@@ -57,7 +57,7 @@ public function trashedBy()
      */
     public function team()
     {
-        return $this->belongsTo(Team::class);
+        return $this->belongsTo(Team::class,'team');
     }
     public function tasks()
     {

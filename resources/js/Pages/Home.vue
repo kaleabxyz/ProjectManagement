@@ -25,12 +25,15 @@ const showSide = (val) => {
             <Sidebar @nav="showSide" />
             <router-view />
         </div>
-
-            <div
-                :class="{
-                    ' pl-72': side === 'active',
+        <div class="bg-custome-blue"
+        :class="{
+                    'pl-[275px] ': side === 'active',
                     'pl-7': side === 'inactive',
-                }"
+                }">
+
+        
+            <div
+                
                 class="h-full flex-1 w-full overflow-hidden mt-14 bg-white rounded-lg pt-4"
             >
                 <div class="border-b-2 border-solid pb-4 shadow-lg">
@@ -295,6 +298,6 @@ const showSide = (val) => {
                     </div>
                 </div>
             </div>
-        
+        </div>
     </body>
 </template>

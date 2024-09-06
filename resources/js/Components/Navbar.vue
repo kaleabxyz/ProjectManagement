@@ -6,6 +6,7 @@ import SideDetail from "@/Components/SideDetail.vue";
 import ApplicationLogo from "@/Components/ApplicationLogo.vue";
 import Checkbox from "@/Components/Checkbox.vue";
 import TextInput from "@/Components/TextInput.vue";
+import { useRouter, useRoute } from "vue-router";
 
 function handleImageError() {
     document.getElementById("screenshot-container")?.classList.add("!hidden");
@@ -18,7 +19,7 @@ const inviteVisible = ref(false);
 const updateVisible = ref(false);
 const showProfile = ref(false);
 const showTrash = ref(false);
-
+const router = useRouter();
 const showAdminstration = ref(false);
 const profileActive = ref(false);
 const profile = ref(true);
@@ -112,7 +113,15 @@ const handleClickOutside = (event) => {
         hidesideDetail();
     }
 };
+const logout = () => {
+      // Clear the token and user data from local storage
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      
+      // Optionally, redirect to the login page
+      router.push('/');
 
+    };
 const updateContent = ref(
     "Filter by Board Lorem ipsum dolor sit amet, consectetur adipisicing elit. Voluptatum, ratione. Molestias perferendis incidunt quisquam eveniet harum aliquam, ab mollitia facere quas cupiditate libero doloribus enim accusantium earum et ducimus? Cum? Filter by Board Lorem ipsum dolor sit amet, consectetur adipisicing elit. Voluptatum, ratione. Molestias perferendis incidunt quisquam eveniet harum aliquam, ab mollitia facere quas cupiditate libero doloribus enim accusantium earum et ducimus? Cum?"
 );
@@ -1545,7 +1554,7 @@ onUnmounted(() => {
                             <i class="fa fa-users mr-2" aria-hidden="true"></i>
                             <h1>Teams</h1>
                         </div>
-                        <div
+                        <div @click="logout"
                             class="py-2 px-2 text-gray-600 flex items-center cursor-pointer hover:bg-gray-100"
                         >
                             <i

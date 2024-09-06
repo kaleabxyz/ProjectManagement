@@ -23,19 +23,24 @@ const formErrors = ref({});
 
 // Function to handle form submission
 const submit = async () => {
-    formErrors.value = {}; // Clear previous errors
-    form.value.processing = true; // Show loading state
+      formErrors.value = {}; // Clear previous errors
+      form.value.processing = true; // Show loading state
 
-    try {
-        console.log("🚀 ~ submit ~ form:", form)
-        // Make a POST request to the backend API endpoint
+      try {
         const response = await axios.post('/api/register', form.value);
-        
+
         if (response.status === 201) {
-          // Redirect to /home
+          // Store token and user data
+          const token = response.data.authorisation.token;
+          const user = response.data.user;
+          if (token) {
+            localStorage.setItem('token', token);
+            localStorage.setItem('user', JSON.stringify(user));
+          }
+
+          // Redirect to home
           router.push('/home');
         }
-        // Handle success (e.g., redirect, show message, etc.)
         console.log('User registered successfully:', response.data);
 
         // Optionally, reset the form after successful submission
@@ -43,7 +48,6 @@ const submit = async () => {
         form.value.email = '';
         form.value.password = '';
         form.value.password_confirmation = '';
-        
     } catch (error) {
         // Handle errors (e.g., display errors in the form)
         if (error.response && error.response.data.errors) {

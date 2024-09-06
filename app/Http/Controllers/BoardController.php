@@ -26,7 +26,7 @@ class BoardController extends Controller
         // Validate incoming request data
         $request->validate([
             'workspace_id' => 'required|exists:workspaces,id',
-            'folder_id' => 'required|exists:folders,id',
+            'folder_id' => 'nullable|exists:folders,id',
             'board_name' => 'required|string|max:255',
             'owner' => 'required|integer|exists:users,id',
             'created_by' => 'nullable|exists:users,id',

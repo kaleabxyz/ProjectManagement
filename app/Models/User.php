@@ -74,4 +74,8 @@ class User extends Authenticatable
     {
         return $this->hasMany(Board::class, 'trashed_by');
     }
+    public function workspaces()
+    {
+        return $this->hasMany(Workspace::class, 'created_by');
+    }
 }

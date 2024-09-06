@@ -373,7 +373,7 @@ const setSelectPriorityToFalse = (taskId) => {
     }
 };
 watch(
-    () => route.params.boardId,
+    () => route.params.boardName,
     (newBoardId) => {
         if (newBoardId) {
             fetchBoard(newBoardId);
@@ -381,9 +381,9 @@ watch(
     }
 );
 onMounted(() => {
-    const boardId = route.params.boardId;
-    if (boardId) {
-        fetchBoard(boardId);
+    const boardName = route.params.boardName;
+    if (boardName) {
+        fetchBoard(boardName);
     }
 
     fetchTasks();

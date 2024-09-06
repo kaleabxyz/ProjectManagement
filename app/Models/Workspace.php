@@ -26,6 +26,10 @@ class Workspace extends Model
     {
         return $this->belongsTo(User::class, 'trashed_by');
     }
+    public function createdBy()
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
 
     /**
      * Get the boards associated with the workspace.

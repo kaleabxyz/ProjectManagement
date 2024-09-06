@@ -32,76 +32,91 @@ class RegisteredUserController extends Controller
      * @throws \Illuminate\Validation\ValidationException
      */
     public function store(Request $request)
-    {
-        $request->validate([
-            'user_name' => 'required|string|max:255',
-            'email' => 'required|string|lowercase|email|max:255|unique:'.User::class,
-            'password' => ['required', 'confirmed', Rules\Password::defaults()],
+{
+    $request->validate([
+        'user_name' => 'required|string|max:255',
+        'email' => 'required|string|lowercase|email|max:255|unique:'.User::class,
+        'password' => ['required', 'confirmed', Rules\Password::defaults()],
+    ]);
+
+    try {
+        // Create the user
+        $user = User::create([
+            'user_name' => $request->user_name,
+            'email' => $request->email,
+            'password' => Hash::make($request->password),
         ]);
-       
-        try {
-            // Create the user
-            $user = User::create([
-                'user_name' => $request->user_name,
-                'email' => $request->email,
-                'password' => Hash::make($request->password),
-            ]);
-            event(new Registered($user));
-            Auth::login($user);
 
-            // Create a new workspace for the user
-            $workspace = Workspace::create([
-                'workspace_name' => 'Main workspace',
-                'created_by' => $user->id,
-            ]);
+        // Log the user in and generate a token
+        $token = Auth::attempt($request->only('email', 'password'));
 
-            // Create a new team with the registering user as the owner
-            $team = Team::create([
-                'team_name' => 'First project team',
-                'owner_id' => $user->id,
-                'board' => null, // Placeholder for board_id
-            ]);
-
-            // Create a team member instance for the registering user
-            TeamMember::create([
-                'team' => $team->id,
-                'member' => $user->id,
-                'role' => 'owner',
-            ]);
-
-            // Create a new board for the workspace and assign the team_id
-            $board = Board::create([
-                'workspace_id' => $workspace->id,
-                'board_name' => 'First project',
-                'owner' => $user->id,
-                'created_by' => $user->id,
-                'team' => $team->id, // Assign the team_id here
-            ]);
-            $team->update(['board' => $board->id]);
-
-            // Create 4 sample tasks for the board
-            for ($i = 1; $i <= 4; $i++) {
-                Task::create([
-                    'task_name' => 'Task ' . $i,
-                    'board_id' => $board->id,
-                    'assigned_to' => $user->id,
-                ]);
-            }
-
-            DB::commit(); // Commit transaction
-
-            // Return a JSON response to handle with Vue
-            return response()->json([
-                'message' => 'User registered successfully',
-                'user' => $user
-            ], 201);
-        } catch (\Exception $e) {
-            DB::rollBack(); // Rollback transaction on failure
-
-            return response()->json([
-                'message' => 'Failed to register user',
-                'error' => $e->getMessage()
-            ], 500);
+        if (!$token) {
+            return response()->json(['error' => 'Could not generate token'], 500);
         }
+
+        // Create related records as before
+        $workspace = Workspace::create([
+            'workspace_name' => 'Main workspace',
+            'created_by' => $user->id,
+        ]);
+
+        $team = Team::create([
+            'team_name' => 'First project team',
+            'owner_id' => $user->id,
+            'board' => null, // Placeholder for board_id
+        ]);
+
+        TeamMember::create([
+            'team' => $team->id,
+            'member' => $user->id,
+            'role' => 'owner',
+        ]);
+
+        $board = Board::create([
+            'workspace_id' => $workspace->id,
+            'board_name' => 'First project',
+            'owner' => $user->id,
+            'created_by' => $user->id,
+            'team' => $team->id,
+        ]);
+        $team->update(['board' => $board->id]);
+
+        for ($i = 1; $i <= 4; $i++) {
+            Task::create([
+                'task_name' => 'Task ' . $i,
+                'board_id' => $board->id,
+                'assigned_to' => $user->id,
+            ]);
+        }
+
+        DB::commit(); // Commit transaction
+        $user = Auth::user()->load([
+            'workspaces',
+            'workspaces.boards',
+            'workspaces.boards.team',
+            'workspaces.boards.team.members',
+            'workspaces.boards.tasks',
+            'workspaces.boards.tasks.updates',    
+            'workspaces.boards.discussions',    
+
+        ]);
+        // Return the token and user data
+        return response()->json([
+            'status' => 'success',
+            'user' => $user,
+            'authorisation' => [
+                'token' => $token,
+                'type' => 'bearer',
+            ]
+        ], 201);
+    } catch (\Exception $e) {
+        DB::rollBack(); // Rollback transaction on failure
+
+        return response()->json([
+            'message' => 'Failed to register user',
+            'error' => $e->getMessage()
+        ], 500);
     }
+}
+
 }

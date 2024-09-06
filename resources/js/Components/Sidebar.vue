@@ -21,9 +21,12 @@ const emit = defineEmits(["nav"]);
 const boards = ref([]);
 const filteredFavorites = ref([]);
 const route = useRoute();
-const boardId = ref(route.params.boardId);
+const boardId = ref(route.params.boardName);
 const option3 = ref(false);
 const router = useRouter();
+const workspace_name = ref('New Workspace');
+const board_name = ref('New Board');
+
 const showNav = ref("active");
 const showTrash = ref(false);
 const trash = ref(true);
@@ -33,15 +36,107 @@ const option2 = ref(false);
 const showFavorites = ref(false);
 const manuallyActivated = ref(true);
 const workSpaces = ref(false);
+const addVisible = ref('');
+const showBoardOptions = ref([]);
 
 
 const user = JSON.parse(localStorage.getItem('user'));
 console.log("🚀 ~ user:", user);
-const showBoardOptions = ref(user.teams.map(() => false));
+const selectedWorkspace = ref(user.workspaces[0]); // Initially select "Main workspace"
+console.log("🚀 ~ selected workspace:", selectedWorkspace.value.id)
+user.workspaces.forEach(workspace => {
+  console.log("🚀 ~ workspace:", workspace);
+  console.log("🚀 ~ boards:", workspace.boards.board);
+
+  // Initialize 'false' for each board
+  workspace.boards.forEach(() => {
+    showBoardOptions.value.push(false);
+  });
+});
+
+
+
 const toggleBoardOption = (index) => {
     showBoardOptions.value[index] = !showBoardOptions.value[index];
 };
 
+
+// Toggle dropdown visibility
+const toggleWorkspaces = () => {
+  workSpaces.value = !workSpaces.value;
+};
+const toggleAdd = (item) => {
+    
+    addVisible.value =item ;
+    console.log("🚀 ~ workspace_name:", workspace_name.value[0])
+};
+const hideAddWorkspace = () => {
+    addVisible.value = '';
+};
+const createWorkspace = async () => {
+    try {
+    const response = await axios.post('/api/workspaces', {
+      workspace_name: workspace_name.value,
+        is_trashed: false,
+        is_archived: false,
+        trashed_by: null,
+        trashed_at: null,
+        folder_id: null,
+      is_favorite:false,
+      created_by: user.id,
+    });
+        workspace_name.value = 'New Workspace';
+        
+    const newWorkspace = response.data;
+    console.log("🚀 ~ createWorkspace ~ newWorkspace:", newWorkspace)
+    user.workspaces.push(newWorkspace);
+    console.log("🚀 ~ createWorkspace ~ user.workspace:", user.workspaces);
+
+    alert('Workspace created successfully!');
+      // Clear input after submission
+    // Reset privacy to default
+    hideAddWorkspace(); // Close the modal after creation
+  } catch (error) {
+    console.error('Error creating workspace:', error);
+    alert('Failed to create workspace.');
+  }
+};
+const createBoard = async () => {
+    try {
+    const response = await axios.post('/api/boards', {
+        board_name: board_name.value,
+        workspace_id: selectedWorkspace.value.id,
+        owner:user.id,
+        is_trashed: false,
+        is_archived: false,
+        trashed_by: null,
+        folder_id: null,
+        trashed_at: null,
+      is_favorite:false,
+      created_by: user.id,
+    });
+        board_name.value = 'New Board';
+      
+    
+    const newBoard = response.data;
+    console.log("🚀 ~ createWorkspace ~ newWorkspace:", newBoard)
+    user.workspaces.boards.push(newBoard);
+    console.log("🚀 ~ createWorkspace ~ user.workspace:", user.teams);
+
+    alert('Workspace created successfully!');
+      // Clear input after submission
+    // Reset privacy to default
+    hideAddWorkspace(); // Close the modal after creation
+  } catch (error) {
+    console.error('Error creating board:', error);
+    alert('Failed to create board.');
+  }
+};
+// Select a workspace
+const selectWorkspace = (workspace) => {
+  selectedWorkspace.value = workspace;
+  workSpaces.value = false; // Close the dropdown after selection
+};
 const toggleOn = () => {
     showNav.value = "active";
     manuallyActivated.value = true;
@@ -73,6 +168,43 @@ const fetchBoards = async () => {
         console.error("There was an error fetching boards!", error);
     }
 };
+const setArchive = async (id) => {
+
+    
+    
+    selectedWorkspace.value.is_archived = true;
+    try {
+        // Update the task name in the database
+        await axios.patch(`/api/workspaces/${selectedWorkspace.value.id}`, {
+            is_archived: true,
+        });
+    } catch (error) {
+        console.error("Error archiving:", error);
+    }
+    selectedWorkspace.value = user.workSpaces[0];
+} 
+const setTrash = async (id) => {
+
+    
+    
+    selectedWorkspace.value.is_trashed = true;
+    selectedWorkspace.value.trashed_by = user.id;
+    selectedWorkspace.value.trashed_at = new Date().toISOString();
+
+
+
+try {
+    // Update the task name in the database
+    await axios.patch(`/api/workspaces/${selectedWorkspace.value.id}`, {
+        is_trashed: true,
+        trashed_by: user.id,
+        trashed_at: new Date().toISOString().slice(0,19).replace('T',' '),
+    });
+    selectedWorkspace.value = user.workspaces[0];
+} catch (error) {
+    console.error("Error trashing :", error);
+}
+} 
 const filterByFavorite = (item) => {
     filteredFavorites.value = item.filter((item) => item.is_favorite === 1);
 };
@@ -97,6 +229,94 @@ onMounted(fetchBoards);
             href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
         />
     </head>
+    <div
+        v-if="addVisible == 'workspace' || addVisible == 'board'"
+        class="bg-black flex p-8 pb-0 fixed z-20 items-center justify-center inset-0 bg-opacity-40"
+        @click.self="hideAddWorkspace"
+    >
+        <div class="bg-white  relative w-96   rounded-xl p-8">
+            <i
+                @click="hideAddWorkspace"
+                class="fa fa-times absolute top-2 right-2 fa-font-extralight text-gray-500 text-2xl ml-2 p-1 hover:bg-gray-100 cursor-pointer"
+                aria-hidden="true"
+            ></i>
+            <h2 class="text-3xl font-semibold mb-4"> {{ addVisible === 'workspace' ? 'Add new workspace' : addVisible === 'board' ? 'Add new Board' : '' }}</h2>
+      <div class="flex justify-center mb-4">
+        <!-- Workspace Icon Placeholder -->
+        <div class="flex items-center justify-center w-20 h-20 bg-pink-500 rounded-full text-white text-2xl font-bold">
+          {{addVisible === 'workspace' ? workspace_name[0] : addVisible === 'board' ? board_name[0] : '' }}
+        </div>
+      </div>
+      <form v-if ="addVisible === 'workspace'"
+      @submit.prevent="createWorkspace">
+        <div class="mb-4">
+          <label
+            for="workspaceName"
+            class="block text-sm font-medium text-gray-700 mb-1"
+            >Workspace name</label
+          >
+          <input
+            type="text"
+            id="workspaceName"
+            v-model="workspace_name"
+            placeholder="Choose a name for your workspace"
+            class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+            required
+          />
+        </div>
+        
+        <div class="flex justify-end space-x-4">
+          <button
+            @click="hideAddWorkspace"
+            type="button"
+            class="bg-transparent hover:bg-gray-100 text-gray-700 py-2 px-4 rounded-md"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            class="bg-blue-600 text-white py-2 px-4 rounded-md shadow hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            Add workspace
+          </button>
+        </div>
+      </form>
+      <form v-if ="addVisible === 'board'"
+       @submit.prevent="createBoard">
+        <div class="mb-4">
+          <label
+            for="workspaceName"
+            class="block text-sm font-medium text-gray-700 mb-1"
+            >Board name</label
+          >
+          <input
+            type="text"
+            id="workspaceName"
+            v-model="board_name"
+            placeholder="Choose a name for your workspace"
+            class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+            required
+          />
+        </div>
+        
+        <div class="flex justify-end space-x-4">
+          <button
+            @click="hideAddWorkspace"
+            type="button"
+            class="bg-transparent hover:bg-gray-100 text-gray-700 py-2 px-4 rounded-md"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            class="bg-blue-600 text-white py-2 px-4 rounded-md shadow hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            Add board
+          </button>
+        </div>
+      </form>
+            </div>
+    </div>
     <div
         v-if="showTrash"
         class="bg-black flex p-8 pb-0 fixed z-20 items-center justify-center inset-0 bg-opacity-40"
@@ -142,7 +362,7 @@ onMounted(fetchBoards);
     <aside
         @mouseover="handleMouseOver"
         @mouseleave="handleMouseLeave"
-        class="group resize-x z-10 fixed top-0 left-0 mt-14 bg-gradient-to-b from-white via-custom-blue to-custom-blue rounded-lg h-full w-fit min-h-screen px-2.5 pt-1"
+        class="group resize-x z-10 fixed top-0 left-0 mt-14 bg-gradient-to-b from-white via-custom-blue to-custom-blue rounded-lg h-full w-fit min-h-screen px-1 pt-1"
     >
         <span
             v-if="manuallyActivated || showNav === 'active'"
@@ -168,7 +388,7 @@ onMounted(fetchBoards);
             @leave="leave"
         >
             <div v-if="showNav === 'active'" class="resize-x">
-                <router-link to="/">
+                <router-link to="/home">
                     <div
                         class="group hover:w-56 flex items-center bg-blue-100 py-1 rounded-md hover:bg-gray-200 cursor-pointer"
                     >
@@ -236,11 +456,11 @@ onMounted(fetchBoards);
                     class="group/project relative"
                 >
                 
-                    <router-link v-if="boards.board.is_favorite"
-                        :to="{
-                            name: 'project',
-                            params: { boardId: boards.id },
-                        }"
+                    <router-link v-if="boards.board.is_favorite && boards.board.board_name"
+                    :to="{
+        name: 'project',
+        params: { boardName: boards.board.name } // Ensure `boards.board.name` is defined
+    }"
                     >
                         <div
                             :class="
@@ -361,141 +581,36 @@ onMounted(fetchBoards);
                 <div v-if="!showFavorites" class="flex flex-col w-fit">
                     <div class="flex mt-2 w-fit">
                         <div class="flex relative items-center mr-4">
-                            <div
-                                @click="workSpaces = !workSpaces"
-                                class="flex items-center hover:bg-gray-200"
-                            >
-                                <h3
-                                    class="bg-gray-500 w-fit text-white py-0.5 px-1.5 rounded-md text-md"
-                                >
-                                    M
-                                </h3>
-                                <svg
-                                    class="absolute left-3.5 top-7"
-                                    width="20px"
-                                    viewBox="0 0 24 24"
-                                    fill="#000000"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                >
-                                    <g
-                                        id="SVGRepo_bgCarrier"
-                                        stroke-width="0"
-                                    ></g>
-                                    <g
-                                        id="SVGRepo_tracerCarrier"
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                    ></g>
-                                    <g id="SVGRepo_iconCarrier">
-                                        <path
-                                            d="M9 20H7C5.89543 20 5 19.1046 5 18V10.9199C5 10.336 5.25513 9.78132 5.69842 9.40136L10.6984 5.11564C11.4474 4.47366 12.5526 4.47366 13.3016 5.11564L18.3016 9.40136C18.7449 9.78132 19 10.336 19 10.9199V18C19 19.1046 18.1046 20 17 20H15M9 20V14C9 13.4477 9.44772 13 10 13H14C14.5523 13 15 13.4477 15 14V20M9 20H15"
-                                            stroke="#ffffff"
-                                            stroke-linecap="round"
-                                            stroke-linejoin="round"
-                                        ></path>
-                                    </g>
-                                </svg>
-                                <div
-                                    class="cursor-pointer flex p-2 pl-1 items-center"
-                                >
-                                    <h1 class="text-md font-bold">
-                                        Main workspace
-                                    </h1>
-                                    <i
-                                        class="fa fa-chevron-down text-xs ml-4"
-                                        aria-hidden="true"
-                                    ></i>
-                                </div>
-                                <div
-                                    v-if="workSpaces"
-                                    @mouseleave="workSpaces = false"
-                                    class="absolute bg-white z-10 left-0 top-14 p-4 w-66 rounded-lg shadow-lg h-fit"
-                                >
-                                    <div class="relative">
-                                        <TextInput
-                                            class="h-8 w-38 pl-6"
-                                            placeholder="Search for a workspace"
-                                        ></TextInput>
-                                        <i
-                                            class="absolute left-2 top-3 fa fa-search text-xs text-gray-400"
-                                        ></i>
-                                    </div>
-                                    <h1 class="text-gray-500 my-4">
-                                        My workspaces
-                                    </h1>
-                                    <div
-                                        class="flex items-center relative hover:bg-gray-100"
-                                    >
-                                        <h3
-                                            class="bg-gray-500 w-fit text-white py-0.5 px-1.5 rounded-md text-md"
-                                        >
-                                            M
-                                        </h3>
-                                        <svg
-                                            class="absolute left-3.5 top-6"
-                                            width="20px"
-                                            viewBox="0 0 24 24"
-                                            fill="#000000"
-                                            xmlns="http://www.w3.org/2000/svg"
-                                        >
-                                            <g
-                                                id="SVGRepo_bgCarrier"
-                                                stroke-width="0"
-                                            ></g>
-                                            <g
-                                                id="SVGRepo_tracerCarrier"
-                                                stroke-linecap="round"
-                                                stroke-linejoin="round"
-                                            ></g>
-                                            <g id="SVGRepo_iconCarrier">
-                                                <path
-                                                    d="M9 20H7C5.89543 20 5 19.1046 5 18V10.9199C5 10.336 5.25513 9.78132 5.69842 9.40136L10.6984 5.11564C11.4474 4.47366 12.5526 4.47366 13.3016 5.11564L18.3016 9.40136C18.7449 9.78132 19 10.336 19 10.9199V18C19 19.1046 18.1046 20 17 20H15M9 20V14C9 13.4477 9.44772 13 10 13H14C14.5523 13 15 13.4477 15 14V20M9 20H15"
-                                                    stroke="#ffffff"
-                                                    stroke-linecap="round"
-                                                    stroke-linejoin="round"
-                                                ></path>
-                                            </g>
-                                        </svg>
-                                        <div
-                                            class="cursor-pointer flex p-2 pl-1 items-center"
-                                        >
-                                            <h1 class="text-md font-bold">
-                                                Main workspace
-                                            </h1>
-                                        </div>
-                                    </div>
-                                    <div
-                                        class="flex items-center relative hover:bg-gray-100"
-                                    >
-                                        <h3
-                                            class="bg-gray-500 w-fit text-white py-0.5 px-1.5 rounded-md text-md"
-                                        >
-                                            M
-                                        </h3>
-
-                                        <div
-                                            class="cursor-pointer flex p-2 pl-1 items-center"
-                                        >
-                                            <h1 class="text-md font-bold">
-                                                New workspace
-                                            </h1>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="flex items-center p-2 pl-0 rounded-md">
-                                <i
-                                    @click="option1 = !option1"
-                                    class="fa fa-ellipsis-h text-xl ml-4 p-2 hover:bg-gray-200 cursor-pointer"
-                                    aria-hidden="true"
-                                ></i>
-                            </div>
-                        </div>
-                        <div
+  <div @click="toggleWorkspaces" class="flex  items-center  hover:bg-gray-200">
+    <!-- Display Selected Workspace Name -->
+    <h3 class="bg-gray-500 w-fit text-white py-0.5 px-1.5 rounded-md text-md">
+      {{ selectedWorkspace.workspace_name.charAt(0) }}
+    </h3>
+    <svg v-if ="selectedWorkspace.id == user.workspaces[0].id"
+      class="absolute left-3.5 top-7"
+      width="20px"
+      viewBox="0 0 24 24"
+      fill="#000000"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <g id="SVGRepo_bgCarrier" stroke-width="0"></g>
+      <g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g>
+      <g id="SVGRepo_iconCarrier">
+        <path
+          d="M9 20H7C5.89543 20 5 19.1046 5 18V10.9199C5 10.336 5.25513 9.78132 5.69842 9.40136L10.6984 5.11564C11.4474 4.47366 12.5526 4.47366 13.3016 5.11564L18.3016 9.40136C18.7449 9.78132 19 10.336 19 10.9199V18C19 19.1046 18.1046 20 17 20H15M9 20V14C9 13.4477 9.44772 13 10 13H14C14.5523 13 15 13.4477 15 14V20M9 20H15"
+          stroke="#ffffff"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        ></path>
+      </g>
+    </svg>
+    <div class="cursor-pointer flex p-2 pl-1 justify-between w-ful items-center">
+      <h1 class="text-md  font-bold">{{ selectedWorkspace.workspace_name }}</h1>
+      <i class="fa fa-chevron-down text-xs ml-4" aria-hidden="true"></i>
+      <div
                             @mouseleave="option1 = false"
                             v-if="option1"
-                            class="absolute z-50 text-md font-light shadow-xl top-20 w-72 left-64 bg-white p-1 py-4 rounded-lg"
+                            class="absolute z-50 text-md font-light shadow-xl top-1 w-72 left-64 bg-white p-1 py-4 rounded-lg"
                         >
                             <div
                                 class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
@@ -597,7 +712,8 @@ onMounted(fetchBoards);
                                 </svg>
                                 <h1>Sort workspaces</h1>
                             </div>
-                            <div
+                            <div  @click.stop = "setTrash(selectedWorkspace.id)"
+                            v-if="selectedWorkspace.id != user.workspaces[0].id"
                                 class="flex items-center border-b my-2 py-2 hover:bg-gray-100 cursor-pointer rounded-md border-gray-400 mt-2 pb-2 px-4"
                             >
                                 <svg
@@ -628,7 +744,7 @@ onMounted(fetchBoards);
                                 </svg>
                                 <h1>Delete workspace</h1>
                             </div>
-                            <div
+                            <div @click.stop="toggleAdd('workspace')"
                                 class="flex my-4 mb-2 w-full hover:bg-gray-100 cursor-pointer rounded-md px-4 pt-2 pb-2 mt-6 items-center"
                             >
                                 <i class="fa fa-plus text-gray-500 mr-2"></i>
@@ -644,7 +760,20 @@ onMounted(fetchBoards);
                                 <h1>Browse all workspaces</h1>
                             </div>
                             <div
-                                @click="
+                               
+                                class="flex group/archive my-2 py-2 relative hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
+                            >
+                                <i
+                                    class="fa fa-trash text-gray-500 mr-2"
+                                    aria-hidden="true"
+                                ></i>
+                                <h1>Show trash/archive</h1>
+                                <div
+                            
+                            class="absolute hidden group-hover/archive:block z-50 text-md font-light shadow-xl top-1 left-[17.5rem] w-64 bg-white p-1 py-4 rounded-lg"
+                        >
+                        <div
+                                @click.stop="
                                     showTrash = true;
                                     trash = true;
                                     archive = false;
@@ -655,10 +784,10 @@ onMounted(fetchBoards);
                                     class="fa fa-trash text-gray-500 mr-2"
                                     aria-hidden="true"
                                 ></i>
-                                <h1>Show trash/archive</h1>
-                            </div>
-                            <div
-                                @click="
+                                <h1>Trash</h1>
+                                </div>
+                                <div
+                                @click.stop="
                                     showTrash = true;
                                     trash = false;
                                     archive = true;
@@ -670,11 +799,93 @@ onMounted(fetchBoards);
                                     aria-hidden="true"
                                 ></i>
                                 <h1>Archive</h1>
+                                </div>
+                    </div>
+                            </div>
+
+                            <div v-if = "selectedWorkspace.id != user.workspaces[0].id"
+                                @click.stop="
+                                    setArchive(selectedWorkspace.id)
+                                "
+                                class="flex my-2 py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
+                            >
+                                <i
+                                    class="fa fa-suitcase text-gray-500 mr-2"
+                                    aria-hidden="true"
+                                ></i>
+                                <h1>Archive</h1>
                             </div>
                         </div>
+    </div>
+    
+
+    <!-- Dropdown Menu -->
+    <div
+      v-if="workSpaces"
+      @mouseleave="workSpaces = false"
+      class="absolute bg-white z-10 left-0 top-14 p-4 w-66 rounded-lg shadow-lg h-fit"
+    >
+      <div class="relative">
+        <TextInput class="h-8 w-38 pl-6" placeholder="Search for a workspace"></TextInput>
+        <i class="absolute left-2 top-3 fa fa-search text-xs text-gray-400"></i>
+      </div>
+      <h1 class="text-gray-500 my-4">My workspaces</h1>
+      
+
+      <!-- Workspace List -->
+      <div
+        v-for="workspace in user.workspaces"
+        :key="workspace.id"
+        class="flex items-center relative overflow-y-auto max-h-10 hover:bg-gray-100"
+        @click="selectWorkspace(workspace)"
+      >
+      <div v-if = "workspace.is_archived == false && workspace.is_trashed == false"
+       class="flex items-center overflow-y-auto" >
+
+      <svg v-if ="workspace.id == user.workspaces[0].id"
+      class="absolute left-3.5 top-5"
+      width="20px"
+      viewBox="0 0 24 24"
+      fill="#000000"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <g id="SVGRepo_bgCarrier" stroke-width="0"></g>
+      <g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g>
+      <g id="SVGRepo_iconCarrier">
+        <path
+          d="M9 20H7C5.89543 20 5 19.1046 5 18V10.9199C5 10.336 5.25513 9.78132 5.69842 9.40136L10.6984 5.11564C11.4474 4.47366 12.5526 4.47366 13.3016 5.11564L18.3016 9.40136C18.7449 9.78132 19 10.336 19 10.9199V18C19 19.1046 18.1046 20 17 20H15M9 20V14C9 13.4477 9.44772 13 10 13H14C14.5523 13 15 13.4477 15 14V20M9 20H15"
+          stroke="#ffffff"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        ></path>
+      </g>
+    </svg>
+        <h3 class="bg-gray-500 w-fit text-white py-0.5 px-1.5 rounded-md text-md">
+          {{ workspace.workspace_name[0] }}
+        </h3>
+        <div class="cursor-pointer flex p-2 pl-1 items-center">
+          <h1 class="text-md font-bold">{{ workspace.workspace_name }}</h1>
+        </div>
+      </div>
+
+      </div>
+    </div>
+  </div>
+
+
+
+                            <div class="flex items-center p-2 pl-0 rounded-md">
+                                <i
+                                    @click="option1 = !option1"
+                                    class="fa fa-ellipsis-h text-xl ml-4 p-2 hover:bg-gray-200 cursor-pointer"
+                                    aria-hidden="true"
+                                ></i>
+                            </div>
+                        </div>
+                        
                     </div>
 
-                    <div class="w-fit flex items-center">
+                    <div class="w-fit flex relative items-center">
                         <div class="relative">
                             <TextInput
                                 class="h-10 my-2 w-44 pl-6 text-sm font-thin"
@@ -697,101 +908,66 @@ onMounted(fetchBoards);
                                     v-if="option3"
                                     class="absolute z-50 text-sm font-light shadow-xl top-0 w-72 left-64 bg-white p-1 py-4 rounded-lg"
                                 >
-                                    <div
-                                        class="flex w-full py-2 border-b hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
-                                    >
-                                        <h1 class="w-40">
-                                            Open board in a new tab
-                                        </h1>
-                                    </div>
-                                    <div
+                                    
+                                    <div @click.stop="toggleAdd('board')"
                                         class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
                                     >
-                                        <i
-                                            class="fa fa-pencil mr-2 text-gray-500"
-                                        ></i>
-                                        <h1 class="w-40">Rename board</h1>
+                                    <svg
+                                        fill="#bfbbbb"
+                                        width="24px"
+                                        height="24px"
+                                        viewBox="0 0 56 56"
+                                        xmlns="http://www.w3.org/2000/svg"
+                                    >
+                                        <g
+                                            id="SVGRepo_bgCarrier"
+                                            stroke-width="0"
+                                        ></g>
+                                        <g
+                                            id="SVGRepo_tracerCarrier"
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                        ></g>
+                                        <g id="SVGRepo_iconCarrier">
+                                            <path
+                                                d="M 13.7851 49.5742 L 42.2382 49.5742 C 47.1366 49.5742 49.5743 47.1367 49.5743 42.3086 L 49.5743 13.6914 C 49.5743 8.8633 47.1366 6.4258 42.2382 6.4258 L 13.7851 6.4258 C 8.9101 6.4258 6.4257 8.8398 6.4257 13.6914 L 6.4257 42.3086 C 6.4257 47.1602 8.9101 49.5742 13.7851 49.5742 Z M 13.8554 45.8008 C 11.5117 45.8008 10.1992 44.5586 10.1992 42.1211 L 10.1992 13.8789 C 10.1992 11.4414 11.5117 10.1992 13.8554 10.1992 L 26.0429 10.1992 L 26.0429 45.8008 Z M 42.1679 10.1992 C 44.4882 10.1992 45.8007 11.4414 45.8007 13.8789 L 45.8007 42.1211 C 45.8007 44.5586 44.4882 45.8008 42.1679 45.8008 L 29.9804 45.8008 L 29.9804 10.1992 Z"
+                                            ></path>
+                                        </g>
+                                    </svg>
+                                        <h1 class="w-40">New Board</h1>
                                     </div>
                                     <div
                                         class="flex w-full py-2 hover:bg-gray-100 justify-between cursor-pointer rounded-md px-4 items-center"
                                     >
                                         <div class="flex">
                                             <i
-                                                class="fa fa-arrow-right mr-2 text-gray-500"
+                                                class="far fa-folder ml-1 mr-2 text-gray-500 text-lg"
                                             ></i>
-                                            <h1 class="w-40">Move to</h1>
+                                            <h1 class="w-40">New Folder</h1>
                                         </div>
-                                        <i class="fa fa-chevron-right"></i>
+                                        
                                     </div>
-                                    <div
-                                        v-if="!boards.board.is_favorite"
-                                        class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
-                                    >
-                                        <i
-                                            class="far fa-star mr-2 text-gray-500"
-                                        ></i>
-                                        <h1 class="w-40">Add to favorites</h1>
-                                    </div>
-                                    <div
-                                        v-if="boards.board.is_favorite"
-                                        class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
-                                    >
-                                        <i
-                                            class="far fa-star mr-2 text-gray-500"
-                                        ></i>
-                                        <h1 class="w-40">Remove from favorites</h1>
-                                    </div>
-                                    <div
-                                        v-if="false"
-                                        class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
-                                    >
-                                        <i
-                                            class="far fa-star mr-2 text-gray-500"
-                                        ></i>
-                                        <h1 class="w-40">
-                                            Remove from favorites
-                                        </h1>
-                                    </div>
-                                    <div
-                                        class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
-                                    >
-                                        <i
-                                            class="far fa-file mr-2 text-gray-500"
-                                        ></i>
-                                        <h1 class="w-40">Duplicate</h1>
-                                    </div>
-                                    <div
-                                        class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
-                                    >
-                                        <i
-                                            class="fa fa-trash mr-2 text-gray-500"
-                                        ></i>
-                                        <h1 class="w-40">Delete</h1>
-                                    </div>
-                                    <div
-                                        class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
-                                    >
-                                        <i
-                                            class="fa fa-suitcase mr-2 text-gray-500"
-                                        ></i>
-                                        <h1 class="w-40">Archive</h1>
-                                    </div>
+                                    
+                                    
+                                    
+                                    
+                                    
                                 </div>
                     </div>
                     <div
-                        v-for="(boards, index) in user.teams"
+                        v-for="(boards, index) in selectedWorkspace.boards"
                         :key="boards.id"
                         class="group/project relative"
                     >
-                        <router-link
-                            :to="{
+                        <router-link v-if = "boards.workspace_id == selectedWorkspace.id"
+                        :to="{
                                 name: 'project',
-                                params: { boardId: boards.board.id },
-                            }"
+                                params: { boardName: boards.board_name }, // Pass boardName
+                             }"
                         >
                             <div
                                 :class="
-                                    boards.id === +boardId
+                                    boards.board_name === +boardId
                                         ? 'bg-blue-100'
                                         : 'bg-gray-200'
                                 "
@@ -821,7 +997,7 @@ onMounted(fetchBoards);
                                     </g>
                                 </svg>
                                 <h2 class="ml-2 text-sm">
-                                    {{ boards.board.board_name }}
+                                    {{ boards.board_name }}
                                 </h2>
 
                                 <div
@@ -856,7 +1032,7 @@ onMounted(fetchBoards);
                                         <i class="fa fa-chevron-right"></i>
                                     </div>
                                     <div
-                                        v-if="!boards.board.is_favorite"
+                                        v-if="!boards.is_favorite"
                                         class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
                                     >
                                         <i
@@ -865,7 +1041,7 @@ onMounted(fetchBoards);
                                         <h1 class="w-40">Add to favorites</h1>
                                     </div>
                                     <div
-                                        v-if="boards.board.is_favorite"
+                                        v-if="boards.is_favorite"
                                         class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
                                     >
                                         <i

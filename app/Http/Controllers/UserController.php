@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use Illuminate\Support\Facades\Log;
+
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -168,15 +170,16 @@ catch (Exception $e) {
 return response()->json(['error' => 'Could not create token'], 500);
 }
 $user = Auth::user()->load([
-    'teams.members',
-    'teams.board',
-    'teams.board.discussions',
+    'workspaces',
+            'workspaces.boards',
+            'workspaces.boards.team',
+            'workspaces.boards.team.members',
+            'workspaces.boards.tasks',
+            'workspaces.boards.tasks.updates',    
+            'workspaces.boards.discussions',    
+]);
+     // Will display user data in the browser and stop further execution
 
-    'teams.board.tasks',
-    'teams.board.tasks.updates',    
-    'boardsCreated',
-    'boardsOwned',
-    'boardsTrashed']);
 return response()->json([
 'status' => 'success',
 'user' => $user,
