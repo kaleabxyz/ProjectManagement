@@ -92,12 +92,21 @@ class RegisteredUserController extends Controller
         DB::commit(); // Commit transaction
         $user = Auth::user()->load([
             'workspaces',
+            'workspaces.folders',
             'workspaces.boards',
+            'workspaces.boards.owner:id,user_name,email,profile_picture_url',
+            'workspaces.boards.creator:id,user_name,email,profile_picture_url',
             'workspaces.boards.team',
             'workspaces.boards.team.members',
             'workspaces.boards.tasks',
+            'workspaces.boards.tasks.SubTasks',
+            'workspaces.boards.tasks.assignedUser:id,user_name,email,profile_picture_url',
             'workspaces.boards.tasks.updates',    
-            'workspaces.boards.discussions',    
+            'workspaces.boards.discussions',  
+            'workspaces.boards.discussions.task:id,task_name', 
+
+            'workspaces.boards.discussions.user:id,user_name,email,profile_picture_url',    
+
 
         ]);
         // Return the token and user data

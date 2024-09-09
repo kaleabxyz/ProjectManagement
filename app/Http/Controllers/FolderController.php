@@ -1,7 +1,7 @@
 <?php
 
 namespace App\Http\Controllers;
-
+use Illuminate\Support\Facades\Log;
 use App\Models\Folder;
 use Illuminate\Http\Request;
 
@@ -15,15 +15,17 @@ class FolderController extends Controller
         $folders = Folder::with(['team', 'workspace', 'trashedBy'])->get();
         return response()->json($folders);
     }
-
+    public function create()
+    {
+        // You may not need this for an API. For web apps, return a view.
+    }
     /**
      * Store a newly created folder in storage.
      */
     public function store(Request $request)
     {
-        $request->validate([
+        $validatedData = $request->validate([
             'folder_name' => 'required|string|max:255',
-            'team_id' => 'required|exists:teams,id',
             'workspace_id' => 'required|exists:workspaces,id',
             'is_favorite' => 'boolean',
             'is_archived' => 'boolean',
@@ -31,9 +33,11 @@ class FolderController extends Controller
             'trashed_at' => 'nullable|date',
             'trashed_by' => 'nullable|exists:users,id',
         ]);
-
-        $folder = Folder::create($request->all());
-
+    
+        Log::info('Validated Folder Data:', $validatedData);
+    
+        $folder = Folder::create($validatedData);
+    
         return response()->json($folder, 201);
     }
 

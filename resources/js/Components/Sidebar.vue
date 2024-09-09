@@ -1,9 +1,11 @@
 <script setup>
 import ResponsiveNavLink from "@/Components/ResponsiveNavLink.vue";
 import TextInput from "@/Components/TextInput.vue";
-import { ref, watch, onMounted } from "vue";
+import { ref, watch, onMounted, computed } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import axios from "axios";
+import state from '../state'; // Import the global state
+
 function handleImageError() {
     document.getElementById("screenshot-container")?.classList.add("!hidden");
     document.getElementById("docs-card")?.classList.add("!row-span-1");
@@ -26,6 +28,8 @@ const option3 = ref(false);
 const router = useRouter();
 const workspace_name = ref('New Workspace');
 const board_name = ref('New Board');
+const folder_name = ref('New Folder');
+
 
 const showNav = ref("active");
 const showTrash = ref(false);
@@ -38,26 +42,39 @@ const manuallyActivated = ref(true);
 const workSpaces = ref(false);
 const addVisible = ref('');
 const showBoardOptions = ref([]);
+const showFolderOptions = ref([]);
 
 
-const user = JSON.parse(localStorage.getItem('user'));
-console.log("🚀 ~ user:", user);
-const selectedWorkspace = ref(user.workspaces[0]); // Initially select "Main workspace"
+
+
+
+// Access the user data from the global state
+const user = computed(() => state.state.user);
+console.log("🚀 ~ user:", user.value);
+const selectedWorkspace = ref(user.value.workspaces[0]); // Initially select "Main workspace"
 console.log("🚀 ~ selected workspace:", selectedWorkspace.value.id)
-user.workspaces.forEach(workspace => {
-  console.log("🚀 ~ workspace:", workspace);
-  console.log("🚀 ~ boards:", workspace.boards.board);
+user.value.workspaces.forEach(workspace => {
+    console.log("🚀 ~ workspace:", workspace);
+    if (workspace.boards) {
+        console.log("🚀 ~ boards:", workspace.boards);
 
-  // Initialize 'false' for each board
-  workspace.boards.forEach(() => {
-    showBoardOptions.value.push(false);
-  });
+        // Initialize 'false' for each board
+        workspace.boards.forEach(() => {
+            showBoardOptions.value.push(false);
+            showFolderOptions.value.push(false);
+
+
+        });
+    }
 });
 
 
 
 const toggleBoardOption = (index) => {
     showBoardOptions.value[index] = !showBoardOptions.value[index];
+};
+const toggleFolderOption = (index) => {
+    showFolderOptions.value[index] = !showFolderOptions.value[index];
 };
 
 
@@ -68,7 +85,7 @@ const toggleWorkspaces = () => {
 const toggleAdd = (item) => {
     
     addVisible.value =item ;
-    console.log("🚀 ~ workspace_name:", workspace_name.value[0])
+    
 };
 const hideAddWorkspace = () => {
     addVisible.value = '';
@@ -82,17 +99,55 @@ const createWorkspace = async () => {
         trashed_by: null,
         trashed_at: null,
         folder_id: null,
+       
       is_favorite:false,
-      created_by: user.id,
+      created_by: user.value.id,
     });
         workspace_name.value = 'New Workspace';
         
     const newWorkspace = response.data;
     console.log("🚀 ~ createWorkspace ~ newWorkspace:", newWorkspace)
-    user.workspaces.push(newWorkspace);
-    console.log("🚀 ~ createWorkspace ~ user.workspace:", user.workspaces);
+    user.value.workspaces.push(newWorkspace);
+    console.log("🚀 ~ createWorkspace ~ user.workspace:", user.value.workspaces);
+    localStorage.setItem('user', JSON.stringify(user.value));
+    
+      // Clear input after submission
+    // Reset privacy to default
+    hideAddWorkspace(); // Close the modal after creation
+  } catch (error) {
+    console.error('Error creating workspace:', error);
+    alert('Failed to create workspace.');
+  }
+};
+const createFolder = async () => {
+    const folderData = {
+        folder_name: folder_name.value,
+        workspace_id: selectedWorkspace.value.id,
+        is_trashed: false,
+        is_archived: false,
+        trashed_by: null,
+        trashed_at: null,
+      is_favorite:false,
+    }
+    console.log("🚀 ~ createFolder ~ folder data:", folderData)
+    try {
+    const response = await axios.post('/api/folders', folderData);
+        folder_name.value = 'New Folder';
+        
+    const newFolder = response.data;
+        console.log("🚀 ~ createWorkspace ~ newWorkspace:", newFolder)
+    
+        const workspace = user.value.workspaces.find(w => w.id === selectedWorkspace.value.id);
+        console.log("🚀 ~ createFolder ~ workspace.folders:", workspace.folders)
+        if (workspace) {
+            console.log("🚀 ~ createFolder ~ workspace.folders:", workspace.folders)
+      workspace.folders.push(newFolder);
+    }
+      
 
-    alert('Workspace created successfully!');
+    // Optionally, update localStorage
+    localStorage.setItem('user', JSON.stringify(user.value))
+    
       // Clear input after submission
     // Reset privacy to default
     hideAddWorkspace(); // Close the modal after creation
@@ -102,28 +157,38 @@ const createWorkspace = async () => {
   }
 };
 const createBoard = async () => {
+    const boardData = {
+  board_name: board_name.value,
+  workspace_id: selectedWorkspace.value.id,
+  owner: user.value.id,
+  is_trashed: false,
+  is_archived: false,
+  trashed_by: null,
+  folder_id: null,
+  description: null,
+  trashed_at: null,
+  is_favorite: false,
+  created_by: user.value.id,
+};
+
+// Log the form data to the console before making the request
+console.log("🚀 ~ Form Data:", boardData);
     try {
-    const response = await axios.post('/api/boards', {
-        board_name: board_name.value,
-        workspace_id: selectedWorkspace.value.id,
-        owner:user.id,
-        is_trashed: false,
-        is_archived: false,
-        trashed_by: null,
-        folder_id: null,
-        trashed_at: null,
-      is_favorite:false,
-      created_by: user.id,
-    });
+        const response = await axios.post('/api/boards', boardData);
+        console.log("🚀 ~ Response Data:", response.data);
         board_name.value = 'New Board';
       
     
-    const newBoard = response.data;
-    console.log("🚀 ~ createWorkspace ~ newWorkspace:", newBoard)
-    user.workspaces.boards.push(newBoard);
-    console.log("🚀 ~ createWorkspace ~ user.workspace:", user.teams);
+        const newBoard = response.data.board;
+    // Push the new board into the appropriate workspace
+    const workspace = user.value.workspaces.find(w => w.id === selectedWorkspace.value.id);
+    if (workspace) {
+      workspace.boards.push(newBoard);
+    }
 
-    alert('Workspace created successfully!');
+    // Optionally, update localStorage
+    localStorage.setItem('user', JSON.stringify(user.value))
+   
       // Clear input after submission
     // Reset privacy to default
     hideAddWorkspace(); // Close the modal after creation
@@ -205,6 +270,9 @@ try {
     console.error("Error trashing :", error);
 }
 } 
+const moveToFolder = (folderId) => {
+
+}
 const filterByFavorite = (item) => {
     filteredFavorites.value = item.filter((item) => item.is_favorite === 1);
 };
@@ -212,13 +280,23 @@ const openBoardInNewTab = (boardId) => {
     window.open(`/project/${boardId}`, "_blank");
 };
 watch(
-    () => route.params.boardId,
+    () => route.params.boardName,
     (newBoardId) => {
         boardId.value = newBoardId; // Update reactive reference
     }
 );
 
-onMounted(fetchBoards);
+onMounted(() => {
+      const storedUser = localStorage.getItem('user');
+      if (storedUser) {
+        user.value = JSON.parse(storedUser);
+      } else {
+        fetchUserData();
+      }
+      if (!state.state.user) {
+    state.fetchUser(); // Fetch user data if not available
+  }
+    });
 </script>
 
 <template>
@@ -230,7 +308,7 @@ onMounted(fetchBoards);
         />
     </head>
     <div
-        v-if="addVisible == 'workspace' || addVisible == 'board'"
+        v-if="addVisible == 'workspace' || addVisible == 'board' || addVisible == 'folder'"
         class="bg-black flex p-8 pb-0 fixed z-20 items-center justify-center inset-0 bg-opacity-40"
         @click.self="hideAddWorkspace"
     >
@@ -244,7 +322,7 @@ onMounted(fetchBoards);
       <div class="flex justify-center mb-4">
         <!-- Workspace Icon Placeholder -->
         <div class="flex items-center justify-center w-20 h-20 bg-pink-500 rounded-full text-white text-2xl font-bold">
-          {{addVisible === 'workspace' ? workspace_name[0] : addVisible === 'board' ? board_name[0] : '' }}
+          {{addVisible === 'workspace' ? workspace_name[0] : addVisible === 'board' ? board_name[0] : addVisible === 'folder' ? folder_name[0]: '' }}
         </div>
       </div>
       <form v-if ="addVisible === 'workspace'"
@@ -278,6 +356,40 @@ onMounted(fetchBoards);
             class="bg-blue-600 text-white py-2 px-4 rounded-md shadow hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           >
             Add workspace
+          </button>
+        </div>
+      </form>
+      <form v-if ="addVisible === 'folder'"
+      @submit.prevent="createFolder">
+        <div class="mb-4">
+          <label
+            for="workspaceName"
+            class="block text-sm font-medium text-gray-700 mb-1"
+            >Folder name</label
+          >
+          <input
+            type="text"
+            id="workspaceName"
+            v-model="folder_name"
+            placeholder="Choose a name for your workspace"
+            class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+            required
+          />
+        </div>
+        
+        <div class="flex justify-end space-x-4">
+          <button
+            @click="hideAddWorkspace"
+            type="button"
+            class="bg-transparent hover:bg-gray-100 text-gray-700 py-2 px-4 rounded-md"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            class="bg-blue-600 text-white py-2 px-4 rounded-md shadow hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            Add Folder
           </button>
         </div>
       </form>
@@ -459,12 +571,13 @@ onMounted(fetchBoards);
                     <router-link v-if="boards.board.is_favorite && boards.board.board_name"
                     :to="{
         name: 'project',
-        params: { boardName: boards.board.name } // Ensure `boards.board.name` is defined
-    }"
+    params: { boardName: boards.board.name } ,// Ensure `boards.board.name` is defined
+    query:{workspace: boards.workspace_id}}"
                     >
+                    {{ "hello", selectedWorkspace }}
                         <div
                             :class="
-                                board.id === +boardId
+                                boards.board_name == boardId
                                     ? 'bg-blue-100'
                                     : 'bg-gray-200'
                             "
@@ -936,7 +1049,7 @@ onMounted(fetchBoards);
                                     </svg>
                                         <h1 class="w-40">New Board</h1>
                                     </div>
-                                    <div
+                                    <div @click.stop="toggleAdd('folder')"
                                         class="flex w-full py-2 hover:bg-gray-100 justify-between cursor-pointer rounded-md px-4 items-center"
                                     >
                                         <div class="flex">
@@ -962,18 +1075,19 @@ onMounted(fetchBoards);
                         <router-link v-if = "boards.workspace_id == selectedWorkspace.id"
                         :to="{
                                 name: 'project',
-                                params: { boardName: boards.board_name }, // Pass boardName
+    params: { boardName: boards.board_name },
+   query: {workSpace: boards.workspace_id} // Pass boardName
                              }"
                         >
                             <div
                                 :class="
-                                    boards.board_name === +boardId
+                                    boards.board_name == boardId
                                         ? 'bg-blue-100'
                                         : 'bg-gray-200'
                                 "
                                 class="flex my-2 mx-1 items-center group-hover/project:bg-blue-100 cursor-pointer p-2 rounded-md"
                             >
-                                {{ console.log(boardId) }}
+                                {{ console.log('board name',boards.workspace_id) }}
                                 <svg
                                     fill="#bfbbbb"
                                     width="24px"
@@ -1005,7 +1119,7 @@ onMounted(fetchBoards);
                                     v-if="showBoardOptions[index]"
                                     class="absolute z-50 text-sm font-light shadow-xl top-0 w-72 left-64 bg-white p-1 py-4 rounded-lg"
                                 >
-                                    <div
+                                    <div @click = "openBoardInNewTab(boards.id)"
                                         class="flex w-full py-2 border-b hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
                                     >
                                         <h1 class="w-40">
@@ -1019,6 +1133,195 @@ onMounted(fetchBoards);
                                             class="fa fa-pencil mr-2 text-gray-500"
                                         ></i>
                                         <h1 class="w-40">Rename board</h1>
+                                    </div>
+                                    <div
+                                        class="flex w-full relative py-2 group/move hover:bg-gray-100 justify-between cursor-pointer rounded-md px-4 items-center"
+                                    >
+                                        <div class="flex">
+                                            <i
+                                                class="fa fa-arrow-right mr-2 text-gray-500"
+                                            ></i>
+                                            <h1 class="w-40">Move to</h1>
+                                            <div
+                            
+                            class="absolute hidden group-hover/move:block z-50 text-md font-light shadow-xl top-1 left-[17.5rem] w-64 bg-white p-1 py-4 rounded-lg"
+                        >
+                        <div
+                                @click.stop="
+                                    showTrash = true;
+                                    trash = true;
+                                    archive = false;
+                                "
+                                class="flex relative group/folder my-2 py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
+                            >
+                                <i
+                                    class="far fa-folder text-gray-500 mr-2"
+                                    aria-hidden="true"
+                                ></i>
+                                <h1>Folder</h1>
+                               
+                                <div v-for ="folder in selectedWorkspace.folders"
+                            
+                            class="absolute hidden group-hover/folder:block z-50 text-md font-light shadow-xl top-1 left-60 h-auto overflow-y-auto w-64 bg-white p-1 py-4 rounded-lg"
+                        > {{ console.log('workspace is this',folder.folder_name) }}
+                        <div
+                                @click.stop="
+                                    moveToFolder(folder.id)
+                                "
+                                class="flex my-2 py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
+                            > 
+                                <i
+                                    class="far fa-folder text-gray-500 mr-2"
+                                    aria-hidden="true"
+                                ></i>
+                                <h1>{{ folder.folder_name }}</h1>
+                               
+                                </div>
+                                
+                                
+                    </div>
+                                </div>
+                                <div
+                                @click.stop="
+                                    showTrash = true;
+                                    trash = false;
+                                    archive = true;
+                                "
+                                class="flex relative group/workspace my-2 py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
+                            >
+                                <i
+                                    class="far fa-square text-gray-500 mr-2"
+                                    aria-hidden="true"
+                                ></i>
+                                <h1>Workspace</h1>
+                                <div v-for ="workspace in user.workspaces"
+                            
+                            class="absolute hidden group-hover/workspace:block z-50 text-md font-light shadow-xl top-1 left-60 w-64 bg-white p-1 py-4 rounded-lg"
+                        >
+                        <div
+                                @click.stop="
+                                    showTrash = true;
+                                    trash = true;
+                                    archive = false;
+                                "
+                                class="flex my-2 py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
+                            >
+                                <i
+                                    class="far fa-square text-gray-500 mr-2"
+                                    aria-hidden="true"
+                                ></i>
+                                <h1>{{ workspace.workspace_name }}</h1>
+                                </div>
+                                
+                    </div>
+                                </div>
+                    </div>
+                                        </div>
+                                        <i class="fa fa-chevron-right"></i>
+                                    </div>
+                                    <div
+                                        v-if="!boards.is_favorite"
+                                        class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
+                                    >
+                                        <i
+                                            class="far fa-star mr-2 text-gray-500"
+                                        ></i>
+                                        <h1 class="w-40">Add to favorites</h1>
+                                    </div>
+                                    <div
+                                        v-if="boards.is_favorite"
+                                        class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
+                                    >
+                                        <i
+                                            class="far fa-star mr-2 text-gray-500"
+                                        ></i>
+                                        <h1 class="w-40">Remove from favorites</h1>
+                                    </div>
+                                    <div
+                                        v-if="false"
+                                        class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
+                                    >
+                                        <i
+                                            class="far fa-star mr-2 text-gray-500"
+                                        ></i>
+                                        <h1 class="w-40">
+                                            Remove from favorites
+                                        </h1>
+                                    </div>
+                                    <div
+                                        class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
+                                    >
+                                        <i
+                                            class="far fa-file mr-2 text-gray-500"
+                                        ></i>
+                                        <h1 class="w-40">Duplicate</h1>
+                                    </div>
+                                    <div
+                                        class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
+                                    >
+                                        <i
+                                            class="fa fa-trash mr-2 text-gray-500"
+                                        ></i>
+                                        <h1 class="w-40">Delete</h1>
+                                    </div>
+                                    <div
+                                        class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
+                                    >
+                                        <i
+                                            class="fa fa-suitcase mr-2 text-gray-500"
+                                        ></i>
+                                        <h1 class="w-40">Archive</h1>
+                                    </div>
+                                </div>
+                            </div>
+                        </router-link>
+                        <span
+                            class="group-hover/project:block hidden absolute top-3.5 right-5"
+                        >
+                            <i
+                                @click.stop="toggleBoardOption(index)"
+                                class="fa fa-ellipsis-h text-xl ml-4 p-1 rounded-md hover:bg-blue-300 cursor-pointer"
+                                aria-hidden="true"
+                            ></i>
+                        </span>
+                    </div>
+                    <div
+                        v-for="(boards, index) in selectedWorkspace.folders"
+                        :key="boards.id"
+                        class="group/project relative"
+                    >
+                        <div v-if = "boards.workspace_id == selectedWorkspace.id"
+                        
+                        >
+                            <div
+                                :class="
+                                    boards.board_name === +boardId
+                                        ? 'bg-blue-100'
+                                        : 'bg-gray-200'
+                                "
+                                class="flex my-2 mx-1 items-center group-hover/project:bg-blue-100 cursor-pointer p-2 rounded-md"
+                            >
+                                {{ console.log(boardId) }}
+                                <i
+                                                class="far fa-folder ml-1 mr-2 text-gray-500 text-lg"
+                                            ></i>
+                                <h2 class="ml-2 text-sm">
+                                    {{ boards.folder_name }}
+                                </h2>
+
+                                <div
+                                    @mouseleave="toggleFolderOption(index)"
+                                    v-if="showFolderOptions[index]"
+                                    class="absolute z-50 text-sm font-light shadow-xl top-0 w-72 left-64 bg-white p-1 py-4 rounded-lg"
+                                >
+                                    
+                                    <div
+                                        class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
+                                    >
+                                        <i
+                                            class="fa fa-pencil mr-2 text-gray-500"
+                                        ></i>
+                                        <h1 class="w-40">Rename folder</h1>
                                     </div>
                                     <div
                                         class="flex w-full py-2 hover:bg-gray-100 justify-between cursor-pointer rounded-md px-4 items-center"
@@ -1086,12 +1389,12 @@ onMounted(fetchBoards);
                                     </div>
                                 </div>
                             </div>
-                        </router-link>
+                        </div>
                         <span
                             class="group-hover/project:block hidden absolute top-3.5 right-5"
                         >
                             <i
-                                @click="toggleBoardOption(index)"
+                                @click="toggleFolderOption(index)"
                                 class="fa fa-ellipsis-h text-xl ml-4 p-1 rounded-md hover:bg-blue-300 cursor-pointer"
                                 aria-hidden="true"
                             ></i>

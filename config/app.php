@@ -14,6 +14,11 @@ return [
     */
 
     'name' => env('APP_NAME', 'Laravel'),
+    'providers' => [
+    // Other service providers
+    Laravel\Sanctum\SanctumServiceProvider::class,
+],
+
 
     /*
     |--------------------------------------------------------------------------

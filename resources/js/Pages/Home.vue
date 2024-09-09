@@ -19,13 +19,13 @@ const showSide = (val) => {
 
 <template>
     <Head title="home" />
-    <body class="bg-custom-blue min-h-screen flex flex-col">
+    <body class="bg-custom-blue min-h-screen w-full flex flex-col">
         <Navbar></Navbar>
         <div class="flex h-full ">
             <Sidebar @nav="showSide" />
             <router-view />
         </div>
-        <div class="bg-custome-blue"
+        <div class="bg-custome-blue h-full w-full"
         :class="{
                     'pl-[275px] ': side === 'active',
                     'pl-7': side === 'inactive',

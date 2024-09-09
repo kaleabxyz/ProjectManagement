@@ -65,15 +65,15 @@ class UpdateController extends Controller
     public function update(Request $request, Update $update)
     {
         $validatedData = $request->validate([
-            'task_id' => 'nullable|exists:tasks,id',
+           
             'user_id' => 'nullable|exists:users,id',
-            'content' => 'required|string',
-            'reply' => 'nullable|boolean',
+            'content' => 'nullable|string',
+           
             'has_reply' => 'nullable|boolean',
 
-            'parent_id' => 'nullable|exists:updates,id',
+      
             'read' => 'nullable|boolean',
-            'board_id' => 'required|exists:boards,id',
+            
         ]);
 
         // Update the existing update with validated data

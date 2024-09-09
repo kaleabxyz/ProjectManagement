@@ -7,11 +7,13 @@ import SideDetail from "@/Components/SideDetail.vue";
 import TextInput from "@/Components/TextInput.vue";
 import axios from "axios";
 import { useRoute } from "vue-router";
+import state from '../state';
 
 import { ref, watch, onMounted, computed, onUnmounted } from "vue";
 
 const addTask = ref("+ AddTask");
 const board = ref([]);
+const boardName = ref(null);
 const discussionActive = ref(false);
 const filteredTasks = ref([]);
 const filteredTasksId = ref([]);
@@ -22,8 +24,15 @@ const projectName = ref("Project managemnt");
 const ProjectDetail = ref(false);
 const replyContent = ref("");
 const route = useRoute();
+const selectedTask = ref(null);
 const selectedTaskId = ref(null);
 const selectedTaskName = ref("");
+const selectOwner = ref([]);
+const selectPriority = ref([]);
+const selectStatus = ref([]);
+const selectOwnerSub = ref([]);
+const selectPrioritySub = ref([]);
+const selectStatusSub = ref([]);
 const showAll = ref(false);
 const showBudget = ref(true);
 const showBudgetS = ref(true);
@@ -42,18 +51,15 @@ const showOwner = ref(true);
 const showOwnerS = ref(true);
 const showPriority = ref(true);
 const showPriorityS = ref(true);
-const showReplyInput = ref(filteredUpdates.value.map(() => false));
-const showSelector = ref(false);
-const showSelectorId = ref(null);
-const showSelectorPId = ref(null);
-const showSelectorSId = ref(null);
+const showReplyInput = ref([]);
 const showStatus = ref(true);
 const showStatusS = ref(true);
-const showSubTasks = ref(false);
+const showSubTasks = ref([]);
 const showTable = ref(true);
 const showTasks = ref(false);
 const showTimeLine = ref(true);
 const showTimeLineS = ref(true);
+const showUpdates = ref([]);
 const side = ref("active");
 const subItem = ref(false);
 const taskUpdate = ref(false);
@@ -63,12 +69,15 @@ const teams = ref([]);
 const updateContent = ref("");
 const updates = ref([]);
 const users = ref([]);
+const workSpace = ref(null);
+
 const workspaces = ref([]);
 
 
 //previous
 
-
+const user = computed(() => state.state.user);
+console.log("🚀 ~ userin project:", user.value.id);
 
 
 const fetchTasks = async () => {
@@ -94,20 +103,32 @@ const fetchUpdates = async () => {
         console.error("There was an error fetching updates!", error);
     }
 };
-const fetchBoard = async (boardId) => {
-    try {
-        const response = await axios.get(`/api/boards/${boardId}`);
-        board.value = response.data;
-        console.log("Fetched Board:", board.value);
-        filterTasksByBoard();
-        filterTeamByBoard();
-        filterUpdatesByBoard();
-    } catch (error) {
-        console.error(
-            `There was an error fetching board with ID ${boardId}!`,
-            error
-        );
-    }
+const fetchBoard =  (workSpace,boardName) => {
+    console.log('hellow is this working',workSpace.value,boardName.value)
+    user.value.workspaces.forEach(workspace => {
+       if(workspace.id ==workSpace.value)
+       {
+           workspace.boards.forEach(b => {
+               if (b.board_name == boardName.value)
+           {
+           
+                   board.value = b;
+                   b.discussions.forEach(() => {
+                    showReplyInput.value.push(false);  
+                   })
+                   b.tasks.forEach(() => {
+                       showSubTasks.value.push(false);
+                       selectOwner.value.push(false);
+                       selectPriority.value.push(false);
+                       selectStatus.value.push(false);
+                       showUpdates.value.push(false);
+                       console.log('showsub task',showSubTasks );
+                 })       
+            
+           }    
+     })
+    } 
+    })
 };
 const fetchTeam = async () => {
     try {
@@ -194,6 +215,65 @@ const updateTaskName = async () => {
         console.error("Error updating task name:", error);
     }
 };
+const setOwner = async (userId ,taskId) => {
+    try {
+        await axios.patch(`/api/tasks/${taskId}`, {
+            assigned_to: userId,
+        });
+        user.value.workspaces.forEach(workspace => {
+            workspace.boards.forEach(board => {
+                const task = board.tasks.find(task => task.id === taskId);
+                if (task) {
+                    task.assigned_to = userId;
+                    
+                }
+            });
+        });
+        localStorage.setItem('user', JSON.stringify(user.value))
+    } catch (error) {
+        console.error("Error updating task owner:", error);
+    }
+}
+const setStatus = async (status ,taskId) => {
+    console.log('status',status)
+    try {
+        await axios.patch(`/api/tasks/${taskId}`, {
+            status: status,
+        });
+        user.value.workspaces.forEach(workspace => {
+            workspace.boards.forEach(board => {
+                const task = board.tasks.find(task => task.id === taskId);
+                if (task) {
+                    task.status = status;
+                   
+                }
+            });
+        });
+        localStorage.setItem('user', JSON.stringify(user.value))
+    } catch (error) {
+        console.error("Error updating task status:", error);
+    }
+}
+const setPriority = async (priority ,taskId) => {
+    
+    try {
+        await axios.patch(`/api/tasks/${taskId}`, {
+            priority: priority,
+        });
+        user.value.workspaces.forEach(workspace => {
+            workspace.boards.forEach(board => {
+                const task = board.tasks.find(task => task.id === taskId);
+                if (task) {
+                    task.priority = priority;
+                    console.log("🚀 ~ setOwner ~ Updated Task:", task);
+                }
+            });
+        });
+        localStorage.setItem('user', JSON.stringify(user.value))
+    } catch (error) {
+        console.error("Error updating task priority:", error);
+    }
+}
 const updateBoardName = async () => {
   try {
     await axios.put(`http://127.0.0.1:8000/api/boards/${board.value.id}`, {
@@ -215,181 +295,232 @@ const updateBoardDescription = async () => {
   }
 };
 
-const postUpdate = async () => {
-    console.log("content update", updateContent.value);
-    const selectedTask = filteredTasksId.value[0];
-    if (updateContent.value.trim() === "") {
-        // Do not post if content is empty
+const postUpdate = async (taskId) => {
+    
+
+    const userId = user.value.id;
+    const userObject = {
+        id: userId,
+        user_name: user.value.user_name, // Assuming your user object has 'name'
+        profile_picture_url: user.value.profile_picture_url, // Assuming your user object has 'profile_picture_url'
+        email:user.value.email,
+    }; 
+    // Check if content is empty or no task is found
+    if (!selectedTask || updateContent.value.trim() === "") {
         return;
     }
+
     const payload = {
         content: updateContent.value,
-        task_id: selectedTask.id,
+        task_id: taskId,
         read: false,
-        user_id: 1, // Replace with actual user ID
+        reply: 0,
+        has_reply: false,
+        user_id: user.value.id, // Replace with actual user ID
         board_id: board.value.id, // Replace with actual board ID
     };
-    console.log("Posting update with payload:", payload);
+    console.log('update payload',payload)
 
     try {
-        await axios.post("/api/updates", {
-            content: updateContent.value,
-            task_id: selectedTask.id,
-            user_id: 1,
-            read: false,
-            board_id: board.value.id,
+        // Send the request to post the update
+        const response = await axios.post("/api/updates", payload);
+
+        // Assuming the server returns the created update
+        const createdUpdateId = response.data.id; // Extract the ID of the newly created update
+
+        // Fetch the full update details from the server
+        const fullUpdateResponse = await axios.get(`/api/updates/${createdUpdateId}`);
+        const newUpdate = fullUpdateResponse.data;
+        
+        const formattedUpdate = {
+            ...newUpdate,
+            task: {
+                id: selectedTask.id,
+                task_name: selectedTask.task_name,
+            },
+            user: userObject, // Nest the user data under 'user'
+        };
+        console.log('update response',formattedUpdate)
+
+        // Push the new update to the board's discussions array
+        
+        console.log('board', board.value.discussions);
+        user.value.workspaces.forEach(workspace => {
+            const matchingBoard = workspace.boards.find(b => b.id === board.value.id);
+            if (matchingBoard) {
+                matchingBoard.discussions.push(formattedUpdate);
+                
+            }
         });
-        // Optionally, handle success (e.g., clear input, show a success message)
+        localStorage.setItem('user', JSON.stringify(user.value))
+        fetchBoard(workSpace,boardName);
+
+        // Clear the input content after successful post
         updateContent.value = "";
     } catch (error) {
-        // Handle error (e.g., show an error message)
         console.error("Failed to post update:", error);
     }
 };
+
 const toggleReplyInput = (index) => {
     showReplyInput.value[index] = !showReplyInput.value[index];
 };
 
 // Function to handle reply submission
-const submitReply = (update, index) => {
+const submitReply = async (updateId,index) => {
     if (replyContent.value.trim() === "") return; // Do not post if the input is empty
+    {{console.log('update id',updateId)}}
+    // Get user details from the current state
+    const userId = user.value.id;
+    const userObject = {
+        id: userId,
+        user_name: user.value.user_name, // Assuming your user object has 'user_name'
+        profile_picture_url: user.value.profile_picture_url, // Assuming your user object has 'profile_picture_url'
+    };
 
     // Prepare the data for the reply
     const replyData = {
         content: replyContent.value,
-        user_id: 1,
+        user_id: userId,
+        has_reply: false,
         board_id: board.value.id,
         task_id: selectedTaskId.value,
-        parent_id: update, // Set the parent ID of the update where the reply button was clicked
+        parent_id: updateId, // Set the parent ID of the update where the reply button was clicked
         reply: 1, // Mark as reply
     };
-    console.log("Reply to be posted:", replyData);
+    console.log('reply data', replyData);
 
-    // Make an API call to create the reply
-    axios
-        .post("/api/updates", replyData)
-        .then((response) => {
-            // Handle successful reply submission
-            console.log("Reply posted:", response.data);
-            filteredUpdates.value.push(response.data);
-            replyContent.value = ""; // Clear the input after posting
-            showReplyInput.value = false; // Hide the input after posting
+    try {
+        // Make an API call to create the reply
+        const response = await axios.post("/api/updates", replyData);
 
-            updateTaskHasReply(update);
-        })
-        .catch((error) => {
-            // Handle errors
-            console.error("Error posting reply:", error);
+        // Assuming the server returns the created reply
+        const newReply = replyData;
+        const formattedReply = {
+            ...newReply,
+            task: {
+                id: selectedTaskId.value,
+                task_name: board.value.tasks.find(task => task.id === selectedTaskId.value)?.task_name, // Get task name
+            },
+            user: userObject, // Nest the user data under 'user'
+        };
+
+        // Push the new reply to the board's discussions array
+       
+
+        // Update the discussions in the user data
+        user.value.workspaces.forEach(workspace => {
+            workspace.boards.forEach(b => {
+                if (b.id === board.value.id) {
+                    b.discussions.push(formattedReply);
+                }
+            });
         });
 
-        const updateTaskHasReply = (updateId) => {
-    axios
-        .patch(`/api/updates/${updateId}`,
-            {
-                has_reply: true,
-                
-            }) // Adjust the endpoint and method as needed
-        .then((response) => {
-            console.log("Task updated with has_reply set to true:", response.data);
-            // Find and update the task in filteredTasks
-            const taskIndex = filteredUpdates.value.findIndex(task => task.id === taskId);
-            if (taskIndex !== -1) {
-                filteredUpdates.value[taskIndex] = { ...filteredUpdates.value[taskIndex], has_reply: true };
-            }
-        })
-        .catch((error) => {
-            console.error("Error updating task:", error);
+        // Save the updated user data in local storage
+        localStorage.setItem('user', JSON.stringify(user.value));
+        fetchBoard(workSpace,boardName);
+        // Clear the input content and hide the reply input
+        replyContent.value = "";
+        showReplyInput.value[index] = false;
+
+        // Optionally, you can call any method to update the task or update state if necessary
+        updateTaskHasReply(updateId);
+
+    } catch (error) {
+        // Handle errors
+        console.error("Error posting reply:", error);
+    }
+};
+
+// Function to update the task to mark it as having a reply
+const updateTaskHasReply = async (updateId) => {
+    try {
+        // Send a PATCH request to update the 'has_reply' status in the database
+        await axios.patch(`/api/updates/${updateId}`, {
+            has_reply: true,
         });
-};
-};
 
-const toggleOwner = (task) => {
-    task.selectOwner = !task.selectOwner;
+        // Find and update the discussion in board.discussions
+        
 
-    // Ensure only one selector is active at a time
-    if (task.selectOwner) {
-        task.selectStatus = false;
-        task.selectPriority = false;
-    }
+        // Update the discussions in the user object
+        user.value.workspaces.forEach(workspace => {
+            workspace.boards.forEach(b => {
+                if (b.id === board.value.id) {
+                    const userDiscussionIndex = b.discussions.findIndex(discussion => discussion.id === updateId);
+                    if (userDiscussionIndex !== -1) {
+                        b.discussions[userDiscussionIndex] = {
+                            ...b.discussions[userDiscussionIndex],
+                            has_reply: true
+                        };
+                    }
+                }
+            });
+        });
 
-    setSelectOwnerToFalse(showSelectorId.value);
-    showSelectorId.value = task.id;
-    showSelector.value = task.selectOwner;
-};
-
-const toggleStatus = (task) => {
-    task.selectStatus = !task.selectStatus;
-
-    // Ensure only one selector is active at a time
-    if (task.selectStatus) {
-        task.selectOwner = false;
-        task.selectPriority = false;
-    }
-
-    setSelectStatusToFalse(showSelectorSId.value);
-    showSelectorSId.value = task.id;
-    showSelector.value = task.selectStatus;
-};
-
-const togglePriority = (task) => {
-    task.selectPriority = !task.selectPriority;
-
-    // Ensure only one selector is active at a time
-    if (task.selectPriority) {
-        task.selectOwner = false;
-        task.selectStatus = false;
-    }
-
-    setSelectPriorityToFalse(showSelectorPId.value);
-    showSelectorPId.value = task.id;
-    showSelector.value = task.selectPriority;
-};
-
-// Clear previously selected owner, status, or priority
-const setSelectOwnerToFalse = (taskId) => {
-    if (showSelector.value) {
-        const task = filteredTasks.value.find((task) => task.id === taskId);
-        if (task) {
-            task.selectOwner = false;
-        }
+        // Save the updated user data in local storage
+        localStorage.setItem('user', JSON.stringify(user.value));
+        fetchBoard(workSpace,boardName);
+    } catch (error) {
+        console.error("Error updating task:", error);
     }
 };
 
-const setSelectStatusToFalse = (taskId) => {
-    if (showSelector.value) {
-        const task = filteredTasks.value.find((task) => task.id === taskId);
-        if (task) {
-            task.selectStatus = false;
-        }
-    }
+
+const toggleOwner = (index) => {
+    
+  // Loop through and deactivate all other owner selectors
+  selectOwner.value = selectOwner.value.map((_, i) => i === index ? !selectOwner.value[i] : false);
+  selectPriority.value = selectPriority.value.map(() => false);
+  selectStatus.value = selectStatus.value.map(() => false);
+};
+const togglePriority = (index) => {
+  // Loop through and deactivate all other priority selectors
+  selectPriority.value = selectPriority.value.map((_, i) => i === index ? !selectPriority.value[i] : false);
+  selectOwner.value = selectOwner.value.map(() => false);
+  selectStatus.value = selectStatus.value.map(() => false);
 };
 
-const setSelectPriorityToFalse = (taskId) => {
-    if (showSelector.value) {
-        const task = filteredTasks.value.find((task) => task.id === taskId);
-        if (task) {
-            task.selectPriority = false;
-        }
-    }
+const toggleStatus = (index) => {
+  // Loop through and deactivate all other status selectors
+  selectStatus.value = selectStatus.value.map((_, i) => i === index ? !selectStatus.value[i] : false);
+  selectOwner.value = selectOwner.value.map(() => false);
+  selectPriority.value = selectPriority.value.map(() => false);
 };
+const resetAllSelectors = () => {
+  // Set all owner selectors to false
+  selectOwner.value = selectOwner.value.map(() => false);
+
+  // Set all priority selectors to false
+  selectPriority.value = selectPriority.value.map(() => false);
+
+  // Set all status selectors to false
+  selectStatus.value = selectStatus.value.map(() => false);
+
+};
+
+
+
 watch(
     () => route.params.boardName,
     (newBoardId) => {
         if (newBoardId) {
-            fetchBoard(newBoardId);
+            const workSpace = route.query.workSpace;
+            fetchBoard(workSpace,newBoardId);
         }
     }
 );
 onMounted(() => {
-    const boardName = route.params.boardName;
+    workSpace.value = route.query.workSpace;
+  boardName.value = route.params.boardName;
+    console.log('board and workspace',  workSpace.value);
     if (boardName) {
-        fetchBoard(boardName);
+        fetchBoard(workSpace,boardName);
     }
+    
 
-    fetchTasks();
-    fetchWorkspaces();
-    fetchTeam();
-    fetchUpdates();
+   
 });
 
 function formatDateForDisplay(dateString) {
@@ -475,18 +606,19 @@ const elapsedPercentage = computed(() => {
     return calculateTimeElapsedPercentage(earliest, latest);
 });
 // Methods
-const toggleSubItem = (taskId) => {
-    const task = tasks.value.find((t) => t.id === taskId);
-    if (task) {
-        task.subItemVisible = !task.subItemVisible;
-    }
+const toggleSubItem = (index) => {
+    
+    showSubTasks.value[index] = !showSubTasks.value[index];
+        console.log('showsub',showSubTasks[index])
+  
 };
 const toggleTaskUpdate = (taskId) => {
+    selectedTask.value = board.value.tasks.find(task => task.id === taskId);
     taskUpdate.value = !taskUpdate.value; // Toggle task updates
     console.log("🚀 ~ toggleTaskUpdate ~ taskId:", taskId);
 
     selectedTaskId.value = taskId; // Set the selected task ID
-    filterTasksById(taskId); // Call to filter tasks by the selected ID
+     // Call to filter tasks by the selected ID
 };
 const segmentWidth = computed(() => {
     const numTasks = filteredTasks.value.length;
@@ -558,19 +690,8 @@ const handleClickOutside = (event) => {
     ) {
         hidesideDetail();
     }
-    if (showSelector.value) {
-        if (showSelectorId.value !== null) {
-            setSelectOwnerToFalse(showSelectorId.value);
-        }
-        if (showSelectorSId.value !== null) {
-            setSelectStatusToFalse(showSelectorSId.value);
-        }
-        if (showSelectorPId.value !== null) {
-            setSelectPriorityToFalse(showSelectorPId.value);
-        }
-
-        showSelector.value = false;
-    }
+    resetAllSelectors();
+    
 };
 document.addEventListener("click", handleClickOutside);
 
@@ -1087,7 +1208,7 @@ onUnmounted(() => {
                                                                         board
                                                                             .owner
                                                                             ?.user_name
-                                                                            ? board.created_by.user_name.charAt(
+                                                                            ? board.creator.user_name.charAt(
                                                                                   0
                                                                               )
                                                                             : "?"
@@ -1601,7 +1722,7 @@ onUnmounted(() => {
                             <SideDetail
                                 v-if="taskUpdate"
                                 @click.stop
-                                class="border-l-8 overflow-y-auto border-gray-300"
+                                class="border-l-8 overflow-y-auto pb-20 border-gray-300"
                             >
                                 <div class="p-4">
                                     <i
@@ -1644,12 +1765,14 @@ onUnmounted(() => {
                                         v-model="updateContent"
                                         class="w-full border-indigo-500 hover:bg-gray-200"
                                         placeholder="Write an update about task"
-                                        @keyup.enter="postUpdate"
+                                        @keyup.enter="postUpdate(selectedTaskId)"
                                     ></TextInput>
+                                    
                                 </div>
-                                <div v-for="(update, index) in filteredUpdates">
+                                <div v-for="(update, index) in [...board.discussions].reverse()">
+                                   
                                     <div
-                                        v-if="update.task_id === selectedTaskId && update.reply === 0"
+                                        v-if="update.task_id == selectedTaskId && update.reply !== 1"
                                         class="flex w-full h-full mt-8 text-black overflow-y-auto"
                                     >
                                         {{
@@ -1667,7 +1790,7 @@ onUnmounted(() => {
                                                 <div>
                                                     <div class="flex p-4">
                                                         <div
-                                                            class="rounded-full group/detail relative"
+                                                            class="rounded-full w-12 h-12 flex items-center justify-center group/detail relative"
                                                         >
                                                             <template
                                                                 v-if="
@@ -1689,7 +1812,7 @@ onUnmounted(() => {
                                                             <!-- Display h1 only if there is no profile_picture_url -->
                                                             <template v-else>
                                                                 <h1
-                                                                    class="py-1 w-fit text-3xl px-3.5 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
+                                                                    class="py-1 w-12 h-12 flex items-center justify-center text-3xl px-3.5 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
                                                                 >
                                                                     {{
                                                                         update
@@ -1697,16 +1820,16 @@ onUnmounted(() => {
                                                                             ?.user_name
                                                                             ? update.user.user_name.charAt(
                                                                                   0
-                                                                              )
+                                                                              ).toUpperCase()
                                                                             : "?"
                                                                     }}
                                                                 </h1>
                                                             </template>
                                                             <div
-                                                                class="w-64 transition-opacity hidden group-hover/detail:flex duration-1000 ease-in-out opacity-0 group-hover/detail:opacity-100 rounded-lg shadow-lg px-0 py-6 pb-0 -top-1 flex-col justify-between left-14 h-44 absolute bg-white"
+                                                                class="w-64 transition-opacity hidden group-hover/detail:flex duration-1000 ease-in-out opacity-0 group-hover/detail:opacity-100 rounded-lg shadow-lg px-0 py-6 pb-0 -top-1 flex-col justify-between left-12 z-10 h-44 absolute bg-white"
                                                             >
                                                                 <div
-                                                                    class="flex px-8"
+                                                                    class="flex px-8 w-20 h-20"
                                                                 >
                                                                     <template
                                                                         v-if="
@@ -1722,7 +1845,7 @@ onUnmounted(() => {
                                                                                     .profile_picture_url
                                                                             "
                                                                             alt="Profile Picture"
-                                                                            class="w-full h-full object-cover rounded-full"
+                                                                            class="w-20 h-20 object-cover rounded-full"
                                                                         />
                                                                     </template>
 
@@ -1731,7 +1854,7 @@ onUnmounted(() => {
                                                                         v-else
                                                                     >
                                                                         <h1
-                                                                            class="py-3 w-fit text-5xl px-6 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
+                                                                            class="py-3 w-20 h-20 flex items-center justify-center z-15 text-5xl px-6 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
                                                                         >
                                                                             {{
                                                                                 update
@@ -1739,7 +1862,7 @@ onUnmounted(() => {
                                                                                     ?.user_name
                                                                                     ? update.user.user_name.charAt(
                                                                                           0
-                                                                                      )
+                                                                                      ).toUpperCase()
                                                                                     : "?"
                                                                             }}
                                                                         </h1>
@@ -1789,7 +1912,7 @@ onUnmounted(() => {
                                                                         ></i>
                                                                         <h1
                                                                             class="text-gray-500"
-                                                                        >
+                                                                        >{{ console.log('email', update.user) }}
                                                                             {{
                                                                                 update
                                                                                     .user
@@ -1913,7 +2036,7 @@ onUnmounted(() => {
                                                         </button>
                                                     </div>
                                                 </div>
-                                                <div v-if= " update.has_reply == false"
+                                                <div v-if= " update.has_reply == 0"
                                                     class="w-full flex mt-8 border-t items-center"
                                                 >
                                                     <div
@@ -1938,32 +2061,41 @@ onUnmounted(() => {
                                                         Reply
                                                     </div>
                                                 </div>
-                                            </div>
-                                            <!-- Reply Input -->
+                                            </div> 
+                                            <!-- Reply Input1 -->
                                             <div
                                                 v-if="showReplyInput[index] && update.has_reply == false"
                                                 class="w-full flex flex-col justify-between relative bg-white border rounded-lg p-0"
-                                            >
+                                            >{{console.log('update id before pass',update)}}
+                                           
+
                                                 <TextInput
                                                     class="w-full"
                                                     placeholder="Write a reply..."
                                                     v-model="replyContent"
                                                     @keyup.enter="
-                                                        submitReply(update.id, index)
+                                                        submitReply(update.id)
                                                     "
                                                 ></TextInput>
+                                           
+
                                             </div>
-                                            <div v-for ="reply in filteredUpdates">
+                                            
+                                            <div>
+
+                                           
+                                            
+                                            <div v-for ="reply in [...board.discussions].reverse()">
 
                                             
                                             <div
                                                 v-if="reply.reply && reply.parent_id === update.id "
-                                                class="w-full flex flex-col justify-between relative bg-white border rounded-lg p-0"
+                                                class="w-full flex flex-col justify-between relative bg-white border border-b-0 rounded-lg p-0"
                                             >
                                                 <div>
                                                     <div class="flex p-4">
                                                         <div
-                                                            class="rounded-full group/detail relative"
+                                                            class="rounded-full w-14 flex items-center justify-center h-14 group/detail relative"
                                                         >
                                                             <template
                                                                 v-if="
@@ -1985,7 +2117,7 @@ onUnmounted(() => {
                                                             <!-- Display h1 only if there is no profile_picture_url -->
                                                             <template v-else>
                                                                 <h1
-                                                                    class="py-1 w-fit text-3xl px-3.5 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
+                                                                    class="py-1 w-12 flex items-center justify-center h-12 text-3xl px-3.5 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
                                                                 >
                                                                     {{
                                                                         update
@@ -1993,7 +2125,7 @@ onUnmounted(() => {
                                                                             ?.user_name
                                                                             ? update.user.user_name.charAt(
                                                                                   0
-                                                                              )
+                                                                              ).toUpperCase()
                                                                             : "?"
                                                                     }}
                                                                 </h1>
@@ -2005,7 +2137,7 @@ onUnmounted(() => {
                                                                     class="flex px-8"
                                                                 >
                                                                 <h1
-                                                                            class="py-3 w-fit text-5xl px-6 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
+                                                                            class="py-3 w-20 h-20 flex items-center justify-center text-5xl px-6 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
                                                                         >
                                                                             {{
                                                                                 update
@@ -2013,7 +2145,7 @@ onUnmounted(() => {
                                                                                     ?.user_name
                                                                                     ? update.user.user_name.charAt(
                                                                                           0
-                                                                                      )
+                                                                                      ).toUpperCase()
                                                                                     : "?"
                                                                             }}
                                                                         </h1>
@@ -2135,88 +2267,68 @@ onUnmounted(() => {
                                                 <div
                                                     class="w-full flex mt-2 px-4 py-2 items-center"
                                                 >
-                                                    <!-- <div
-                                                        class="rounded-full group/detail relative"
-                                                    >
-                                                        <h1
-                                                            class="py-1 w-fit text-3xl px-3.5 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
-                                                        >
-                                                            K
-                                                        </h1>
-                                                        <div
-                                                            class="w-64 transition-opacity hidden group-hover/detail:flex duration-1000 ease-in-out opacity-0 group-hover/detail:opacity-100 rounded-lg shadow-lg px-0 py-6 pb-0 -top-20 flex-col justify-between left-14 h-44 absolute bg-white"
-                                                        >
-                                                            <div
-                                                                class="flex px-8"
-                                                            >
-                                                                <h1
-                                                                    class="py-3 w-fit text-5xl px-6 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
-                                                                >
-                                                                    K
-                                                                </h1>
-                                                                <div>
-                                                                    <div
-                                                                        class="flex"
-                                                                    >
-                                                                        <h1
-                                                                            class="font-extralight hover:underline cursor-pointer"
-                                                                        >
-                                                                            Kaleab
-                                                                        </h1>
-                                                                        <span
-                                                                            class="w-3 h-3 rounded-full bg-green-400 ml-2"
-                                                                        ></span>
-                                                                    </div>
-                                                                    <h1
-                                                                        class="mt-4 p-1 bg-blue-100 flex items-center justify-center rounded-lg"
-                                                                    >
-                                                                        Admin
-                                                                    </h1>
-                                                                </div>
-                                                            </div>
-                                                            <div
-                                                                class="border-t group/contact w-full relative border-gray-500 hover:bg-gray-100 cursor-pointer flex items-center justify-center border-b-0 py-4"
-                                                            >
-                                                                <h1>
-                                                                    Contact
-                                                                    Details
-                                                                </h1>
-                                                                <i
-                                                                    class="fa fa-chevron-down ml-2 text-xs"
-                                                                    aria-hidden="true"
-                                                                ></i>
-                                                                <div
-                                                                    class="w-64 gr transition-opacity duration-1000 ease-in-out opacity-0 group-hover/contact:opacity-100 rounded-lg px-4 shadow-lg py-2 top-12 flex items-center left-0 h-16 absolute bg-white"
-                                                                >
-                                                                    <i
-                                                                        class="far fa-envelope mr-2 font-extralight text-gray-500"
-                                                                    ></i>
-                                                                    <h1
-                                                                        class="text-gray-500"
-                                                                    >
-                                                                        kaleab@email.com
-                                                                    </h1>
-                                                                    <h1
-                                                                        class="bg-blue-400 text-sm ml-4 rounded-md hover:bg-blue-500 p-1"
-                                                                    >
-                                                                        Copy
-                                                                    </h1>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div> -->
-                                                    <TextInput
-                                                        class="w-full"
-                                                        placeholder="Write a reply..."
-                                                    ></TextInput>
+                                                  
+                                                    
                                                 </div>
+                                                <!-- reply input 2 -->
                                             </div>
+                                            
+                                            
+                                        </div>{{console.log('update has reply',update.has_reply)}}
+                                        <div v-if = "update.has_reply == 1"
+                                        class = "flex flex-row">
+                                                <div>
+                                                    <div class>
+                                                        <template
+                                                                v-if="
+                                                                    user
+                                                                        ?.profile_picture_url
+                                                                "
+                                                            >
+                                                                <img
+                                                                    :src="
+                                                                        user
+                                                                            .profile_picture_url
+                                                                    "
+                                                                    alt="Profile Picture"
+                                                                    class="w-full h-full object-cover rounded-full"
+                                                                />
+                                                            </template>
+
+                                                            <!-- Display h1 only if there is no profile_picture_url -->
+                                                            <template v-else>
+                                                                <h1
+                                                                    class="py-1 w-12 h-12 flex items-center justify-center text-3xl px-3.5 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
+                                                                >
+                                                                    {{
+                                                                        
+                                                                            user
+                                                                            ?.user_name
+                                                                            ? update.user.user_name.charAt(
+                                                                                  0
+                                                                              ).toUpperCase()
+                                                                            : "?"
+                                                                    }}
+                                                                </h1>
+                                                            </template>
+                                                    </div>
+                                                </div>
+                                            <TextInput 
+                                            class="w-full"
+                                            placeholder="Write a reply..."
+                                            v-model="replyContent"
+                                            @keyup.enter="
+                                                submitReply(update.id, index)
+                                            "
+                                        ></TextInput>
                                         </div>
+                                    </div>
+                                   
                                         </div>
                                     </div>
                                 </div>
                             </SideDetail>
-                            <div v-for="task in filteredTasks" :key="task.id">
+                            <div v-for="(task, index) in board.tasks" :key="task.id">
                                 <tr
                                     class="border w-fit group flex bg-white hover:bg-gray-100"
                                 >
@@ -2239,15 +2351,15 @@ onUnmounted(() => {
                                         class="px-6 py-1 group w-56 border flex items-center"
                                     >
                                         <span
-                                            @click="toggleSubItem(task.id)"
+                                            @click.stop="toggleSubItem(index)"
                                             class="hidden group-hover:block"
                                         >
                                             <i
                                                 :class="{
                                                     'fa fa-chevron-right mr-4':
-                                                        !task.subItemVisible,
+                                                        !showSubTasks[index],
                                                     'fa fa-chevron-down mr-4':
-                                                        task.subItemVisible,
+                                                        showSubTasks[index],
                                                 }"
                                                 aria-hidden="true"
                                             ></i>
@@ -2272,7 +2384,7 @@ onUnmounted(() => {
                                     </td>
                                     <td
                                         @click.stop
-                                        @click="toggleOwner(task)"
+                                        @click="toggleOwner(index)"
                                         v-if="showOwner || showAll || showTasks"
                                         class="px-6 py-1 relative flex w-24 justify-center border items-center"
                                     >
@@ -2308,27 +2420,28 @@ onUnmounted(() => {
                                             </h1>
                                         </template>
                                         <div
-                                            v-if="task.selectOwner"
-                                            class="absolute justify-center flex flex-col items-start z-20 top-10 overflow-y-auto bg-white shadow-lg rounded-lg w-52 h-fit"
+                                            v-if="selectOwner[index]"
+                                            class="absolute justify-center flex flex-col  z-20 top-10 overflow-y-auto pt-2 items-center bg-white shadow-lg rounded-lg w-52 h-fit"
                                         >
-                                            <div>
-                                                <div
-                                                    v-for="user in filteredTeam"
-                                                    :key="user.id"
+                                            <div v-for="user in board.team.members"
+                                            :key="user.id" >
+                                               
+                                                <div @click="setOwner(user.id,task.id)"
+                                                    
                                                     class="flex relative items-center cursor-pointer w-44 mb-2 hover:bg-gray-100 px-3 py-2"
                                                 >
                                                     <!-- Conditional rendering: show initials if no profile picture -->
                                                     <h1
                                                         v-if="
-                                                            !user.user
+                                                            !user
                                                                 ?.profile_picture_url
                                                         "
                                                         class="py-1 px-2.5 border-2 border-white text-white rounded-full bg-blue-300"
                                                     >
                                                         {{
-                                                            user.member
+                                                            user
                                                                 ?.user_name
-                                                                ? user.user.user_name.charAt(
+                                                                ? user.user_name.charAt(
                                                                       0
                                                                   )
                                                                 : "?"
@@ -2337,7 +2450,7 @@ onUnmounted(() => {
                                                     <!-- Show user name -->
                                                     <h1 class="ml-2">
                                                         {{
-                                                            user.user?.user_name
+                                                            user?.user_name
                                                         }}
                                                     </h1>
                                                 </div>
@@ -2346,7 +2459,7 @@ onUnmounted(() => {
                                     </td>
                                     <td
                                         @click.stop
-                                        @click="toggleStatus(task)"
+                                        @click="toggleStatus(index)"
                                         :class="{
                                             'bg-gray-400':
                                                 task.status === 'Not Started',
@@ -2364,20 +2477,20 @@ onUnmounted(() => {
                                             {{ task.status }}
                                         </h1>
                                         <div
-                                            v-if="task.selectStatus"
+                                            v-if="selectStatus[index]"
                                             class="absolute text-white justify-center flex flex-col items-center z-10 top-10 overflow-y-auto bg-white shadow-lg rounded-lg w-52 max-h-40"
                                         >
-                                            <div
+                                            <div @click ="setStatus('Completed',task.id)"
                                                 class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-green-500 bg-green-400 px-3 py-2"
                                             >
                                                 <h1>Completed</h1>
                                             </div>
-                                            <div
+                                            <div @click ="setStatus('In Progress',task.id)"
                                                 class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-orange-500 bg-orange-400 px-3 py-2"
                                             >
                                                 <h1>In Progress</h1>
                                             </div>
-                                            <div
+                                            <div @click ="setStatus('Not Started',task.id)"
                                                 class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-gray-500 bg-gray-400 px-3 py-2"
                                             >
                                                 <h1>Not Started</h1>
@@ -2413,8 +2526,8 @@ onUnmounted(() => {
                                             }}
                                         </div>
                                     </td>
-                                    <td
-                                        @click="togglePriority(task)"
+                                    <td 
+                                        @click="togglePriority(index)"
                                         @click.stop
                                         :class="{
                                             'bg-purple-800':
@@ -2431,25 +2544,25 @@ onUnmounted(() => {
                                     >
                                         {{ task.priority }}
                                         <div
-                                            v-if="task.selectPriority"
+                                            v-if="selectPriority[index]"
                                             class="absolute pt-10 text-white justify-center flex flex-col items-center z-10 top-10 overflow-y-auto bg-white shadow-lg rounded-lg w-52 max-h-40"
                                         >
-                                            <div
+                                            <div @click ="setPriority('Critical',task.id)"
                                                 class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-gray-900 bg-gray-700 px-3 py-2"
                                             >
                                                 <h1>Critical</h1>
                                             </div>
-                                            <div
+                                            <div @click ="setPriority('High',task.id)"
                                                 class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-purple-900 bg-purple-800 px-3 py-2"
                                             >
                                                 <h1>High</h1>
                                             </div>
-                                            <div
+                                            <div @click ="setPriority('Medium',task.id)"
                                                 class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-blue-800 bg-blue-700 px-3 py-2"
                                             >
                                                 <h1>Medium</h1>
                                             </div>
-                                            <div
+                                            <div @click ="setPriority('Low',task.id)"
                                                 class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-blue-500 bg-blue-400 px-3 py-2"
                                             >
                                                 <h1>Low</h1>
@@ -2537,7 +2650,7 @@ onUnmounted(() => {
                                 <!-- Subitem -->
 
                                 <tr
-                                    v-if="task.subItemVisible"
+                                    v-if="showSubTasks[index]"
                                     class="bg-white border m-4 mb-0 rounded-md flex border-l-8 border-l-blue-300 z-5"
                                 >
                                     <th
@@ -2820,7 +2933,7 @@ onUnmounted(() => {
                             >
                                 <div class="flex w-full h-full">
                                     <span
-                                        v-for="(task, index) in filteredTasks"
+                                        v-for="(task, index) in board.tasks"
                                         :key="task.id"
                                         :style="{ width: segmentWidth }"
                                         :class="{
@@ -2849,10 +2962,10 @@ onUnmounted(() => {
                                         :style="{
                                             width: `${elapsedPercentage2(
                                                 getEarliestAndLatestDates(
-                                                    filteredTasks
+                                                    board.tasks
                                                 ).earliest,
                                                 getEarliestAndLatestDates(
-                                                    filteredTasks
+                                                    board.tasks
                                                 ).latest
                                             )}%`,
                                         }"
@@ -2865,7 +2978,7 @@ onUnmounted(() => {
                                             {{
                                                 formatDateForDisplay(
                                                     getEarliestAndLatestDates(
-                                                        filteredTasks
+                                                        board.tasks
                                                     ).earliest
                                                 )
                                             }}
@@ -2873,7 +2986,7 @@ onUnmounted(() => {
                                             {{
                                                 formatDateForDisplay(
                                                     getEarliestAndLatestDates(
-                                                        filteredTasks
+                                                        board.tasks
                                                     ).latest
                                                 )
                                             }}
@@ -2887,7 +3000,7 @@ onUnmounted(() => {
                             >
                                 <div class="flex w-full h-full">
                                     <span
-                                        v-for="(task, index) in filteredTasks"
+                                        v-for="(task, index) in board.tasks"
                                         :key="task.id"
                                         :style="{ width: segmentWidth }"
                                         :class="{
@@ -2934,10 +3047,10 @@ onUnmounted(() => {
                                         :style="{
                                             width: `${elapsedPercentage2(
                                                 getEarliestAndLatestDates(
-                                                    filteredTasks
+                                                    board.tasks
                                                 ).earliest2,
                                                 getEarliestAndLatestDates(
-                                                    filteredTasks
+                                                    board.tasks
                                                 ).latest
                                             )}%`,
                                         }"
@@ -2951,7 +3064,7 @@ onUnmounted(() => {
                                             {{
                                                 formatDateForDisplay(
                                                     getEarliestAndLatestDates(
-                                                        filteredTasks
+                                                        board.tasks
                                                     ).earliest2
                                                 )
                                             }}
@@ -2959,7 +3072,7 @@ onUnmounted(() => {
                                             {{
                                                 formatDateForDisplay(
                                                     getEarliestAndLatestDates(
-                                                        filteredTasks
+                                                        board.tasks
                                                     ).latest
                                                 )
                                             }}
@@ -2979,7 +3092,7 @@ onUnmounted(() => {
             <div v-if="showCard" class="rounded-md">
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-4 p-4">
                     <div
-                        v-for="(task, index) in filteredTasks"
+                        v-for="(task, index) in board.tasks"
                         :key="index"
                         class="bg-white rounded-lg shadow p-4"
                     >

@@ -21,7 +21,22 @@ class UserController extends Controller
         $users = User::all();
         return response()->json($users);
     }
-    
+    public function fetchUser()
+{
+    $user = Auth::user()->load([
+        'workspaces',
+        'workspaces.boards',
+        'workspaces.boards.owner:id,user_name,email,profile_picture_url',
+        'workspaces.boards.team',
+        'workspaces.boards.team.members',
+        'workspaces.boards.tasks',
+        'workspaces.boards.tasks.updates',    
+        'workspaces.boards.discussions',
+        // Add more relations if needed
+    ]);
+
+    return response()->json(['user' => $user], 200);
+}
     /**
      * Show the form for creating a new user.
      */
@@ -171,12 +186,20 @@ return response()->json(['error' => 'Could not create token'], 500);
 }
 $user = Auth::user()->load([
     'workspaces',
+    'workspaces.folders',
             'workspaces.boards',
+            'workspaces.boards.owner:id,user_name,email,profile_picture_url',
+            'workspaces.boards.creator:id,user_name,email,profile_picture_url',
             'workspaces.boards.team',
             'workspaces.boards.team.members',
             'workspaces.boards.tasks',
+            'workspaces.boards.tasks.SubTasks',
+
+            'workspaces.boards.tasks.assignedUser:id,user_name,email,profile_picture_url',
             'workspaces.boards.tasks.updates',    
-            'workspaces.boards.discussions',    
+            'workspaces.boards.discussions', 
+            'workspaces.boards.discussions.task:id,task_name', 
+            'workspaces.boards.discussions.user:id,user_name,email,profile_picture_url',    
 ]);
      // Will display user data in the browser and stop further execution
 

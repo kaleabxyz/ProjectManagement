@@ -17,9 +17,10 @@ use App\Http\Controllers\Auth\AuthenticatedSessionController;
 
 
 
-Route::get('/user', function (Request $request) {
-    return $request->user();
-})->middleware('auth:sanctum');
+// api.php (routes file)
+
+Route::middleware('auth:sanctum')->get('/user', [UserController::class, 'fetchUser']);
+
 
 Route::post('/register', [RegisteredUserController::class, 'store']);
 Route::apiResource('tasks', TaskController::class);

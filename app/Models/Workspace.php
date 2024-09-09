@@ -38,4 +38,8 @@ class Workspace extends Model
     {
         return $this->hasMany(Board::class, 'workspace_id');
     }
+    public function folders()
+    {
+        return $this->hasMany(Folder::class,'workspace_id');
+    }
 }

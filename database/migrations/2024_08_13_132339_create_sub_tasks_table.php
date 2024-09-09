@@ -16,12 +16,6 @@ return new class extends Migration
         Schema::create('sub_tasks', function (Blueprint $table) {
             $table->id();
             $table->string('task_name')->index();
-            $table->boolean('selectStatus')->default(false);
-            $table->boolean('selectOwner')->default(false);
-            $table->boolean('selectPriority')->default(false);
-            $table->boolean('showUpdates')->default(false);
-            
-
             $table->string('status');
             $table->string('priority');
             $table->dateTime('due_date');

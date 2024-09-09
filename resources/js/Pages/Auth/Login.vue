@@ -1,14 +1,17 @@
 <script setup>
 import { ref } from 'vue';
 import axios from 'axios';
+import { useRouter } from 'vue-router';
 import Checkbox from '@/Components/Checkbox.vue';
 import GuestLayout from '@/Layouts/GuestLayout.vue';
 import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
+import state from '../../state'
 
 // Define props
+const router = useRouter();
 const props = defineProps({
     canResetPassword: {
         type: Boolean,
@@ -48,8 +51,9 @@ const token = response.data.authorisation.token; // Access token from the 'autho
 const user = response.data.user; // User object
 if(token){
 localStorage.setItem('token', token);
-localStorage.setItem('user', JSON.stringify(user));
-window.location.href = '/home';
+    localStorage.setItem('user', JSON.stringify(user));
+    state.state.user = user;
+router.push('/home')
 } else {
 console.error('Token not received');
 }

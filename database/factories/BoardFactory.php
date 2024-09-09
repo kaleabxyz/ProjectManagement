@@ -20,7 +20,7 @@ class BoardFactory extends Factory
         return [
             'workspace_id' => Workspace::factory(), // Creates a new workspace
             'folder_id' => null, // Creates a new folder, or set it to null if no folder is needed
-            'team' => Team::factory(), // Creates a new team
+            
             'is_favorite' => $this->faker->boolean(),
             'discription' => $this->faker->paragraphs(5, true),
             

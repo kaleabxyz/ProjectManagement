@@ -11,7 +11,6 @@ class Folder extends Model
 
     protected $fillable = [
         'folder_name',
-        'team_id',
         'workspace_id',
         'is_favorite',
         'is_archived',
@@ -20,12 +19,11 @@ class Folder extends Model
         'trashed_by',
     ];
 
-    /**
-     * Get the team associated with the folder.
-     */
-    public function team()
+   
+   
+    public function boards()
     {
-        return $this->belongsTo(Team::class);
+        return $this->hasMany(Board::class);
     }
 
     /**
@@ -33,7 +31,7 @@ class Folder extends Model
      */
     public function workspace()
     {
-        return $this->belongsTo(Workspace::class);
+        return $this->belongsTo(Workspace::class, 'workspace_id');
     }
 
     /**

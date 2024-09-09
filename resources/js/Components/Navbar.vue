@@ -7,6 +7,7 @@ import ApplicationLogo from "@/Components/ApplicationLogo.vue";
 import Checkbox from "@/Components/Checkbox.vue";
 import TextInput from "@/Components/TextInput.vue";
 import { useRouter, useRoute } from "vue-router";
+import state from "./../state"
 
 function handleImageError() {
     document.getElementById("screenshot-container")?.classList.add("!hidden");
@@ -14,6 +15,7 @@ function handleImageError() {
     document.getElementById("docs-card-content")?.classList.add("!flex-row");
     document.getElementById("background")?.classList.add("!hidden");
 }
+const boards = ref([]);
 const sideDetail = ref(false);
 const inviteVisible = ref(false);
 const updateVisible = ref(false);
@@ -84,7 +86,114 @@ const users = ref([
         lastActive: "Never logged in",
     },
 ]);
+const user = computed(() => state.state.user);
+console.log("🚀 ~ userin project:", user.value.id);
+const fetchBoards = () => {
+    // Directly set the boards array by flattening all boards from all workspaces
+    boards.value = user.value.workspaces.flatMap(workspace => workspace.boards);
 
+    console.log('All boards:', boards.value);
+};
+
+const submitReply = async (updateId,index) => {
+    if (replyContent.value.trim() === "") return; // Do not post if the input is empty
+    {{console.log('update id',updateId)}}
+    // Get user details from the current state
+    const userId = user.value.id;
+    const userObject = {
+        id: userId,
+        user_name: user.value.user_name, // Assuming your user object has 'user_name'
+        profile_picture_url: user.value.profile_picture_url, // Assuming your user object has 'profile_picture_url'
+    };
+
+    // Prepare the data for the reply
+    const replyData = {
+        content: replyContent.value,
+        user_id: userId,
+        has_reply: false,
+        board_id: board.value.id,
+        task_id: selectedTaskId.value,
+        parent_id: updateId, // Set the parent ID of the update where the reply button was clicked
+        reply: 1, // Mark as reply
+    };
+    console.log('reply data', replyData);
+
+    try {
+        // Make an API call to create the reply
+        const response = await axios.post("/api/updates", replyData);
+
+        // Assuming the server returns the created reply
+        const newReply = replyData;
+        const formattedReply = {
+            ...newReply,
+            task: {
+                id: selectedTaskId.value,
+                task_name: board.value.tasks.find(task => task.id === selectedTaskId.value)?.task_name, // Get task name
+            },
+            user: userObject, // Nest the user data under 'user'
+        };
+
+        // Push the new reply to the board's discussions array
+       
+
+        // Update the discussions in the user data
+        user.value.workspaces.forEach(workspace => {
+            workspace.boards.forEach(b => {
+                if (b.id === board.value.id) {
+                    b.discussions.push(formattedReply);
+                }
+            });
+        });
+
+        // Save the updated user data in local storage
+        localStorage.setItem('user', JSON.stringify(user.value));
+        fetchBoards();
+        // Clear the input content and hide the reply input
+        replyContent.value = "";
+        showReplyInput.value[index] = false;
+
+        // Optionally, you can call any method to update the task or update state if necessary
+        updateTaskHasReply(updateId);
+
+    } catch (error) {
+        // Handle errors
+        console.error("Error posting reply:", error);
+    }
+};
+
+// Function to update the task to mark it as having a reply
+const updateTaskHasReply = async (updateId) => {
+    try {
+        // Send a PATCH request to update the 'has_reply' status in the database
+        await axios.patch(`/api/updates/${updateId}`, {
+            has_reply: true,
+        });
+
+        // Find and update the discussion in board.discussions
+        
+
+        // Update the discussions in the user object
+        user.value.workspaces.forEach(workspace => {
+            workspace.boards.forEach(b => {
+                if (b.id === board.value.id) {
+                    const userDiscussionIndex = b.discussions.findIndex(discussion => discussion.id === updateId);
+                    if (userDiscussionIndex !== -1) {
+                        b.discussions[userDiscussionIndex] = {
+                            ...b.discussions[userDiscussionIndex],
+                            has_reply: true
+                        };
+                    }
+                }
+            });
+        });
+
+        // Save the updated user data in local storage
+        localStorage.setItem('user', JSON.stringify(user.value));
+        fetchBoards();
+    } catch (error) {
+        console.error("Error updating task:", error);
+    }
+};
 const toggleSideDetail = () => {
     sideDetail.value = !sideDetail.value;
 };
@@ -118,6 +227,9 @@ const logout = () => {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       
+      console.log("🚀 ~ logout ~ state.state.user:", state.state.user)
+    state.state.user = null;
+    
       // Optionally, redirect to the login page
       router.push('/');
 
@@ -977,384 +1089,14 @@ onUnmounted(() => {
                     <div class="flex">
                         <div>
                             <div
-                                class="w-1/2 flex flex-col relative justify-between bg-white border rounded-lg p-0"
+                                class="w-10 h-10 bg-blue-600 ml-6 mt-4 absolute -right-20 rounded-md flex items-center hover:bg-blue-700 justify-center"
                             >
-                                <div
-                                    class="w-10 h-10 bg-blue-600 ml-6 mt-4 absolute -right-20 rounded-md flex items-center hover:bg-blue-700 justify-center"
-                                >
-                                    <i
-                                        class="fa fa-check text-white text-2xl"
-                                    ></i>
-                                </div>
-                                <div>
-                                    <div class="flex p-4">
-                                        <div
-                                            class="rounded-full group/detail relative"
-                                        >
-                                            <h1
-                                                class="py-1 w-fit text-3xl px-3.5 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
-                                            >
-                                                K
-                                            </h1>
-                                            <div
-                                                class="w-64 transition-opacity hidden group-hover/detail:flex duration-1000 ease-in-out opacity-0 group-hover/detail:opacity-100 rounded-lg shadow-lg px-0 py-6 pb-0 -top-20 flex-col justify-between left-14 h-44 absolute bg-white"
-                                            >
-                                                <div class="flex px-8">
-                                                    <h1
-                                                        class="py-3 w-fit text-5xl px-6 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
-                                                    >
-                                                        K
-                                                    </h1>
-                                                    <div>
-                                                        <div class="flex">
-                                                            <h1
-                                                                class="font-extralight hover:underline cursor-pointer"
-                                                            >
-                                                                Kaleab
-                                                            </h1>
-                                                            <span
-                                                                class="w-3 h-3 rounded-full bg-green-400 ml-2"
-                                                            ></span>
-                                                        </div>
-                                                        <h1
-                                                            class="mt-4 p-1 bg-blue-100 flex items-center justify-center rounded-lg"
-                                                        >
-                                                            Admin
-                                                        </h1>
-                                                    </div>
-                                                </div>
-                                                <div
-                                                    class="border-t group/contact w-full relative border-gray-500 hover:bg-gray-100 cursor-pointer flex items-center justify-center border-b-0 py-4"
-                                                >
-                                                    <h1>Contact Details</h1>
-                                                    <i
-                                                        class="fa fa-chevron-down ml-2 text-xs"
-                                                        aria-hidden="true"
-                                                    ></i>
-                                                    <div
-                                                        class="w-64 gr transition-opacity duration-1000 ease-in-out opacity-0 group-hover/contact:opacity-100 rounded-lg px-4 shadow-lg py-2 top-16 flex items-center left-0 h-16 absolute bg-white"
-                                                    >
-                                                        <i
-                                                            class="far fa-envelope mr-2 font-extralight text-gray-500"
-                                                        ></i>
-                                                        <h1
-                                                            class="text-gray-500"
-                                                        >
-                                                            kaleab@email.com
-                                                        </h1>
-                                                        <h1
-                                                            class="bg-blue-400 text-sm ml-4 rounded-md hover:bg-blue-500 p-1"
-                                                        >
-                                                            Copy
-                                                        </h1>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div class="w-full">
-                                            <div
-                                                class="flex items-center justify-between"
-                                            >
-                                                <div class="flex items-center">
-                                                    <h1
-                                                        class="font-extralight hover:underline cursor-pointer"
-                                                    >
-                                                        Kaleab
-                                                    </h1>
-                                                    <span
-                                                        class="w-3 h-3 rounded-full bg-green-400 ml-2"
-                                                    ></span>
-                                                </div>
-                                                <div
-                                                    class="flex items-center text-gray-600"
-                                                >
-                                                    <i class="far fa-clock">
-                                                    </i>
-                                                    <h1
-                                                        class="ml-1 hover:underline cursor-pointer mr-1"
-                                                    >
-                                                        3h
-                                                    </h1>
-                                                    <span
-                                                        @click="
-                                                            toggleSideDetail
-                                                        "
-                                                        @click.stop
-                                                        class="h-full hover:bg-gray-100"
-                                                    >
-                                                        <i
-                                                            class="far fa-bell m-1 text-sm"
-                                                        ></i>
-                                                    </span>
-                                                    <span>
-                                                        <i
-                                                            class="fa fa-ellipsis-h text-lg py-1 px-1 hover:bg-gray-100 cursor-pointer"
-                                                            aria-hidden="true"
-                                                        ></i>
-                                                    </span>
-                                                </div>
-                                            </div>
-                                            <div
-                                                class="flex items-center text-gray-500 text-sm"
-                                            >
-                                                <a
-                                                    href="#"
-                                                    class="hover:text-blue-600"
-                                                >
-                                                    <h1>
-                                                        Project management >
-                                                    </h1>
-                                                </a>
-                                                <a
-                                                    href="#"
-                                                    class="hover:text-blue-600"
-                                                >
-                                                    <h1>To do ></h1>
-                                                </a>
-                                                <a
-                                                    href="#"
-                                                    class="hover:text-blue-600"
-                                                >
-                                                    <h1>Task1</h1>
-                                                </a>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div
-                                        class="mt-4 p-4 flex items-center flex-col"
-                                    >
-                                        <p>
-                                            {{ truncatedDescription }}
-                                        </p>
-                                        <button
-                                            @click="toggleFullDescription"
-                                            class="text-green-500 hover:text-green-600 hover:shadow-lg w-full bg-white"
-                                        >
-                                            {{
-                                                showFullDescription
-                                                    ? "Less"
-                                                    : "More"
-                                            }}
-                                        </button>
-                                    </div>
-                                </div>
-                                <div
-                                    class="w-full flex mt-8 border-t items-center"
-                                >
-                                    <div
-                                        class="w-1/2 flex justify-center items-center p-3 border-r hover:bg-gray-100"
-                                    >
-                                        <i
-                                            class="far fa-thumbs-up text-gray-400 mr-2"
-                                            aria-hidden="true"
-                                        ></i>
-                                        Like
-                                    </div>
-                                    <div
-                                        class="w-1/2 flex justify-center items-center p-3 hover:bg-gray-100"
-                                    >
-                                        <i
-                                            class="fa mr-2 text-gray-400 fa-reply"
-                                            aria-hidden="true"
-                                        ></i>
-                                        Reply
-                                    </div>
-                                </div>
+                                <i
+                                    class="fa fa-check text-white text-2xl"
+                                ></i>
                             </div>
-                            <div
-                                class="w-1/2 flex flex-col justify-between relative bg-white border rounded-lg p-0"
-                            >
-                                <div
-                                    class="w-10 h-10 bg-blue-600 ml-6 mt-4 absolute -right-20 rounded-md flex items-center hover:bg-blue-700 justify-center"
-                                >
-                                    <i
-                                        class="fa fa-check text-white text-2xl"
-                                    ></i>
-                                </div>
-                                <div>
-                                    <div class="flex p-4">
-                                        <div
-                                            class="rounded-full group/detail relative"
-                                        >
-                                            <h1
-                                                class="py-1 w-fit text-3xl px-3.5 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
-                                            >
-                                                K
-                                            </h1>
-                                            <div
-                                                class="w-64 transition-opacity hidden group-hover/detail:flex duration-1000 ease-in-out opacity-0 group-hover/detail:opacity-100 rounded-lg shadow-lg px-0 py-6 pb-0 -top-20 flex-col justify-between left-14 h-44 absolute bg-white"
-                                            >
-                                                <div class="flex px-8">
-                                                    <h1
-                                                        class="py-3 w-fit text-5xl px-6 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
-                                                    >
-                                                        K
-                                                    </h1>
-                                                    <div>
-                                                        <div class="flex">
-                                                            <h1
-                                                                class="font-extralight hover:underline cursor-pointer"
-                                                            >
-                                                                Kaleab
-                                                            </h1>
-                                                            <span
-                                                                class="w-3 h-3 rounded-full bg-green-400 ml-2"
-                                                            ></span>
-                                                        </div>
-                                                        <h1
-                                                            class="mt-4 p-1 bg-blue-100 flex items-center justify-center rounded-lg"
-                                                        >
-                                                            Admin
-                                                        </h1>
-                                                    </div>
-                                                </div>
-                                                <div
-                                                    class="border-t group/contact w-full relative border-gray-500 hover:bg-gray-100 cursor-pointer flex items-center justify-center border-b-0 py-4"
-                                                >
-                                                    <h1>Contact Details</h1>
-                                                    <i
-                                                        class="fa fa-chevron-down ml-2 text-xs"
-                                                        aria-hidden="true"
-                                                    ></i>
-                                                    <div
-                                                        class="w-64 gr transition-opacity duration-1000 ease-in-out opacity-0 group-hover/contact:opacity-100 rounded-lg px-4 shadow-lg py-2 top-16 flex items-center left-0 h-16 absolute bg-white"
-                                                    >
-                                                        <i
-                                                            class="far fa-envelope mr-2 font-extralight text-gray-500"
-                                                        ></i>
-                                                        <h1
-                                                            class="text-gray-500"
-                                                        >
-                                                            kaleab@email.com
-                                                        </h1>
-                                                        <h1
-                                                            class="bg-blue-400 text-sm ml-4 rounded-md hover:bg-blue-500 p-1"
-                                                        >
-                                                            Copy
-                                                        </h1>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div class="w-full">
-                                            <div class="">
-                                                <div
-                                                    class="bg-gray-100 rounded-lg"
-                                                >
-                                                    <h1
-                                                        class="font-extralight text-blue-500 px-4 py-2 hover:underline cursor-pointer"
-                                                    >
-                                                        Kaleab
-                                                    </h1>
-                                                    <div
-                                                        class="mt-1 p-4 flex items-center flex-col"
-                                                    >
-                                                        <p>
-                                                            {{
-                                                                truncatedDescription
-                                                            }}
-                                                        </p>
-                                                        <button
-                                                            @click="
-                                                                toggleFullDescription
-                                                            "
-                                                            class="text-green-500 hover:text-green-600 hover:shadow-lg w-full bg-white"
-                                                        >
-                                                            {{
-                                                                showFullDescription
-                                                                    ? "Less"
-                                                                    : "More"
-                                                            }}
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                                <div
-                                                    class="flex items-center text-gray-600"
-                                                >
-                                                    <i class="far fa-clock">
-                                                    </i>
-                                                    <h1
-                                                        class="ml-1 mt-2 hover:underline cursor-pointer mr-1"
-                                                    >
-                                                        3h
-                                                    </h1>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div
-                                    class="w-full flex mt-2 px-4 py-2 items-center"
-                                >
-                                    <div
-                                        class="rounded-full group/detail relative"
-                                    >
-                                        <h1
-                                            class="py-1 w-fit text-3xl px-3.5 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
-                                        >
-                                            K
-                                        </h1>
-                                        <div
-                                            class="w-64 transition-opacity hidden group-hover/detail:flex duration-1000 ease-in-out opacity-0 group-hover/detail:opacity-100 rounded-lg shadow-lg px-0 py-6 pb-0 -top-20 flex-col justify-between left-14 h-44 absolute bg-white"
-                                        >
-                                            <div class="flex px-8">
-                                                <h1
-                                                    class="py-3 w-fit text-5xl px-6 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
-                                                >
-                                                    K
-                                                </h1>
-                                                <div>
-                                                    <div class="flex">
-                                                        <h1
-                                                            class="font-extralight hover:underline cursor-pointer"
-                                                        >
-                                                            Kaleab
-                                                        </h1>
-                                                        <span
-                                                            class="w-3 h-3 rounded-full bg-green-400 ml-2"
-                                                        ></span>
-                                                    </div>
-                                                    <h1
-                                                        class="mt-4 p-1 bg-blue-100 flex items-center justify-center rounded-lg"
-                                                    >
-                                                        Admin
-                                                    </h1>
-                                                </div>
-                                            </div>
-                                            <div
-                                                class="border-t group/contact w-full relative border-gray-500 hover:bg-gray-100 cursor-pointer flex items-center justify-center border-b-0 py-4"
-                                            >
-                                                <h1>Contact Details</h1>
-                                                <i
-                                                    class="fa fa-chevron-down ml-2 text-xs"
-                                                    aria-hidden="true"
-                                                ></i>
-                                                <div
-                                                    class="w-64 gr transition-opacity duration-1000 ease-in-out opacity-0 group-hover/contact:opacity-100 rounded-lg px-4 shadow-lg py-2 top-16 flex items-center left-0 h-16 absolute bg-white"
-                                                >
-                                                    <i
-                                                        class="far fa-envelope mr-2 font-extralight text-gray-500"
-                                                    ></i>
-                                                    <h1 class="text-gray-500">
-                                                        kaleab@email.com
-                                                    </h1>
-                                                    <h1
-                                                        class="bg-blue-400 text-sm ml-4 rounded-md hover:bg-blue-500 p-1"
-                                                    >
-                                                        Copy
-                                                    </h1>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <TextInput
-                                        class="w-full"
-                                        placeholder="Write a reply..."
-                                    ></TextInput>
-                                </div>
-                            </div>
+                            
+                            
                         </div>
                     </div>
                 </div>

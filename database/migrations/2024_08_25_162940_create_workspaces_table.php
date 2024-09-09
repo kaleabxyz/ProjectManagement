@@ -14,6 +14,7 @@ return new class extends Migration
         Schema::create('workspaces', function (Blueprint $table) {
             $table->id();
             $table->string('workspace_name');
+            $table->longText('description')->nullable();
             $table->boolean('is_favorite')->default(false);
             $table->boolean('is_archived')->default(false);
             $table->bigInteger('created_by')->unsigned(); // Add this line

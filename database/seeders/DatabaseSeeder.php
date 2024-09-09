@@ -23,11 +23,9 @@ class DatabaseSeeder extends Seeder
         //     'name' => 'Test User',
         //     'email' => 'test@example.com',
         // ]);
-        User::factory()->count(18)->create();
+       
         Board::factory()->count(5)->create();
-        TeamMember::factory()->count(20)->create();
-        Task::factory()->count(20)->create();
-        Update::factory()->count(50)->create();
+        
 
     }
 }

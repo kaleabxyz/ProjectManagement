@@ -30,7 +30,7 @@ class TaskController extends Controller
             'selectOwner' => 'boolean',
             'selectPriority' => 'boolean',
             'showUpdates' => 'boolean',
-            'priority' => 'nullable|string|in:Low,Medium,High',
+            'priority' => 'nullable|string|in:Critical,Low,Medium,High',
             'due_date' => 'nullable|date',
             'board_id' => 'required|integer|exists:boards,id',
             'assigned_to' => 'nullable|integer|exists:users,id',

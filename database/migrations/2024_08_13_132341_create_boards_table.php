@@ -20,12 +20,11 @@ return new class extends Migration
             $table->bigInteger('folder_id')->unsigned()->nullable();  
             $table->foreign('folder_id')->references('id')->on('folders')->onUpdate('cascade'); 
             $table->bigInteger('team')->unsigned()->nullable();  // Foreign key for projects
-            $table->foreign('team')->references('id')->on('team_members')->onUpdate('cascade'); 
+            $table->foreign('team')->references('id')->on('teams')->onUpdate('cascade'); 
             $table->boolean('is_favorite')->default(false);
             $table->boolean('is_archived')->default(false);
             $table->string('board_name')->index();
             $table->longText('discription')->nullable();
-            $table->boolean('showOptions')->default(false);
             $table->bigInteger('owner')->unsigned()->nullable();
             $table->foreign('owner')->references('id')->on('users')->onUpdate('cascade');
             $table->boolean('is_trashed')->default(false);

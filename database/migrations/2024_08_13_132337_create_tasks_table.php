@@ -17,10 +17,7 @@ return new class extends Migration
             $table->id();
             $table->string('task_name')->index();
             $table->string('status')->default("Not Started");
-            $table->boolean('selectStatus')->default(false);
-            $table->boolean('selectOwner')->default(false);
-            $table->boolean('selectPriority')->default(false);
-            $table->boolean('showUpdates')->default(false);
+           
             
             $table->string('priority')->default("Medium");
             $table->dateTime('due_date')->nullable();
@@ -35,7 +32,7 @@ return new class extends Migration
             $table->bigInteger('trashed_by')->unsigned()->nullable();
             $table->foreign('trashed_by')->references('id')->on('users')->onUpdate('cascade');
             $table->integer('column')->nullable();
-            $table->boolean('subItemVisible')->default(false);
+           
             $table->timestamps();
         });
 

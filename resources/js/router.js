@@ -21,7 +21,7 @@ const routes = [
     name: 'project',
     component: Project,
     meta: { requiresAuth: true },
-    props: (route) => ({ boardName: route.params.boardName }),
+    props: (route) => ({ boardName: route.params.boardName,workspace: route.params.workspace }),
   },
   {
     path: '/login',

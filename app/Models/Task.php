@@ -10,7 +10,6 @@ class Task extends Model
     use HasFactory;
     protected $fillable = [
         'task_name',
-        
         'status',
         'priority',
         'due_date',
@@ -31,6 +30,10 @@ class Task extends Model
     public function updates()
     {
         return $this->hasMany(Update::class,);
+    }
+    public function SubTasks()
+    {
+        return $this->hasMany(SubTask::class);
     }
 
     public function assignedUser()

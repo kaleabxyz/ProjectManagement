@@ -7,6 +7,7 @@ import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
 import axios from 'axios'; // Import axios
 import { ref } from 'vue';
+import state from '../../state'
 
 // Form data
 const router = useRouter();
@@ -23,42 +24,49 @@ const formErrors = ref({});
 
 // Function to handle form submission
 const submit = async () => {
-      formErrors.value = {}; // Clear previous errors
-      form.value.processing = true; // Show loading state
+  formErrors.value = {}; // Clear previous errors
+  form.value.processing = true; // Show loading state
 
-      try {
-        const response = await axios.post('/api/register', form.value);
+  try {
+    const response = await axios.post('/api/register', form.value);
 
-        if (response.status === 201) {
-          // Store token and user data
-          const token = response.data.authorisation.token;
-          const user = response.data.user;
-          if (token) {
-            localStorage.setItem('token', token);
-            localStorage.setItem('user', JSON.stringify(user));
-          }
+    if (response.status === 201) {
+      // Store token and user data
+      const token = response.data.authorisation.token;
+      const user = response.data.user;
+      
+      if (token) {
+        localStorage.setItem('token', token);
+        localStorage.setItem('user', JSON.stringify(user));
 
-          // Redirect to home
-          router.push('/home');
-        }
-        console.log('User registered successfully:', response.data);
+        
+        console.log("🚀 ~ submit ~ state.user:", state.state.user)
+        // Update the reactive state with the new user data
+        state.state.user = user;
+      }
 
-        // Optionally, reset the form after successful submission
-        form.value.user_name = '';
-        form.value.email = '';
-        form.value.password = '';
-        form.value.password_confirmation = '';
-    } catch (error) {
-        // Handle errors (e.g., display errors in the form)
-        if (error.response && error.response.data.errors) {
-            formErrors.value = error.response.data.errors;
-        } else {
-            console.error('Error during registration:', error);
-        }
-    } finally {
-        form.value.processing = false; // Hide loading state
+      // Redirect to home
+      router.push('/home');
     }
+    console.log('User registered successfully:', response.data);
+
+    // Optionally, reset the form after successful submission
+    form.value.user_name = '';
+    form.value.email = '';
+    form.value.password = '';
+    form.value.password_confirmation = '';
+  } catch (error) {
+    // Handle errors (e.g., display errors in the form)
+    if (error.response && error.response.data.errors) {
+      formErrors.value = error.response.data.errors;
+    } else {
+      console.error('Error during registration:', error);
+    }
+  } finally {
+    form.value.processing = false; // Hide loading state
+  }
 };
+
 </script>
 
 <template>
