@@ -1,13 +1,13 @@
 <script setup>
-import { Head, Link } from "@inertiajs/vue3";
-import { ref, onUnmounted, computed } from "vue";
+import { ref, toRaw, onUnmounted, computed } from "vue";
 import ResponsiveNavLink from "@/Components/ResponsiveNavLink.vue";
 import SideDetail from "@/Components/SideDetail.vue";
 import ApplicationLogo from "@/Components/ApplicationLogo.vue";
 import Checkbox from "@/Components/Checkbox.vue";
+import axios from "axios";
 import TextInput from "@/Components/TextInput.vue";
 import { useRouter, useRoute } from "vue-router";
-import state from "./../state"
+import state from "./../state";
 
 function handleImageError() {
     document.getElementById("screenshot-container")?.classList.add("!hidden");
@@ -16,6 +16,14 @@ function handleImageError() {
     document.getElementById("background")?.classList.add("!hidden");
 }
 const boards = ref([]);
+const selectedBoard = ref([]);
+const selectedUpdates = ref([]);
+const showUpdate = ref("allUpdates");
+const showRead = ref(true);
+const mentions = ref([]);
+const replyContent = ref("");
+const showReplyInput = ref([]);
+const allUpdates = ref([]);
 const sideDetail = ref(false);
 const inviteVisible = ref(false);
 const updateVisible = ref(false);
@@ -90,14 +98,107 @@ const user = computed(() => state.state.user);
 console.log("🚀 ~ userin project:", user.value.id);
 const fetchBoards = () => {
     // Directly set the boards array by flattening all boards from all workspaces
-    boards.value = user.value.workspaces.flatMap(workspace => workspace.boards);
+    boards.value = user.value.workspaces.flatMap(
+        (workspace) => workspace.boards
+    );
+    allUpdates.value = boards.value.flatMap((board) =>
+        board.discussions && board.discussions.length > 0
+            ? board.discussions
+            : []
+    );
+    selectedUpdates.value = allUpdates.value;
+    selectedUpdates.value.forEach((update) => {
+        if (!update.reply) {
+            showReplyInput.value.push(false);
+        }
+    });
 
-    console.log('All boards:', boards.value);
+    selectedBoard.value = null;
+
+    console.log("showReplyInput", showReplyInput);
+    console.log("All boards:", allUpdates.value);
+};
+const filteredUpdates = computed(() => {
+    if (showUpdate.value === 'allUpdates') {
+        // Show all updates
+        if (showRead.value) {
+            // Show all updates including read and unread
+            return selectedUpdates.value;
+        } else {
+            // Show only unread updates
+            return selectedUpdates.value.filter(update => !update.read);
+        }
+    }else if (showUpdate.value === "mentioned") {
+        // Show only updates where the user is mentioned, excluding replies
+        if (showRead.value) {
+            return mentions.value;
+        } else {
+            return mentions.value.filter(
+            update =>
+                !update.read   
+        );
+        }   
+    } else if (showUpdate.value === "bookmarked" && showRead) {
+        // Show only bookmarked updates excluding replies
+        return selectedUpdates.value.filter(
+            (update) => !update.read && update.bookmark
+        );
+    } else if (showUpdate.value === "bookmarked" && !showRead) {
+        // Show only bookmarked updates excluding replies
+        return selectedUpdates.value.filter(
+            (update) =>  update.read && update.bookmark
+        );
+    } else {
+        // Default to showing all updates excluding replies
+        return selectedUpdates.value.filter((update) => !update.reply);
+    }
+});
+const markAsRead = async (update) => {
+    // Update the local state
+    update.read = true;
+
+    // Optionally, send the update to the server
+    try {
+        await axios.patch(`/api/updates/${update.id}`, { read: true });
+        user.value.workspaces.forEach((workspace) => {
+            workspace.boards.forEach((b) => {
+                if (b.id === update.board_id) {
+                    const userDiscussionIndex = b.discussions.findIndex(
+                        (discussion) => discussion.id === update.id
+                    );
+                    if (userDiscussionIndex !== -1) {
+                        b.discussions[userDiscussionIndex] = {
+                            ...b.discussions[userDiscussionIndex],
+                            read: true,
+                        };
+                    }
+                }
+            });
+        });
+
+        // Save the updated user data in local storage
+        localStorage.setItem("user", JSON.stringify(user.value));
+        fetchBoards();
+        console.log('Update marked as read:', update.id);
+    } catch (error) {
+        console.error('Failed to mark update as read:', error);
+    }
 };
 
-const submitReply = async (updateId,index) => {
+const submitReply = async (
+    updateId,
+    boardId,
+    boardName,
+    taskId,
+    taskName,
+    index
+) => {
     if (replyContent.value.trim() === "") return; // Do not post if the input is empty
-    {{console.log('update id',updateId)}}
+    {
+        {
+            console.log("update id", updateId);
+        }
+    }
     // Get user details from the current state
     const userId = user.value.id;
     const userObject = {
@@ -111,12 +212,12 @@ const submitReply = async (updateId,index) => {
         content: replyContent.value,
         user_id: userId,
         has_reply: false,
-        board_id: board.value.id,
-        task_id: selectedTaskId.value,
+        board_id: boardId,
+        task_id: taskId,
         parent_id: updateId, // Set the parent ID of the update where the reply button was clicked
         reply: 1, // Mark as reply
     };
-    console.log('reply data', replyData);
+    console.log("reply data", replyData);
 
     try {
         // Make an API call to create the reply
@@ -124,45 +225,56 @@ const submitReply = async (updateId,index) => {
 
         // Assuming the server returns the created reply
         const newReply = replyData;
+        const selectedBoard = boards.value.find(
+            (board) => board.id === boardId
+        );
+
+        // Find the task name from the selected board
+
         const formattedReply = {
             ...newReply,
             task: {
-                id: selectedTaskId.value,
-                task_name: board.value.tasks.find(task => task.id === selectedTaskId.value)?.task_name, // Get task name
+                id: taskId,
+                task_name: taskName, // Get task name from the selected board
+            },
+            board: {
+                id: boardId,
+                board_name: boardName,
             },
             user: userObject, // Nest the user data under 'user'
         };
 
         // Push the new reply to the board's discussions array
-       
 
         // Update the discussions in the user data
-        user.value.workspaces.forEach(workspace => {
-            workspace.boards.forEach(b => {
-                if (b.id === board.value.id) {
+        user.value.workspaces.forEach((workspace) => {
+            workspace.boards.forEach((b) => {
+                if (b.id === boardId) {
                     b.discussions.push(formattedReply);
                 }
             });
         });
 
         // Save the updated user data in local storage
-        localStorage.setItem('user', JSON.stringify(user.value));
+        localStorage.setItem("user", JSON.stringify(user.value));
         fetchBoards();
         // Clear the input content and hide the reply input
         replyContent.value = "";
         showReplyInput.value[index] = false;
 
         // Optionally, you can call any method to update the task or update state if necessary
-        updateTaskHasReply(updateId);
-
+        updateTaskHasReply(updateId, boardId);
     } catch (error) {
         // Handle errors
         console.error("Error posting reply:", error);
     }
 };
+const toggleReplyInput = (index) => {
+    showReplyInput.value[index] = !showReplyInput.value[index];
+};
 
 // Function to update the task to mark it as having a reply
-const updateTaskHasReply = async (updateId) => {
+const updateTaskHasReply = async (updateId, boardId) => {
     try {
         // Send a PATCH request to update the 'has_reply' status in the database
         await axios.patch(`/api/updates/${updateId}`, {
@@ -170,17 +282,18 @@ const updateTaskHasReply = async (updateId) => {
         });
 
         // Find and update the discussion in board.discussions
-        
 
         // Update the discussions in the user object
-        user.value.workspaces.forEach(workspace => {
-            workspace.boards.forEach(b => {
-                if (b.id === board.value.id) {
-                    const userDiscussionIndex = b.discussions.findIndex(discussion => discussion.id === updateId);
+        user.value.workspaces.forEach((workspace) => {
+            workspace.boards.forEach((b) => {
+                if (b.id === boardId) {
+                    const userDiscussionIndex = b.discussions.findIndex(
+                        (discussion) => discussion.id === updateId
+                    );
                     if (userDiscussionIndex !== -1) {
                         b.discussions[userDiscussionIndex] = {
                             ...b.discussions[userDiscussionIndex],
-                            has_reply: true
+                            has_reply: true,
                         };
                     }
                 }
@@ -188,11 +301,63 @@ const updateTaskHasReply = async (updateId) => {
         });
 
         // Save the updated user data in local storage
-        localStorage.setItem('user', JSON.stringify(user.value));
+        localStorage.setItem("user", JSON.stringify(user.value));
         fetchBoards();
     } catch (error) {
         console.error("Error updating task:", error);
     }
+};
+const truncatedDescription = (update,parent) => {
+    const content = update.content; // Accessing content from the update
+    const index = allUpdates.value.indexOf(update); // Find the index of the update
+
+    // Regular expression to match mentions like @username
+    const mentionPattern = /@(\w+)/g; // Matches any word starting with '@'
+    let match;
+
+    // Highlight mentions by wrapping them with a span
+    let formattedContent = content.replace(
+        mentionPattern,
+        (match, username) => {
+            return `<span style="color: blue;">${match}</span>`;
+        }
+    );
+
+    // Check for mentions in the update content
+    while ((match = mentionPattern.exec(content)) !== null) {
+        const mentionedUser = match[1]; // Extract the username after '@'
+
+        // If the mentioned user is the current user, add the update to mentions
+        if (
+            mentionedUser.toLowerCase() === user.value.user_name.toLowerCase()
+        ) {
+            if (!mentions.value.includes(update)) {
+                if (update.reply && parent) {
+                    if (!mentions.value.includes(parent)) {
+                        // If it's a reply, add the parent update to the mentions array
+                        mentions.value.push(parent);
+                    }
+                    
+
+                } else {
+                    // If it's not a reply, add the current update to the mentions array
+                    mentions.value.push(update);
+                } // Add to mentions array
+            }
+        }
+    }
+
+    // Truncate the description
+    if (showFullDescription.value[index] || content.length <= 100) {
+        return formattedContent; // Return formatted content with highlights
+    } else {
+        return formattedContent.substring(0, 100) + "..."; // Truncate and return
+    }
+};
+
+// Function to toggle the description between truncated and full for each update
+const toggleFullDescription = (index) => {
+    showFullDescription.value[index] = !showFullDescription.value[index];
 };
 const toggleSideDetail = () => {
     sideDetail.value = !sideDetail.value;
@@ -210,6 +375,7 @@ const hideInvite = () => {
 };
 const toggleUpdate = () => {
     updateVisible.value = !inviteVisible.value;
+    fetchBoards();
 };
 const hideUpdate = () => {
     updateVisible.value = false;
@@ -223,34 +389,21 @@ const handleClickOutside = (event) => {
     }
 };
 const logout = () => {
-      // Clear the token and user data from local storage
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      
-      console.log("🚀 ~ logout ~ state.state.user:", state.state.user)
-    state.state.user = null;
-    
-      // Optionally, redirect to the login page
-      router.push('/');
+    // Clear the token and user data from local storage
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
 
-    };
+    console.log("🚀 ~ logout ~ state.state.user:", state.state.user);
+    state.state.user = null;
+
+    // Optionally, redirect to the login page
+    router.push("/");
+};
 const updateContent = ref(
     "Filter by Board Lorem ipsum dolor sit amet, consectetur adipisicing elit. Voluptatum, ratione. Molestias perferendis incidunt quisquam eveniet harum aliquam, ab mollitia facere quas cupiditate libero doloribus enim accusantium earum et ducimus? Cum? Filter by Board Lorem ipsum dolor sit amet, consectetur adipisicing elit. Voluptatum, ratione. Molestias perferendis incidunt quisquam eveniet harum aliquam, ab mollitia facere quas cupiditate libero doloribus enim accusantium earum et ducimus? Cum?"
 );
 
 const showFullDescription = ref(false);
-
-const toggleFullDescription = () => {
-    showFullDescription.value = !showFullDescription.value;
-};
-
-const truncatedDescription = computed(() => {
-    if (showFullDescription.value || updateContent.value.length <= 190) {
-        return updateContent.value;
-    } else {
-        return updateContent.value.substring(0, 190) + "...";
-    }
-});
 
 document.addEventListener("click", handleClickOutside);
 
@@ -960,7 +1113,7 @@ onUnmounted(() => {
                 class="fa fa-times absolute top-6 right-6 fa-font-extralight text-gray-500 text-2xl ml-2 p-1 hover:bg-gray-100 cursor-pointer"
                 aria-hidden="true"
             ></i>
-            <div class="h-full w-1/5">
+            <div class="h-full overflow-y-auto w-1/5">
                 <h1 class="font-bold text-4xl">Update feed</h1>
                 <div class="flex items-center justify-between mt-10">
                     <h1 class="font-bold text-lg">Filter by Board</h1>
@@ -996,7 +1149,16 @@ onUnmounted(() => {
                 </div>
                 <div class="pr-2">
                     <div
-                        class="flex items-start justify-between bg-blue-200 rounded-md p-2 hover:bg-gray-100"
+                        @click="
+                            selectedBoard = null;
+                            selectedUpdates = allUpdates;
+                        "
+                        :class="
+                            selectedBoard == null
+                                ? 'bg-blue-100'
+                                : 'bg-gray-200'
+                        "
+                        class="flex cursor-pointer items-start justify-between rounded-md p-2 hover:bg-blue-200"
                     >
                         <h1 class="text-sm font-extralight">
                             All boards in my feed
@@ -1006,32 +1168,63 @@ onUnmounted(() => {
                         </h1>
                     </div>
                 </div>
+                <div v-for="(board, index) in boards">
+                    <div class="pr-2">
+                        <div
+                            @click="
+                                selectedBoard = board.id;
+                                selectedUpdates = board.discussions;
+                            "
+                            :class="
+                                selectedBoard == board.id
+                                    ? 'bg-blue-100'
+                                    : 'bg-gray-200'
+                            "
+                            class="flex my-2 cursor-pointer items-start justify-between rounded-md p-2 hover:bg-blue-200"
+                        >
+                            {{ console.log("selected board", board.id) }}
+                            <h1 class="text-sm font-extralight">
+                                {{ board.board_name }}
+                            </h1>
+                            <h1
+                                class="px-2 rounded-full bg-gray-400 text-black"
+                            >
+                                1
+                            </h1>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="w-full">
                 <div
                     class="flex mt-6 ml-10 font-extralight text-gray-700 text-lg"
                 >
-                    <div
-                        class="p-4 py-1 flex border-b-2 border-blue-400 items-center hover:bg-gray-100 cursor-pointer"
+                    <div @click ="showUpdate = 'allUpdates'"
+                    :class="{
+                        'border-b-2 border-blue-400': showUpdate == 'allUpdates',
+                    }"
+                        class="p-4 py-1 flex  items-center hover:bg-gray-100 cursor-pointer"
                     >
                         <h3>All updates</h3>
                     </div>
-                    <div
+                    <div @click ="showUpdate = 'mentioned'"
+                    :class="{
+                        'border-b-2 border-blue-400': showUpdate == 'mentioned',
+                    }"
                         class="p-4 py-1 flex items-center hover:bg-gray-100 cursor-pointer"
                     >
                         <h3>@ I was mentioned</h3>
                     </div>
-                    <div
+                    <div @click = "showUpdate = 'bookmarked'"
+                    :class="{
+                        'border-b-2 border-blue-400': showUpdate == 'bookmarked',
+                    }"
                         class="p-4 py-1 flex items-center hover:bg-gray-100 cursor-pointer"
                     >
                         <i class="far fa-bookmark mr-2"></i>
                         <h3>Bookmarked</h3>
                     </div>
-                    <div
-                        class="p-4 py-1 flex items-center hover:bg-gray-100 cursor-pointer"
-                    >
-                        <h3>All account updates</h3>
-                    </div>
+                    
                 </div>
                 <div
                     class="w-full h-full py-6 px-10 bg-gray-50 overflow-y-auto"
@@ -1041,12 +1234,12 @@ onUnmounted(() => {
                             class="flex items-center px-2 rounded-lg py-2 hover:bg-gray-200 mr-96 cursor-pointer justify-between"
                         >
                             <h1 class="font-bold mr-4">Show</h1>
-                            <div class="flex items-center">
-                                <h1>Unread updates</h1>
-                                <i
-                                    class="fa fa-chevron-down ml-2 text-xs"
-                                    aria-hidden="true"
-                                ></i>
+                            <div
+                                @click="showRead = !showRead"
+                                class="flex items-center"
+                            >
+                                <h1 v-if="!showRead">Unread updates</h1>
+                                <h1 v-if="showRead">All updates</h1>
                             </div>
                         </div>
                         <div
@@ -1087,16 +1280,619 @@ onUnmounted(() => {
                         </div>
                     </div>
                     <div class="flex">
-                        <div>
+                        <div class="w-1/2">
+                            {{ console.log('selected Updates,filteredUpdates,  show Update, show Read', selectedUpdates, filteredUpdates, showUpdate, showRead) }}
                             <div
-                                class="w-10 h-10 bg-blue-600 ml-6 mt-4 absolute -right-20 rounded-md flex items-center hover:bg-blue-700 justify-center"
+                                v-if="true"
+                                v-for="(update, index) in filteredUpdates.slice().reverse()"
+                                :key="index"
+                                class="relative"
                             >
-                                <i
-                                    class="fa fa-check text-white text-2xl"
-                                ></i>
+                                <div @click="markAsRead(update)"
+                                    v-if="!update.reply && !update.read "
+                                    class="w-10 h-10 bg-blue-600 ml-6 mt-4 absolute -right-20 rounded-md flex items-center hover:bg-blue-700 justify-center"
+                                >
+                                    <i
+                                        class="fa fa-check text-white text-2xl"
+                                    ></i>
+                                </div>
+
+                                <div
+                                    v-if="update.reply !== 1"
+                                    class="flex w-full h-full mt-8 text-black overflow-y-auto"
+                                >
+                                    <div class="w-full px-6 overflow-y-auto">
+                                        <div
+                                            class="w-full flex flex-col relative justify-between bg-white border rounded-lg p-0"
+                                        >
+                                            <div>
+                                                <div class="flex p-4">
+                                                    <div
+                                                        class="rounded-full w-12 h-12 flex items-center justify-center group/detail relative"
+                                                    >
+                                                        <template
+                                                            v-if="
+                                                                update.user
+                                                                    ?.profile_picture_url
+                                                            "
+                                                        >
+                                                            <img
+                                                                :src="
+                                                                    update.user
+                                                                        .profile_picture_url
+                                                                "
+                                                                alt="Profile Picture"
+                                                                class="w-full h-full object-cover rounded-full"
+                                                            />
+                                                        </template>
+
+                                                        <!-- Display h1 only if there is no profile_picture_url -->
+                                                        <template v-else>
+                                                            <h1
+                                                                class="py-1 w-12 h-12 flex items-center justify-center text-3xl px-3.5 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
+                                                            >
+                                                                {{
+                                                                    update.user
+                                                                        ?.user_name
+                                                                        ? update.user.user_name
+                                                                              .charAt(
+                                                                                  0
+                                                                              )
+                                                                              .toUpperCase()
+                                                                        : "?"
+                                                                }}
+                                                            </h1>
+                                                        </template>
+                                                        <div
+                                                            class="w-64 transition-opacity hidden group-hover/detail:flex duration-1000 ease-in-out opacity-0 group-hover/detail:opacity-100 rounded-lg shadow-lg px-0 py-6 pb-0 -top-1 flex-col justify-between left-12 z-10 h-44 absolute bg-white"
+                                                        >
+                                                            <div
+                                                                class="flex px-8 w-20 h-20"
+                                                            >
+                                                                <template
+                                                                    v-if="
+                                                                        update
+                                                                            .user
+                                                                            ?.profile_picture_url
+                                                                    "
+                                                                >
+                                                                    <img
+                                                                        :src="
+                                                                            update
+                                                                                .user
+                                                                                .profile_picture_url
+                                                                        "
+                                                                        alt="Profile Picture"
+                                                                        class="w-20 h-20 object-cover rounded-full"
+                                                                    />
+                                                                </template>
+
+                                                                <!-- Display h1 only if there is no profile_picture_url -->
+                                                                <template
+                                                                    v-else
+                                                                >
+                                                                    <h1
+                                                                        class="py-3 w-20 h-20 flex items-center justify-center z-15 text-5xl px-6 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
+                                                                    >
+                                                                        {{
+                                                                            update
+                                                                                .user
+                                                                                ?.user_name
+                                                                                ? update.user.user_name
+                                                                                      .charAt(
+                                                                                          0
+                                                                                      )
+                                                                                      .toUpperCase()
+                                                                                : "?"
+                                                                        }}
+                                                                    </h1>
+                                                                </template>
+                                                                <div>
+                                                                    <div
+                                                                        class="flex"
+                                                                    >
+                                                                        <h1
+                                                                            class="font-extralight hover:underline cursor-pointer"
+                                                                        >
+                                                                            {{
+                                                                                update
+                                                                                    .user
+                                                                                    .user_name
+                                                                            }}
+                                                                        </h1>
+                                                                        <span
+                                                                            class="w-3 h-3 rounded-full bg-green-400 ml-2"
+                                                                        ></span>
+                                                                    </div>
+                                                                    <h1
+                                                                        class="mt-4 p-1 bg-blue-100 flex items-center justify-center rounded-lg"
+                                                                    >
+                                                                        {{
+                                                                            update.user_role
+                                                                        }}
+                                                                    </h1>
+                                                                </div>
+                                                            </div>
+                                                            <div
+                                                                class="border-t group/contact w-full relative border-gray-500 hover:bg-gray-100 cursor-pointer flex items-center justify-center border-b-0 py-4"
+                                                            >
+                                                                <h1>
+                                                                    Contact
+                                                                    Details
+                                                                </h1>
+                                                                <i
+                                                                    class="fa fa-chevron-down ml-2 text-xs"
+                                                                    aria-hidden="true"
+                                                                ></i>
+                                                                <div
+                                                                    class="w-64 gr transition-opacity duration-1000 ease-in-out opacity-0 group-hover/contact:opacity-100 rounded-lg px-4 shadow-lg py-2 top-12 flex items-center left-0 h-16 absolute bg-white"
+                                                                >
+                                                                    <i
+                                                                        class="far fa-envelope mr-2 font-extralight text-gray-500"
+                                                                    ></i>
+                                                                    <h1
+                                                                        class="text-gray-500"
+                                                                    >
+                                                                        {{
+                                                                            console.log(
+                                                                                "email",
+                                                                                update.user
+                                                                            )
+                                                                        }}
+                                                                        {{
+                                                                            update
+                                                                                .user
+                                                                                .email
+                                                                        }}
+                                                                    </h1>
+                                                                    <h1
+                                                                        class="bg-blue-400 text-sm ml-4 rounded-md hover:bg-blue-500 p-1"
+                                                                    >
+                                                                        Copy
+                                                                    </h1>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="w-full">
+                                                        <div
+                                                            class="flex items-center justify-between"
+                                                        >
+                                                            <div
+                                                                class="flex items-center"
+                                                            >
+                                                                <h1
+                                                                    class="font-extralight hover:underline cursor-pointer"
+                                                                >
+                                                                    {{
+                                                                        update
+                                                                            .user
+                                                                            .user_name
+                                                                    }}
+                                                                </h1>
+                                                                <span
+                                                                    class="w-3 h-3 rounded-full bg-green-400 ml-2"
+                                                                ></span>
+                                                            </div>
+                                                            <div
+                                                                class="flex items-center text-gray-600"
+                                                            >
+                                                                <i
+                                                                    class="far fa-clock"
+                                                                >
+                                                                </i>
+                                                                <h1
+                                                                    class="ml-1 hover:underline cursor-pointer mr-1"
+                                                                >
+                                                                    3h
+                                                                </h1>
+                                                                <span
+                                                                    @click="
+                                                                        toggleSideDetail
+                                                                    "
+                                                                    @click.stop
+                                                                    class="h-full hover:bg-gray-100"
+                                                                >
+                                                                    <i
+                                                                        class="far fa-bell m-1 text-sm"
+                                                                    ></i>
+                                                                </span>
+                                                                <span>
+                                                                    <i
+                                                                        class="fa fa-ellipsis-h text-lg py-1 px-1 hover:bg-gray-100 cursor-pointer"
+                                                                        aria-hidden="true"
+                                                                    ></i>
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                        <div
+                                                            class="flex items-center text-gray-500 text-sm"
+                                                        >
+                                                            <a
+                                                                href="#"
+                                                                class="hover:text-blue-600"
+                                                            >
+                                                                <h1>
+                                                                    {{
+                                                                        update
+                                                                            .board
+                                                                            .board_name
+                                                                    }}>
+                                                                </h1>
+                                                            </a>
+                                                            <a
+                                                                href="#"
+                                                                class="hover:text-blue-600"
+                                                            >
+                                                                <h1>To do ></h1>
+                                                            </a>
+                                                            <a
+                                                                href="#"
+                                                                class="hover:text-blue-600"
+                                                            >
+                                                                <h1>
+                                                                    {{
+                                                                        update
+                                                                            .task
+                                                                            .task_name
+                                                                    }}
+                                                                </h1>
+                                                            </a>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div
+                                                    class="mt-4 p-4 flex items-center flex-col"
+                                                >
+                                                    <p
+                                                        v-html="
+                                                            truncatedDescription(
+                                                                update,null
+                                                            )
+                                                        "
+                                                    ></p>
+                                                    <button
+                                                        @click="
+                                                            toggleFullDescription(
+                                                                index
+                                                            )
+                                                        "
+                                                        class="text-green-500 hover:text-green-600 hover:shadow-lg w-full bg-white"
+                                                    >
+                                                        {{
+                                                            showFullDescription[
+                                                                index
+                                                            ]
+                                                                ? "Less"
+                                                                : "More"
+                                                        }}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div
+                                                v-if="update.has_reply == 0"
+                                                class="w-full flex mt-8 border-t items-center"
+                                            >
+                                                <div
+                                                    class="w-1/2 flex justify-center items-center p-3 border-r hover:bg-gray-100"
+                                                >
+                                                    <i
+                                                        class="far fa-thumbs-up text-gray-400 mr-2"
+                                                        aria-hidden="true"
+                                                    ></i>
+                                                    Like
+                                                </div>
+                                                <div
+                                                    @click="
+                                                        toggleReplyInput(index)
+                                                    "
+                                                    class="w-1/2 flex justify-center items-center p-3 hover:bg-gray-100"
+                                                >
+                                                    <i
+                                                        class="fa mr-2 text-gray-400 fa-reply"
+                                                        aria-hidden="true"
+                                                    ></i>
+                                                    Reply
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <!-- Reply Input1 -->
+                                        <div
+                                            v-if="
+                                                showReplyInput[index] &&
+                                                update.has_reply == false
+                                            "
+                                            class="w-full flex flex-col justify-between relative bg-white border rounded-lg p-0"
+                                        >
+                                            <TextInput
+                                                class="w-full"
+                                                placeholder="Write a reply..."
+                                                v-model="replyContent"
+                                                @keyup.enter="
+                                                    submitReply(
+                                                        update.id,
+                                                        update.board.id,
+                                                        update.board.board_name,
+                                                        update.task.task_id,
+                                                        update.task.task_name,
+                                                        index
+                                                    )
+                                                "
+                                            ></TextInput>
+                                        </div>
+
+                                        <div>
+                                            <div
+                                                v-for="reply in selectedUpdates
+                                                    .slice()
+                                                    .reverse()"
+                                            >
+                                                <div
+                                                    v-if="
+                                                        reply.reply &&
+                                                        reply.parent_id ===
+                                                            update.id
+                                                    "
+                                                    class="w-full flex flex-col justify-between relative bg-white border border-b-0 rounded-lg p-0"
+                                                >
+                                                    <div>
+                                                        <div class="flex p-4">
+                                                            <div
+                                                                class="rounded-full w-14 flex items-center justify-center h-14 group/detail relative"
+                                                            >
+                                                                <template
+                                                                    v-if="
+                                                                        update
+                                                                            .user
+                                                                            ?.profile_picture_url
+                                                                    "
+                                                                >
+                                                                    <img
+                                                                        :src="
+                                                                            update
+                                                                                .user
+                                                                                .profile_picture_url
+                                                                        "
+                                                                        alt="Profile Picture"
+                                                                        class="w-full h-full object-cover rounded-full"
+                                                                    />
+                                                                </template>
+
+                                                                <!-- Display h1 only if there is no profile_picture_url -->
+                                                                <template
+                                                                    v-else
+                                                                >
+                                                                    <h1
+                                                                        class="py-1 w-12 flex items-center justify-center h-12 text-3xl px-3.5 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
+                                                                    >
+                                                                        {{
+                                                                            update
+                                                                                .user
+                                                                                ?.user_name
+                                                                                ? update.user.user_name
+                                                                                      .charAt(
+                                                                                          0
+                                                                                      )
+                                                                                      .toUpperCase()
+                                                                                : "?"
+                                                                        }}
+                                                                    </h1>
+                                                                </template>
+                                                                <div
+                                                                    class="w-64 transition-opacity hidden group-hover/detail:flex duration-1000 ease-in-out opacity-0 group-hover/detail:opacity-100 rounded-lg shadow-lg px-0 py-6 pb-0 -top-20 flex-col justify-between left-14 h-44 absolute bg-white"
+                                                                >
+                                                                    <div
+                                                                        class="flex px-8"
+                                                                    >
+                                                                        <h1
+                                                                            class="py-3 w-20 h-20 flex items-center justify-center text-5xl px-6 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
+                                                                        >
+                                                                            {{
+                                                                                update
+                                                                                    .user
+                                                                                    ?.user_name
+                                                                                    ? update.user.user_name
+                                                                                          .charAt(
+                                                                                              0
+                                                                                          )
+                                                                                          .toUpperCase()
+                                                                                    : "?"
+                                                                            }}
+                                                                        </h1>
+                                                                        <div>
+                                                                            <div
+                                                                                class="flex"
+                                                                            >
+                                                                                <h1
+                                                                                    class="font-extralight hover:underline cursor-pointer"
+                                                                                >
+                                                                                    {{
+                                                                                        update
+                                                                                            .user
+                                                                                            .user_name
+                                                                                    }}
+                                                                                </h1>
+                                                                                <span
+                                                                                    class="w-3 h-3 rounded-full bg-green-400 ml-2"
+                                                                                ></span>
+                                                                            </div>
+                                                                            <h1
+                                                                                class="mt-4 p-1 bg-blue-100 flex items-center justify-center rounded-lg"
+                                                                            >
+                                                                                {{
+                                                                                    update.user_role
+                                                                                }}
+                                                                            </h1>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div
+                                                                        class="border-t group/contact w-full relative border-gray-500 hover:bg-gray-100 cursor-pointer flex items-center justify-center border-b-0 py-4"
+                                                                    >
+                                                                        <h1>
+                                                                            Contact
+                                                                            Details
+                                                                        </h1>
+                                                                        <i
+                                                                            class="fa fa-chevron-down ml-2 text-xs"
+                                                                            aria-hidden="true"
+                                                                        ></i>
+                                                                        <div
+                                                                            class="w-64 gr transition-opacity duration-1000 ease-in-out opacity-0 group-hover/contact:opacity-100 rounded-lg px-4 shadow-lg py-2 top-12 flex items-center left-0 h-16 absolute bg-white"
+                                                                        >
+                                                                            <i
+                                                                                class="far fa-envelope mr-2 font-extralight text-gray-500"
+                                                                            ></i>
+                                                                            <h1
+                                                                                class="text-gray-500"
+                                                                            >
+                                                                                {{
+                                                                                    update
+                                                                                        .user
+                                                                                        .email
+                                                                                }}
+                                                                            </h1>
+                                                                            <h1
+                                                                                class="bg-blue-400 text-sm ml-4 rounded-md hover:bg-blue-500 p-1"
+                                                                            >
+                                                                                Copy
+                                                                            </h1>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="w-full">
+                                                                <div class="">
+                                                                    <div
+                                                                        class="bg-gray-100 rounded-lg"
+                                                                    >
+                                                                        <h1
+                                                                            class="font-extralight text-blue-500 px-4 py-2 hover:underline cursor-pointer"
+                                                                        >
+                                                                            {{
+                                                                                update
+                                                                                    .user
+                                                                                    .user_name
+                                                                            }}
+                                                                        </h1>
+                                                                        <div
+                                                                            class="mt-1 p-4 flex items-center flex-col"
+                                                                        >
+                                                                            <p
+                                                                                v-html="
+                                                                                    truncatedDescription(
+                                                                                        reply,update
+                                                                                    )
+                                                                                "
+                                                                            ></p>
+                                                                            <button
+                                                                                @click="
+                                                                                    toggleFullDescription(
+                                                                                        index
+                                                                                    )
+                                                                                "
+                                                                                class="text-green-500 hover:text-green-600 hover:shadow-lg w-full bg-white"
+                                                                            >
+                                                                                {{
+                                                                                    showFullDescription[
+                                                                                        index
+                                                                                    ]
+                                                                                        ? "Less"
+                                                                                        : "More"
+                                                                                }}
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div
+                                                                        class="flex items-center text-gray-600"
+                                                                    >
+                                                                        <i
+                                                                            class="far fa-clock"
+                                                                        >
+                                                                        </i>
+                                                                        <h1
+                                                                            class="ml-1 mt-2 hover:underline cursor-pointer mr-1"
+                                                                        >
+                                                                            3h
+                                                                        </h1>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div
+                                                        class="w-full flex mt-2 px-4 py-2 items-center"
+                                                    ></div>
+                                                    <!-- reply input 2 -->
+                                                </div>
+                                            </div>
+                                            {{
+                                                console.log(
+                                                    "update has reply",
+                                                    update.has_reply
+                                                )
+                                            }}
+                                            <div
+                                                v-if="update.has_reply == 1"
+                                                class="flex flex-row"
+                                            >
+                                                <div>
+                                                    <div class>
+                                                        <template
+                                                            v-if="
+                                                                user?.profile_picture_url
+                                                            "
+                                                        >
+                                                            <img
+                                                                :src="
+                                                                    user.profile_picture_url
+                                                                "
+                                                                alt="Profile Picture"
+                                                                class="w-full h-full object-cover rounded-full"
+                                                            />
+                                                        </template>
+
+                                                        <!-- Display h1 only if there is no profile_picture_url -->
+                                                        <template v-else>
+                                                            <h1
+                                                                class="py-1 w-12 h-12 flex items-center justify-center text-3xl px-3.5 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
+                                                            >
+                                                                {{
+                                                                    user?.user_name
+                                                                        ? update.user.user_name
+                                                                              .charAt(
+                                                                                  0
+                                                                              )
+                                                                              .toUpperCase()
+                                                                        : "?"
+                                                                }}
+                                                            </h1>
+                                                        </template>
+                                                    </div>
+                                                </div>
+                                                <TextInput
+                                                    class="w-full"
+                                                    placeholder="Write a reply..."
+                                                    v-model="replyContent"
+                                                    @keyup.enter="
+                                                        submitReply(
+                                                            update.id,
+                                                            update.board.id,
+                                                            update.board
+                                                                .board_name,
+                                                            update.task.task_id,
+                                                            update.task
+                                                                .task_name,
+                                                            index
+                                                        )
+                                                    "
+                                                ></TextInput>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                            
-                            
                         </div>
                     </div>
                 </div>
@@ -1198,7 +1994,7 @@ onUnmounted(() => {
                 <img
                     class="w-24"
                     src="../../../public/images/image-removebg-preview.png"
-                    alt="F" 
+                    alt="F"
             /></router-link>
             <h1 class="font-sans">work management</h1>
         </div>
@@ -1237,7 +2033,11 @@ onUnmounted(() => {
                 @click.stop
                 class="bg-custom-gray hover:bg-gray-200 cursor-pointer relative flex items-center rounded-r-full"
             >
-                <img class="ml-2 w-6" src="../../../public/images/logo-s.png" alt="" />
+                <img
+                    class="ml-2 w-6"
+                    src="../../../public/images/logo-s.png"
+                    alt=""
+                />
                 <span>
                     <i class="fa fa-user-circle ml-4 fa-2x"></i>
                 </span>
@@ -1296,7 +2096,8 @@ onUnmounted(() => {
                             <i class="fa fa-users mr-2" aria-hidden="true"></i>
                             <h1>Teams</h1>
                         </div>
-                        <div @click="logout"
+                        <div
+                            @click="logout"
                             class="py-2 px-2 text-gray-600 flex items-center cursor-pointer hover:bg-gray-100"
                         >
                             <i

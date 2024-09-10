@@ -113,8 +113,11 @@ const fetchBoard =  (workSpace,boardName) => {
            {
            
                    board.value = b;
-                   b.discussions.forEach(() => {
+                   b.discussions.forEach(update => {
+                       if (!update.reply) {
+                        
                     showReplyInput.value.push(false);  
+                    }
                    })
                    b.tasks.forEach(() => {
                        showSubTasks.value.push(false);
@@ -338,6 +341,10 @@ const postUpdate = async (taskId) => {
                 id: selectedTask.id,
                 task_name: selectedTask.task_name,
             },
+            board: {
+                id: board.value.id,
+                board_name: board.value.board_name,
+            },
             user: userObject, // Nest the user data under 'user'
         };
         console.log('update response',formattedUpdate)
@@ -387,6 +394,7 @@ const submitReply = async (updateId,index) => {
         task_id: selectedTaskId.value,
         parent_id: updateId, // Set the parent ID of the update where the reply button was clicked
         reply: 1, // Mark as reply
+        read: false,
     };
     console.log('reply data', replyData);
 

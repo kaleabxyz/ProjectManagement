@@ -101,7 +101,7 @@ class RegisteredUserController extends Controller
             'workspaces.boards.tasks',
             'workspaces.boards.tasks.SubTasks',
             'workspaces.boards.tasks.assignedUser:id,user_name,email,profile_picture_url',
-            'workspaces.boards.tasks.updates',    
+            'workspaces.boards.discussions.board:id,board_name',    
             'workspaces.boards.discussions',  
             'workspaces.boards.discussions.task:id,task_name', 
 

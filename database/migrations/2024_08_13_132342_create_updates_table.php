@@ -21,10 +21,12 @@ return new class extends Migration
             $table->foreign('user_id')->references('id')->on('users')->onUpdate('cascade')->onDelete('cascade');
             $table->longText('content');
             $table->boolean('has_reply')->default(false);
+            $table->boolean('bookmark')->default(false);
+
             $table->boolean('reply')->nullable();
             $table->bigInteger('parent_id')->unsigned()->nullable(); // New column
             $table->foreign('parent_id')->references('id')->on('updates')->onUpdate('cascade')->onDelete('cascade'); // Foreign key for replies
-            $table->boolean('read')->nullable();
+            $table->boolean('read')->default(false);
             $table->bigInteger('board_id')->unsigned();
             $table->foreign('board_id')->references('id')->on('boards')->onUpdate('cascade')->onDelete('cascade');
             $table->timestamps();
