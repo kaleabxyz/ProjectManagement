@@ -1,5 +1,5 @@
 <script setup>
-import { ref, toRaw, onUnmounted, computed } from "vue";
+import { ref, toRaw, onUnmounted,watch,onMounted, computed } from "vue";
 import ResponsiveNavLink from "@/Components/ResponsiveNavLink.vue";
 import SideDetail from "@/Components/SideDetail.vue";
 import ApplicationLogo from "@/Components/ApplicationLogo.vue";
@@ -16,17 +16,25 @@ function handleImageError() {
     document.getElementById("background")?.classList.add("!hidden");
 }
 const boards = ref([]);
+const board = ref([]);
+const userRole = ref('');
+const showMembers = ref(false);
+const boardName = ref(null);
+const workSpace = ref(null);
+const showReplyInput = ref([]);
 const selectedBoard = ref([]);
 const selectedUpdates = ref([]);
 const showUpdate = ref("allUpdates");
+const route = useRoute();
 const showRead = ref(true);
 const mentions = ref([]);
 const replyContent = ref("");
-const showReplyInput = ref([]);
+
 const allUpdates = ref([]);
 const sideDetail = ref(false);
 const inviteVisible = ref(false);
 const updateVisible = ref(false);
+
 const showProfile = ref(false);
 const showTrash = ref(false);
 const router = useRouter();
@@ -37,9 +45,16 @@ const trash = ref(true);
 const archive = ref(false);
 const workingStatus = ref(false);
 const password = ref(false);
-const jobTitle = ref("content");
-const userName = ref("Kaleab");
+const jobTitle = ref("");
+const phone = ref("");
+const mobilePhone = ref("");
+const location = ref("");
+const skype = ref("");
+const birthday = ref("");
+
+const userName = ref("");
 const selectedStatus = ref("In the office");
+const selectedProfile = ref([]);
 
 const statuses = [
     { id: "in-office", label: "In the office", icon: "fas fa-building" },
@@ -95,7 +110,29 @@ const users = ref([
     },
 ]);
 const user = computed(() => state.state.user);
-console.log("🚀 ~ userin project:", user.value.id);
+
+
+console.log("🚀 ~ userin project:", selectedProfile.value);
+const fetchBoard =  (workSpace,boardName) => {
+    console.log('hellow is this working',workSpace.value,boardName.value)
+    user.value.workspaces.forEach(workspace => {
+       if(workspace.id ==workSpace.value)
+       {
+           workspace.boards.forEach(b => {
+               if (b.board_name == boardName.value)
+           {
+           
+                   board.value = b;
+                   console.log('discusssss',board.value.id)
+                   
+                         
+            
+           }    
+     })
+    } 
+    })
+};
+
 const fetchBoards = () => {
     // Directly set the boards array by flattening all boards from all workspaces
     boards.value = user.value.workspaces.flatMap(
@@ -116,8 +153,9 @@ const fetchBoards = () => {
     selectedBoard.value = null;
 
     console.log("showReplyInput", showReplyInput);
-    console.log("All boards:", allUpdates.value);
+    console.log("All boards:", boards.value);
 };
+
 const filteredUpdates = computed(() => {
     if (showUpdate.value === 'allUpdates') {
         // Show all updates
@@ -154,6 +192,56 @@ const filteredUpdates = computed(() => {
         return selectedUpdates.value.filter((update) => !update.reply);
     }
 });
+const userProfile = (user) => {
+    console.log('selected user for profile',user)
+    selectedProfile.value = user;
+    user.workspaces.forEach((workspace) => {
+            workspace.boards.forEach((b) => {
+                if (b.id === board.value.id) {
+                   
+                    b.team.members.forEach((member) => {
+                        if (member.id == user.id) {
+                             userRole.value = member.pivot.role;
+                            console.log('selected board for navbar', userRole)
+                      }
+                    })
+                }
+            });
+        });
+    userName.value = user.user_name;
+    jobTitle.value = user.job_title;
+    phone.value = user.phone;
+    mobilePhone.value = user.mobile_phone;
+    location.value = user.location;
+    skype.value = user.skype;
+    birthday.value = user.birthday;
+
+}
+const updateUserField = async (fieldName, newValue) => {
+    // Exit if the input is empty or hasn't changed
+    if (!newValue.trim() || newValue === user.value[fieldName]) {
+        return;
+    }
+
+    // Update the field in the frontend state
+    user.value[fieldName] = newValue;
+
+    try {
+        // Update the user field in the database
+        await axios.patch(`/api/users/${user.value.id}`, {
+            [fieldName]: newValue,
+        });
+
+        // Save the updated user data to localStorage
+        localStorage.setItem("user", JSON.stringify(user.value));
+
+        console.log(`${fieldName} updated successfully in user data.`);
+    } catch (error) {
+        console.error(`Error updating ${fieldName}:`, error);
+    }
+};
+
+
 const markAsRead = async (update) => {
     // Step 1: Update the local state
     update.is_read = true;
@@ -486,6 +574,28 @@ document.addEventListener("click", handleClickOutside);
 onUnmounted(() => {
     document.removeEventListener("click", handleClickOutside);
 });
+
+watch(
+    () => route.params.boardName,
+    (newBoardId) => {
+        if (newBoardId) {
+            const workSpace = route.query.workSpace;
+            fetchBoard(workSpace,newBoardId);
+        }
+    }
+);
+onMounted(() => {
+    workSpace.value = route.query.workSpace;
+  boardName.value = route.params.boardName;
+    console.log('board and workspace',  workSpace.value);
+    if (boardName) {
+        fetchBoard(workSpace, boardName);
+        fetchBoards(); 
+    }
+    
+
+   
+});
 </script>
 
 <template>
@@ -558,8 +668,9 @@ onUnmounted(() => {
                             @click="
                                 profile = true;
                                 workingStatus = false;
-                                password = false;
-                            "
+                            password = false;
+                                
+   userProfile(user)                         "
                             :class="{
                                 'bg-blue-100': profile === true,
                                 'hover:bg-gray-200': profile !== true,
@@ -615,22 +726,54 @@ onUnmounted(() => {
                     <div class="w-full overflow-y-auto border rounded-lg">
                         <div class="flex p-6 justify-between">
                             <div class="flex h-fit">
-                                <h1
-                                    class="text-8xl mr-6 font-bold text-white rounded-full bg-blue-300 py-10 px-14"
-                                >
-                                    K
-                                </h1>
+                                <template
+                                                                    v-if="
+                                                                        selectedProfile
+                                                                            ?.profile_picture_url
+                                                                    "
+                                                                >
+                                                                    <img
+                                                                        :src="
+                                                                            selectedProfile
+                                                                                .profile_picture_url
+                                                                        "
+                                                                        alt="Profile Picture"
+                                                                        class="w-20 h-20 object-cover rounded-full"
+                                                                    />
+                                                                </template>
+
+                                                                <!-- Display h1 only if there is no profile_picture_url -->
+                                                                <template
+                                                                    v-else
+                                                                >
+                                                                    <h1
+                                                                        class="py-3 w-40 h-40 flex items-center justify-center z-15 text-8xl px-6 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
+                                                                    > 
+                                                                        {{
+                                                                            selectedProfile
+                                                                                ?.user_name
+                                                                                ? selectedProfile.user_name
+                                                                                      .charAt(
+                                                                                          0
+                                                                                      )
+                                                                                      .toUpperCase()
+                                                                                : "?"
+                                                                        }}
+                                                                    </h1>
+                                                                </template>
                                 <div class="flex flex-col">
                                     <input
                                         type="text"
                                         class="px-0 border-0 hover:border-gray-300 hover:border text-4xl font-medium py-1"
                                         v-model="userName"
+                                        @input="updateUserField('user_name', userName)"
                                     />
 
                                     <input
                                         type="text"
                                         class="px-0 border-0 hover:border-gray-300 hover:border text-sm py-1 text-gray-500"
                                         v-model="jobTitle"
+                                        @input="updateUserField('job_title', jobTitle)"
                                         :placeholder="
                                             jobTitle ? '' : 'Add a job title'
                                         "
@@ -638,7 +781,7 @@ onUnmounted(() => {
                                     <h1
                                         class="mt-4 p-1 py-0 bg-blue-500 text-white flex items-center w-fit rounded-sm"
                                     >
-                                        Admin
+                                        {{userRole}}
                                     </h1>
                                 </div>
                             </div>
@@ -652,7 +795,7 @@ onUnmounted(() => {
                                         <h1>Email</h1>
                                     </div>
                                     <h1 class="ml-4 text-sm text-gray-500">
-                                        kaleab@email.com
+                                        {{ selectedProfile.email }}
                                     </h1>
                                 </div>
                                 <div>
@@ -667,6 +810,7 @@ onUnmounted(() => {
                                         type="text"
                                         class="px-0 ml-4 border-0 hover:border-gray-300 hover:border text-sm py-1 text-gray-500"
                                         v-model="phone"
+                                        @input="updateUserField('phone', phone)"
                                         :placeholder="phone ? '' : 'Add phone'"
                                     />
                                 </div>
@@ -682,6 +826,7 @@ onUnmounted(() => {
                                         type="text"
                                         class="px-0 ml-4 border-0 hover:border-gray-300 hover:border text-sm py-1 text-gray-500"
                                         v-model="mobilePhone"
+                                        @input="updateUserField('mobile_phone', mobilePhone)"
                                         :placeholder="
                                             mobilePhone
                                                 ? ''
@@ -701,6 +846,7 @@ onUnmounted(() => {
                                         type="text"
                                         class="px-0 ml-4 border-0 hover:border-gray-300 hover:border text-sm py-1 text-gray-500"
                                         v-model="location"
+                                        @input="updateUserField('location', location)"
                                         :placeholder="
                                             location ? '' : 'Add location'
                                         "
@@ -723,6 +869,7 @@ onUnmounted(() => {
                                     type="text"
                                     class="px-0 ml-4 border-0 hover:border-gray-300 hover:border text-sm py-1 text-gray-500"
                                     v-model="skype"
+                                    @input="updateUserField('skype', skype)"
                                     :placeholder="skype ? '' : 'Add a skype'"
                                 />
                             </div>
@@ -736,6 +883,7 @@ onUnmounted(() => {
                                     type="text"
                                     class="px-0 ml-4 border-0 hover:border-gray-300 hover:border text-sm py-1 text-gray-500"
                                     v-model="birthday"
+                                    @input="updateUserField('birthday', birthday)"
                                     :placeholder="
                                         birthday ? '' : 'Add birthday'
                                     "
@@ -744,6 +892,66 @@ onUnmounted(() => {
                         </div>
                         <div class="w-1/2 border rounded-lg p-6">
                             <h1 class="text-5xl">Teams</h1>
+                            <div v-for = "teamBoard in boards"
+                            >
+                            <div>
+
+                                <div @click.stop = "showMembers = !showMembers"
+                                class = "m-4 w-3/4 p-2 bg-gray-100 cursor-pointer  "
+                                >
+                                <div class = "w-full flex text-xl font-bold justify-between" >
+                                    
+                                    {{ teamBoard.board_name }}
+                                    <span>
+                                        <i :class="{
+                        'fa-chevron-up': showMembers ,
+                        'fa-chevron-down': !showMembers ,
+                    }"
+                                         class = "fa " ></i>
+                                    </span>
+                                </div>
+                                <div v-if = "showMembers"
+                                    class = "m-2"
+                                >
+                                    <h1>Members</h1>
+                                    <div v-for = "user in teamBoard.team.members"
+                                    class = "bg-white p-2"
+                                    >
+                                    <div 
+                                                    
+                                                    class="flex relative items-center cursor-pointer w-44 mb-2 rounded-lg hover:bg-blue-100 px-3 py-1"
+                                                >
+                                                    <!-- Conditional rendering: show initials if no profile picture -->
+                                                    <h1
+                                                        v-if="
+                                                            !user
+                                                                ?.profile_picture_url
+                                                        "
+                                                        class="py-1 px-2.5 border-2 border-white text-white rounded-full bg-blue-300"
+                                                    >
+                                                        {{
+                                                            user
+                                                                ?.user_name
+                                                                ? user.user_name.charAt(
+                                                                      0
+                                                                  ).toUpperCase()
+                                                                : "?"
+                                                        }}
+                                                    </h1>
+                                                    <!-- Show user name -->
+                                                    <h1 class="ml-2">
+                                                        {{
+                                                            user?.user_name
+                                                        }}
+                                                    </h1>
+                                                </div>
+                                    </div>
+                                </div>
+
+                                </div>
+                            </div>
+
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -757,26 +965,27 @@ onUnmounted(() => {
                         </p>
                         <div class="grid grid-cols-3 gap-4">
                             <div
-                                v-for="(status, index) in statuses"
-                                :key="index"
-                                class="flex items-center"
-                            >
-                                <input
-                                    type="radio"
-                                    :id="status.id"
-                                    name="status"
-                                    :value="status.label"
-                                    v-model="selectedStatus"
-                                    class="form-radio text-blue-600 h-4 w-4"
-                                />
-                                <label
-                                    :for="status.id"
-                                    class="ml-2 text-gray-700"
-                                >
-                                    <i :class="status.icon" class="mr-1"></i
-                                    >{{ status.label }}
-                                </label>
-                            </div>
+    v-for="(status, index) in statuses"
+    :key="index"
+    class="flex items-center"
+>
+    <input
+        type="radio"
+        :id="status.id"
+        name="status"
+        :value="status.label"
+        v-model="selectedStatus"
+        @change="updateUserField('working_status', status.label)"
+        class="form-radio text-blue-600 h-4 w-4"
+    />
+    <label
+        :for="status.id"
+        class="ml-2 text-gray-700"
+    >
+        <i :class="status.icon" class="mr-1"></i>{{ status.label }}
+    </label>
+</div>
+
                         </div>
                     </div>
                 </div>
@@ -2130,7 +2339,7 @@ onUnmounted(() => {
                     <h1 class="text-gray-400">Account</h1>
                     <section class="text-sm">
                         <div
-                            @click="showProfile = true"
+                            @click="showProfile = true;userProfile(user) "
                             class="py-2 px-2 text-gray-600 flex items-center cursor-pointer hover:bg-gray-100"
                         >
                             <i class="far fa-user mr-2" aria-hidden="true"></i>
