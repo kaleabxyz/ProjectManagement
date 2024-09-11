@@ -2,8 +2,9 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Update extends Model
 {
@@ -15,8 +16,7 @@ class Update extends Model
         'content',
         'reply',
         'has_reply',
-        'parent_id',
-        'read',
+        'parent_id',   
         'board_id',
     ];
 
@@ -59,5 +59,11 @@ class Update extends Model
     public function parent()
     {
         return $this->belongsTo(Update::class, 'parent_id');
+    }
+    public function readers()
+    {
+        return $this->belongsToMany(User::class, 'user_update_read_status')
+                    ->withPivot('is_read')
+                    ->withTimestamps();
     }
 }

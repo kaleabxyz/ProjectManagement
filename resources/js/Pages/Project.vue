@@ -18,8 +18,9 @@ const discussionActive = ref(false);
 const filteredTasks = ref([]);
 const filteredTasksId = ref([]);
 const filteredTeam = ref([]);
-const filteredUpdates = ref([]);
+
 const isEditing = ref(false);
+const mentions = ref([]);
 const projectName = ref("Project managemnt");
 const ProjectDetail = ref(false);
 const replyContent = ref("");
@@ -41,6 +42,7 @@ const showDueDate = ref(true);
 const showDueDateS = ref(true);
 const showFiles = ref(true);
 const showFilesS = ref(true);
+const showFullDescription = ref([]);
 const showGroup = ref(true);
 const showHide = ref(false);
 const showLastUpdate = ref(false);
@@ -59,6 +61,7 @@ const showTable = ref(true);
 const showTasks = ref(false);
 const showTimeLine = ref(true);
 const showTimeLineS = ref(true);
+const showUpdate = ref("allUpdates");
 const showUpdates = ref([]);
 const side = ref("active");
 const subItem = ref(false);
@@ -113,11 +116,13 @@ const fetchBoard =  (workSpace,boardName) => {
            {
            
                    board.value = b;
+                   console.log('discusssss',board.value.discussions)
                    b.discussions.forEach(update => {
                        if (!update.reply) {
                         
-                    showReplyInput.value.push(false);  
-                    }
+                        initializeShowReplyInput();  
+                       }
+                    
                    })
                    b.tasks.forEach(() => {
                        showSubTasks.value.push(false);
@@ -133,6 +138,14 @@ const fetchBoard =  (workSpace,boardName) => {
     } 
     })
 };
+const initializeShowReplyInput = () => {
+    if (board.value && board.value.discussions) {
+        showReplyInput.value = board.value.discussions.map(() => false);
+    } else {
+        showReplyInput.value = [];
+    }
+};
+
 const fetchTeam = async () => {
     try {
         const response = await axios.get("/api/team-members");
@@ -163,21 +176,7 @@ const filterTasksByBoard = () => {
         filteredTasks.value = tasks.value; // Show all tasks if no board is fetched
     }
 };
-const filterUpdatesByBoard = () => {
-    if (board.value) {
-        // Filter updates by board_id and exclude those with null task_id values
-        filteredUpdates.value = updates.value.filter(
-            (update) =>
-                update.board_id === board.value.id && update.task_id !== null
-        );
-        console.log("Filtered updates", filteredUpdates.value);
-    } else {
-        // If no board is selected, show all updates (including those with null task_id values)
-        filteredUpdates.value = updates.value.filter(
-            (update) => update.task_id === null
-        );
-    }
-};
+
 const filterTeamByBoard = () => {
     if (board.value) {
         filteredTeam.value = teams.value.filter(
@@ -204,20 +203,45 @@ const filterTasksById = (task_id) => {
 };
 
 const updateTaskName = async () => {
-    if (filteredTasksId.value.length === 0) return;
+    
 
-    const selectedTask = filteredTasksId.value[0];
-    selectedTask.task_name = selectedTaskName.value;
+    // Get the selected task object
+    if (
+        selectedTaskName.value.trim() === "" ||
+        selectedTaskName.value === selectedTask.value.task_name
+    ) {
+        return; // Exit if task name is empty or unchanged
+    }
+    selectedTask.value.task_name = selectedTaskName.value; // Update task name
 
     try {
         // Update the task name in the database
-        await axios.patch(`/api/tasks/${selectedTask.id}`, {
-            task_name: selectedTask.task_name,
+        await axios.patch(`/api/tasks/${selectedTask.value.id}`, {
+            task_name: selectedTask.value.task_name,
         });
+
+        // Find the task in user data and update it
+        user.value.workspaces.forEach((workspace) => {
+            workspace.boards.forEach((board) => {
+                if (board.id === selectedTask.value.board_id) {
+                    board.tasks.forEach((task) => {
+                        if (task.id === selectedTask.value.id) {
+                            task.task_name = selectedTask.value.task_name; // Update task name in user data
+                        }
+                    });
+                }
+            });
+        });
+
+        // Save the updated user data to localStorage
+        localStorage.setItem("user", JSON.stringify(user.value));
+
+        console.log("Task name updated successfully in user data.");
     } catch (error) {
         console.error("Error updating task name:", error);
     }
 };
+
 const setOwner = async (userId ,taskId) => {
     try {
         await axios.patch(`/api/tasks/${taskId}`, {
@@ -316,7 +340,7 @@ const postUpdate = async (taskId) => {
     const payload = {
         content: updateContent.value,
         task_id: taskId,
-        read: false,
+       
         reply: 0,
         has_reply: false,
         user_id: user.value.id, // Replace with actual user ID
@@ -332,14 +356,18 @@ const postUpdate = async (taskId) => {
         const createdUpdateId = response.data.id; // Extract the ID of the newly created update
 
         // Fetch the full update details from the server
-        const fullUpdateResponse = await axios.get(`/api/updates/${createdUpdateId}`);
+        const fullUpdateResponse = await axios.get(`/api/updates/${createdUpdateId}`, {
+            params: {
+                user_id: user.value.id
+            }
+        });
         const newUpdate = fullUpdateResponse.data;
-        
+
         const formattedUpdate = {
             ...newUpdate,
             task: {
-                id: selectedTask.id,
-                task_name: selectedTask.task_name,
+                id: selectedTask.value.id,
+                task_name: selectedTask.value.task_name,
             },
             board: {
                 id: board.value.id,
@@ -347,20 +375,23 @@ const postUpdate = async (taskId) => {
             },
             user: userObject, // Nest the user data under 'user'
         };
-        console.log('update response',formattedUpdate)
 
         // Push the new update to the board's discussions array
-        
-        console.log('board', board.value.discussions);
         user.value.workspaces.forEach(workspace => {
             const matchingBoard = workspace.boards.find(b => b.id === board.value.id);
             if (matchingBoard) {
                 matchingBoard.discussions.push(formattedUpdate);
-                
+
+                // Find the task and increment updates_count
+                const task = matchingBoard.tasks.find(task => task.id === taskId);
+                if (task) {
+                    task.updates_count = (task.updates_count || 0) + 1;
+                }
             }
         });
+
         localStorage.setItem('user', JSON.stringify(user.value))
-        fetchBoard(workSpace,boardName);
+        fetchBoard(workSpace, boardName);
 
         // Clear the input content after successful post
         updateContent.value = "";
@@ -394,14 +425,21 @@ const submitReply = async (updateId,index) => {
         task_id: selectedTaskId.value,
         parent_id: updateId, // Set the parent ID of the update where the reply button was clicked
         reply: 1, // Mark as reply
-        read: false,
     };
-    console.log('reply data', replyData);
+    
 
     try {
+        
         // Make an API call to create the reply
         const response = await axios.post("/api/updates", replyData);
-
+        const createdUpdateId = response.data.id;
+        const fullUpdateResponse = await axios.get(`/api/updates/${createdUpdateId}`, {
+            params: {
+                user_id: user.value.id
+            }
+        });
+        console.log('reply data', response.data);
+        console.log('reply response',fullUpdateResponse)
         // Assuming the server returns the created reply
         const newReply = replyData;
         const formattedReply = {
@@ -530,6 +568,29 @@ onMounted(() => {
 
    
 });
+const filteredUpdates = computed(() => {
+    if (!board.value || !board.value.discussions) {
+        // If the board or its discussions are not defined, return an empty array
+        return [];
+    }
+
+    let updates = [];
+
+    if (showUpdate.value == 'allUpdates') {
+        // Show all updates including read and unread
+        updates = board.value.discussions;
+    } else if (showUpdate.value == "mentioned") {
+        // Show only updates where the user is mentioned, excluding replies
+        updates = mentions.value || [];
+    } else {
+        // Default to showing all updates excluding replies
+        updates = board.value.discussions;
+    }
+
+    // Reverse the updates to show the latest first
+    return updates.slice().reverse();
+});
+
 
 function formatDateForDisplay(dateString) {
     const date = new Date(dateString);
@@ -608,7 +669,7 @@ function calculateTimeElapsedPercentage(creationDate, dueDate) {
 
     return percentageElapsed;
 }
-const { earliest, latest } = getEarliestAndLatestDates(filteredTasks.value);
+const { earliest, latest } = getEarliestAndLatestDates(board.value.tasks);
 
 const elapsedPercentage = computed(() => {
     return calculateTimeElapsedPercentage(earliest, latest);
@@ -624,7 +685,7 @@ const toggleTaskUpdate = (taskId) => {
     selectedTask.value = board.value.tasks.find(task => task.id === taskId);
     taskUpdate.value = !taskUpdate.value; // Toggle task updates
     console.log("🚀 ~ toggleTaskUpdate ~ taskId:", taskId);
-
+    selectedTaskName.value = selectedTask.value.task_name;
     selectedTaskId.value = taskId; // Set the selected task ID
      // Call to filter tasks by the selected ID
 };
@@ -664,21 +725,67 @@ watch(isEditing, (newValue) => {
     }
 });
 
-const showFullDescription = ref(filteredUpdates.value.map(() => false));
+watch(filteredUpdates, (newUpdates) => {
+  if (newUpdates && newUpdates.length) { // Check if newUpdates is defined and has a length property
+    showFullDescription.value = newUpdates.map(() => false); // Initialize for each update
+  } else {
+    showFullDescription.value = []; // Reset to an empty array if there are no updates
+  }
+}, { immediate: true });
 
 
-const truncatedDescription = (update) => {
-            const content = update.content; // Accessing content from the update
-            const index = filteredUpdates.value.indexOf(update); // Find the index of the update
-            if (showFullDescription.value[index] || content.length <= 100) {
-                return content;
-            } else {
-                return content.substring(0, 100) + "...";
+const truncatedDescription = (update,parent) => {
+    const content = update.content; // Accessing content from the update
+    const index = filteredUpdates ? filteredUpdates.value.indexOf(update) : -1;
+    // Find the index of the update
+
+    // Regular expression to match mentions like @username
+    const mentionPattern = /@(\w+)/g; // Matches any word starting with '@'
+    let match;
+
+    // Highlight mentions by wrapping them with a span
+    let formattedContent = content.replace(
+        mentionPattern,
+        (match, username) => {
+            return `<span class="text-blue-500 hover:underline cursor-pointer">${match}</span>`;
+        }
+    );
+
+    // Check for mentions in the update content
+    while ((match = mentionPattern.exec(content)) !== null) {
+        const mentionedUser = match[1]; // Extract the username after '@'
+
+        // If the mentioned user is the current user, add the update to mentions
+        if (
+            mentionedUser.toLowerCase() === user.value.user_name.toLowerCase()
+        ) {
+            if (!mentions.value.includes(update)) {
+                if (update.reply && parent) {
+                    if (!mentions.value.includes(parent)) {
+                        // If it's a reply, add the parent update to the mentions array
+                        mentions.value.push(parent);
+                    }
+                    
+
+                } else {
+                    // If it's not a reply, add the current update to the mentions array
+                    mentions.value.push(update);
+                } // Add to mentions array
             }
-        };
+        }
+    }
+
+    // Truncate the description
+    if (showFullDescription.value[index] || content.length <= 100) {
+        return formattedContent; // Return formatted content with highlights
+    } else {
+        return formattedContent.substring(0, 100) + "..."; // Truncate and return
+    }
+};
 
         // Function to toggle the description between truncated and full for each update
-        const toggleFullDescription = (index) => {
+const toggleFullDescription = (index) => {
+            console.log('inside the toggle full descripton',showFullDescription.value[index])
             showFullDescription.value[index] = !showFullDescription.value[index];
         };
 const hidesideDetail = () => {
@@ -883,13 +990,13 @@ onUnmounted(() => {
                             </div>
                             <div class="mt-4 p-4 flex items-center flex-col">
                                 <p>
-                                    {{ truncatedDescription }}
+                                    
                                 </p>
                                 <button
                                     @click="toggleFullDescription"
                                     class="text-green-500 hover:text-green-600 hover:shadow-lg w-full bg-white"
                                 >
-                                    {{ showFullDescription ? "Less" : "More" }}
+                                    
                                 </button>
                             </div>
                         </div>
@@ -996,7 +1103,7 @@ onUnmounted(() => {
                                                 class="mt-1 p-4 flex items-center flex-col"
                                             >
                                                 <p>
-                                                    {{ truncatedDescription }}
+                                                    
                                                 </p>
                                                 <button
                                                     @click="
@@ -1004,11 +1111,7 @@ onUnmounted(() => {
                                                     "
                                                     class="text-green-500 hover:text-green-600 hover:shadow-lg w-full bg-white"
                                                 >
-                                                    {{
-                                                        showFullDescription
-                                                            ? "Less"
-                                                            : "More"
-                                                    }}
+                                                   
                                                 </button>
                                             </div>
                                         </div>
@@ -1095,12 +1198,13 @@ onUnmounted(() => {
                 </div>
             </div>
         </SideDetail>
-
+        <div class="bg-custome-blue h-full w-full"
+        :class="{
+                    'pl-[275px] ': side === 'active',
+                    'pl-7': side === 'inactive',
+                }">
         <div
-            :class="{
-                'pl-72': side === 'active',
-                'pl-8': side === 'inactive',
-            }"
+            
             class="h-full flex-1 w-98 overflow-x-hidden-hidden overflow-y-auto pr-8 mt-14 bg-white rounded-lg pl-10 pt-4"
         >
             <div class="flex justify-between relative">
@@ -1750,10 +1854,22 @@ onUnmounted(() => {
                                 <div
                                     class="flex items-center border-b-2 mt-6 text-black pl-6 font-extralight text-sm"
                                 >
-                                    <div
-                                        class="p-4 py-1 flex border-b-2 border-blue-400 items-center hover:bg-gray-100 cursor-pointer"
+                                    <div @click.stop = "showUpdate = 'allUpdates'"
+                                    :class="{
+                        'border-b-2 border-blue-400': showUpdate == 'allUpdates',
+                    }"
+                                        class="p-4 py-1 flex  items-center hover:bg-gray-100 cursor-pointer"
                                     >
                                         <h3>Updates</h3>
+                                    </div>
+                                    <span class="w-0.5 h-4 bg-gray-400"></span>
+                                    <div @click.stop = "showUpdate = 'mentioned'"
+                                    :class="{
+                        'border-b-2 border-blue-400': showUpdate == 'mentioned',
+                    }"
+                                        class="p-4 py-1 flex items-center hover:bg-gray-100 cursor-pointer"
+                                    >
+                                        <h3>I was mentioned</h3>
                                     </div>
                                     <span class="w-0.5 h-4 bg-gray-400"></span>
                                     <div
@@ -1777,7 +1893,7 @@ onUnmounted(() => {
                                     ></TextInput>
                                     
                                 </div>
-                                <div v-for="(update, index) in [...board.discussions].reverse()">
+                                <div v-for="(update, index) in filteredUpdates">
                                    
                                     <div
                                         v-if="update.task_id == selectedTaskId && update.reply !== 1"
@@ -2006,7 +2122,7 @@ onUnmounted(() => {
                                                                     class="hover:text-blue-600"
                                                                 >
                                                                     <h1>
-                                                                        To do >
+                                                                        To do 
                                                                     </h1>
                                                                 </a>
                                                                 <a
@@ -2014,7 +2130,7 @@ onUnmounted(() => {
                                                                     class="hover:text-blue-600"
                                                                 >
                                                                     <h1>
-                                                                        {{
+                                                                        >{{
                                                                             update
                                                                                 .task
                                                                                 .task_name
@@ -2027,9 +2143,13 @@ onUnmounted(() => {
                                                     <div
                                                         class="mt-4 p-4 flex items-center flex-col"
                                                     >
-                                                        <p>
-                                                            {{  truncatedDescription(update)}}
-                                                        </p>
+                                                    <p
+                                                        v-html="
+                                                            truncatedDescription(
+                                                                update,null
+                                                            )
+                                                        "
+                                                    ></p>
                                                         <button
                                                             @click="
                                                                 toggleFullDescription(index)
@@ -2093,7 +2213,7 @@ onUnmounted(() => {
 
                                            
                                             
-                                            <div v-for ="reply in [...board.discussions].reverse()">
+                                            <div v-for ="(reply, index2) in filteredUpdates">
 
                                             
                                             <div
@@ -2236,19 +2356,21 @@ onUnmounted(() => {
                                                                     <div
                                                                         class="mt-1 p-4 flex items-center flex-col"
                                                                     >
-                                                                        <p>
-                                                                            {{
-                                                                                truncatedDescription(reply) 
-                                                                            }}
-                                                                        </p>
+                                                                    <p
+                                                                                v-html="
+                                                                                    truncatedDescription(
+                                                                                        reply,update
+                                                                                    )
+                                                                                "
+                                                                            ></p>
                                                                         <button
                                                                             @click="
-                                                                                toggleFullDescription(index)
+                                                                                toggleFullDescription(index2)
                                                                             "
                                                                             class="text-green-500 hover:text-green-600 hover:shadow-lg w-full bg-white"
-                                                                        >
+                                                                        > {{console.log('show full description',showFullDescription[index])}}
                                                                             {{
-                                                                                showFullDescription[index]
+                                                                                showFullDescription[index2]
                                                                                     ? "Less"
                                                                                     : "More"
                                                                             }}
@@ -2379,15 +2501,12 @@ onUnmounted(() => {
                                             class="w-full cursor-pointer justify-between h-full flex items-center"
                                         >
                                             {{ task.task_name }}
-                                            <span class="flex items-end">
-                                                <i
-                                                    class="far fa-comment text-xl text-blue-700"
-                                                ></i>
-                                                <span
-                                                    class="text-xs text-white px-1 rounded-full bg-blue-700"
-                                                    >3</span
-                                                >
-                                            </span>
+                                            <span class="relative flex items-center">
+    <i class="far fa-comment text-xl text-blue-700"></i>
+    <span class="absolute top-0 left-4 -translate-x-1/2 translate-y-1/2 text-xs text-white px-1 rounded-full bg-blue-700">
+        {{ task.updates_count }}
+    </span>
+</span>
                                         </span>
                                     </td>
                                     <td
@@ -2422,7 +2541,7 @@ onUnmounted(() => {
                                                         ?.user_name
                                                         ? task.assigned_user.user_name.charAt(
                                                               0
-                                                          )
+                                                          ).toUpperCase()
                                                         : "?"
                                                 }}
                                             </h1>
@@ -2451,7 +2570,7 @@ onUnmounted(() => {
                                                                 ?.user_name
                                                                 ? user.user_name.charAt(
                                                                       0
-                                                                  )
+                                                                  ).toUpperCase()
                                                                 : "?"
                                                         }}
                                                     </h1>
@@ -3171,5 +3290,6 @@ onUnmounted(() => {
                 </div>
             </div>
         </div>
+    </div>
     </body>
 </template>

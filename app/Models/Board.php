@@ -2,8 +2,9 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class Board extends Model
 {
@@ -63,9 +64,16 @@ public function trashedBy()
     {
         return $this->hasMany(Task::class);
     }
-    public function discussions()
+    public function discussions2()
     {
         return $this->hasMany(Update::class);
+    }
+    public function discussions()
+    {
+        return $this->hasMany(Update::class)
+                    ->with(['readers' => function ($query) {
+                        $query->where('user_id', Auth::id()); // Filter by current user
+                    }]);
     }
     /**
      * Get the user who trashed the board.

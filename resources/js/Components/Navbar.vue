@@ -126,7 +126,7 @@ const filteredUpdates = computed(() => {
             return selectedUpdates.value;
         } else {
             // Show only unread updates
-            return selectedUpdates.value.filter(update => !update.read);
+            return selectedUpdates.value.filter(update => !update.is_read);
         }
     }else if (showUpdate.value === "mentioned") {
         // Show only updates where the user is mentioned, excluding replies
@@ -135,55 +135,131 @@ const filteredUpdates = computed(() => {
         } else {
             return mentions.value.filter(
             update =>
-                !update.read   
+                !update.is_read   
         );
         }   
-    } else if (showUpdate.value === "bookmarked" && showRead) {
+    } else if (showUpdate.value === "bookmarked" ) {
         // Show only bookmarked updates excluding replies
-        return selectedUpdates.value.filter(
-            (update) => !update.read && update.bookmark
+        if (showRead.value) {
+            return selectedUpdates.value.filter(
+            (update) =>   update.bookmark
+        );;
+        } else {
+            return selectedUpdates.value.filter(
+            (update) =>  !update.is_read && update.bookmark
         );
-    } else if (showUpdate.value === "bookmarked" && !showRead) {
-        // Show only bookmarked updates excluding replies
-        return selectedUpdates.value.filter(
-            (update) =>  update.read && update.bookmark
-        );
-    } else {
+        }
+    }  else {
         // Default to showing all updates excluding replies
         return selectedUpdates.value.filter((update) => !update.reply);
     }
 });
 const markAsRead = async (update) => {
-    // Update the local state
-    update.read = true;
+    // Step 1: Update the local state
+    update.is_read = true;
 
-    // Optionally, send the update to the server
+    // Step 2: Optionally, send the update to the server
     try {
-        await axios.patch(`/api/updates/${update.id}`, { read: true });
+        // Send the request to mark the update as read on the server
+        await axios.post(`/api/updates/${update.id}/read`, { user_id: user.value.id });
+
+        // Step 3: Update the user data locally
         user.value.workspaces.forEach((workspace) => {
-            workspace.boards.forEach((b) => {
-                if (b.id === update.board_id) {
-                    const userDiscussionIndex = b.discussions.findIndex(
+            workspace.boards.forEach((board) => {
+                if (board.id === update.board_id) {
+                    const discussionIndex = board.discussions.findIndex(
                         (discussion) => discussion.id === update.id
                     );
-                    if (userDiscussionIndex !== -1) {
-                        b.discussions[userDiscussionIndex] = {
-                            ...b.discussions[userDiscussionIndex],
-                            read: true,
+                    if (discussionIndex !== -1) {
+                        board.discussions[discussionIndex] = {
+                            ...board.discussions[discussionIndex],
+                            is_read: true, // Update the discussion's read status
                         };
                     }
                 }
             });
         });
 
-        // Save the updated user data in local storage
+        // Step 4: Save the updated user data in local storage
         localStorage.setItem("user", JSON.stringify(user.value));
+
+        // Optionally, refresh the boards to ensure UI reflects the updated state
         fetchBoards();
+
         console.log('Update marked as read:', update.id);
     } catch (error) {
         console.error('Failed to mark update as read:', error);
     }
 };
+const markAllAsRead = async () => {
+    try {
+        // Step 1: Update the local state
+        selectedUpdates.value.forEach(update => {
+            update.is_read = true;
+        });
+
+        // Step 2: Send requests to mark each update as read on the server
+        await Promise.all(
+            selectedUpdates.value.map(update =>
+                axios.post(`/api/updates/${update.id}/read`, { user_id: user.value.id })
+            )
+        );
+
+        // Step 3: Update the user data locally
+        user.value.workspaces.forEach(workspace => {
+            workspace.boards.forEach(board => {
+                board.discussions.forEach(discussion => {
+                    if (selectedUpdates.value.some(update => update.id === discussion.id)) {
+                        discussion.is_read = true;
+                    }
+                });
+            });
+        });
+
+        // Step 4: Save the updated user data in local storage
+        localStorage.setItem("user", JSON.stringify(user.value));
+
+        // Optionally, refresh the boards to ensure UI reflects the updated state
+        fetchBoards();
+
+        console.log('All updates marked as read');
+    } catch (error) {
+        console.error('Failed to mark all updates as read:', error);
+    }
+};
+const toggleBookmark = async (update) => {
+    // Toggle the local bookmark status
+    const newBookmarkStatus = !update.bookmark;
+    update.bookmark = newBookmarkStatus;
+
+    try {
+        // Send the request to update the bookmark status on the server
+        await axios.patch(`/api/updates/${update.id}`, {
+            bookmark: newBookmarkStatus
+        });
+
+        // Update the local user data
+        user.value.workspaces.forEach(workspace => {
+            workspace.boards.forEach(board => {
+                board.discussions.forEach(discussion => {
+                    if (discussion.id === update.id) {
+                        discussion.bookmark = newBookmarkStatus;
+                    }
+                });
+            });
+        });
+
+        // Save the updated user data in local storage
+        localStorage.setItem("user", JSON.stringify(user.value));
+
+        console.log('Bookmark status updated:', update.id);
+    } catch (error) {
+        console.error('Failed to update bookmark status:', error);
+    }
+};
+
+
+
 
 const submitReply = async (
     updateId,
@@ -1242,10 +1318,11 @@ onUnmounted(() => {
                                 <h1 v-if="showRead">All updates</h1>
                             </div>
                         </div>
-                        <div
+                        <div 
                             class="flex items-center px-2 rounded-lg py-2 ml- hover:bg-gray-200 cursor-pointer justify-between"
                         >
-                            <div class="flex items-center">
+                            <div  @click="markAllAsRead"
+                            class="flex items-center">
                                 <svg
                                     class="mr-2"
                                     width="16px"
@@ -1289,7 +1366,7 @@ onUnmounted(() => {
                                 class="relative"
                             >
                                 <div @click="markAsRead(update)"
-                                    v-if="!update.reply && !update.read "
+                                    v-if="!update.reply && !update.is_read "
                                     class="w-10 h-10 bg-blue-600 ml-6 mt-4 absolute -right-20 rounded-md flex items-center hover:bg-blue-700 justify-center"
                                 >
                                     <i
@@ -1488,18 +1565,19 @@ onUnmounted(() => {
                                                                     3h
                                                                 </h1>
                                                                 <span
-                                                                    @click="
-                                                                        toggleSideDetail
-                                                                    "
-                                                                    @click.stop
+                                                                    
+                                                                    @click.stop="toggleBookmark(update)"
                                                                     class="h-full hover:bg-gray-100"
                                                                 >
-                                                                    <i
-                                                                        class="far fa-bell m-1 text-sm"
+                                                                    <i :class="{
+    'fa': update.bookmark,
+       'far' : !update.bookmark                 
+                    }"
+                                                                        class=" fa-bookmark m-1 text-sm"
                                                                     ></i>
                                                                 </span>
                                                                 <span>
-                                                                    <i
+                                                                    <i 
                                                                         class="fa fa-ellipsis-h text-lg py-1 px-1 hover:bg-gray-100 cursor-pointer"
                                                                         aria-hidden="true"
                                                                     ></i>
@@ -1525,14 +1603,14 @@ onUnmounted(() => {
                                                                 href="#"
                                                                 class="hover:text-blue-600"
                                                             >
-                                                                <h1>To do ></h1>
+                                                                <h1>To do </h1>
                                                             </a>
                                                             <a
                                                                 href="#"
                                                                 class="hover:text-blue-600"
                                                             >
                                                                 <h1>
-                                                                    {{
+                                                                    >{{
                                                                         update
                                                                             .task
                                                                             .task_name
@@ -1838,7 +1916,7 @@ onUnmounted(() => {
                                                 class="flex flex-row"
                                             >
                                                 <div>
-                                                    <div class>
+                                                    <div class = "bg-white rounded-l-lg roundend-b-lg border border-t-0" >
                                                         <template
                                                             v-if="
                                                                 user?.profile_picture_url

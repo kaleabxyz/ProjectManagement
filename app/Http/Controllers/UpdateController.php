@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Update;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class UpdateController extends Controller
@@ -13,7 +14,7 @@ class UpdateController extends Controller
      */
     public function index()
     {
-        $updates = Update::with(['user', 'task', 'user.teamMembers','replies'])->get()
+        $updates = Update::with(['user', 'task', 'user.teamMembers'])->get()
         ->map(function ($update) {
             // Fetch the role of the user from team_members table
             $teamMember = $update->user->teamMembers->where('board', $update->board_id)->first();
@@ -35,12 +36,11 @@ class UpdateController extends Controller
                 'content' => 'required|string',
                 'reply' => 'nullable|boolean',
                 'parent_id' => 'nullable|exists:updates,id',
-                'read' => 'nullable|boolean',
                 'board_id' => 'required|exists:boards,id',
             ]);
 
             $update = Update::create($validatedData);
-
+            $update->readers()->attach($validatedData['user_id'], ['is_read' => false]);
             return response()->json($update, 201);
         } catch (\Illuminate\Validation\ValidationException $e) {
             // Log validation errors to the Laravel log
@@ -54,10 +54,38 @@ class UpdateController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(Update $update)
+    public function show(Request $request, Update $update)
     {
-        return response()->json($update);
+        // Get the user ID from the request
+        $userId = $request->input('user_id');
+    
+        // Check if the user has read the update
+        $readStatus = $update->readers()
+                             ->where('user_id', $userId)
+                             ->first()
+                             ->pivot
+                             ->is_read ?? false;
+    
+        // Fetch the user role from the team_members table through team
+        $teamMember = $update->user->teamMembers()
+                                 ->whereHas('team', function ($query) use ($update) {
+                                     $query->where('board', $update->board_id);
+                                 })
+                                 ->first();
+                                 
+        $userRole = $teamMember ? $teamMember->role : 'Not Assigned';
+    
+        // Load the update data along with the read status and user role
+        $updateData = $update->toArray();
+        $updateData['is_read'] = $readStatus;
+        $updateData['user_role'] = $userRole;
+    
+        return response()->json($updateData);
     }
+    
+
+
+
 
     /**
      * Update the specified resource in storage.
@@ -72,7 +100,7 @@ class UpdateController extends Controller
             'has_reply' => 'nullable|boolean',
 
       
-            'read' => 'nullable|boolean',
+           
             
         ]);
 
@@ -81,6 +109,19 @@ class UpdateController extends Controller
 
         return response()->json($update);
     }
+    public function markAsRead($id, Request $request)
+{
+    $userId = $request->input('user_id');
+
+    // Update the read status in the pivot table
+    DB::table('user_update_read_status')
+        ->where('update_id', $id)
+        ->where('user_id', $userId)
+        ->update(['is_read' => true]);
+
+    return response()->json(['success' => true]);
+}
+
 
     /**
      * Remove the specified resource from storage.

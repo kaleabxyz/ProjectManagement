@@ -192,17 +192,31 @@ $user = Auth::user()->load([
             'workspaces.boards.creator:id,user_name,email,profile_picture_url',
             'workspaces.boards.team',
             'workspaces.boards.team.members',
-            'workspaces.boards.tasks',
+            'workspaces.boards.tasks' => function ($query) {
+        $query->withCount('updates'); // Add this line to include update counts
+    },
             'workspaces.boards.tasks.SubTasks',
 
             'workspaces.boards.tasks.assignedUser:id,user_name,email,profile_picture_url',
             'workspaces.boards.discussions.board:id,board_name',    
             'workspaces.boards.discussions', 
             'workspaces.boards.discussions.task:id,task_name', 
-            'workspaces.boards.discussions.user:id,user_name,email,profile_picture_url',    
+            'workspaces.boards.discussions.user:id,user_name,email,profile_picture_url',   
+            'teamMembers', 
 ]);
      // Will display user data in the browser and stop further execution
+     $user->workspaces->each(function ($workspace) use ($user) {
+        $workspace->boards->each(function ($board) use ($user) {
+            // Fetch the role of the user in this board's team
+            $teamMember = $user->teamMembers->where('team_id', $board->team_id)->first();
+            $userRole = $teamMember ? $teamMember->role : 'Not Assigned';
 
+            // Assign role to discussions
+            $board->discussions->each(function ($discussion) use ($userRole) {
+                $discussion->user_role = $userRole;
+            });
+        });
+    });
 return response()->json([
 'status' => 'success',
 'user' => $user,

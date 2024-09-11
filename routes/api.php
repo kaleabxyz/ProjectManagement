@@ -33,5 +33,6 @@ Route::apiResource('invitations', InvitationController::class);
 Route::apiResource('sub-tasks', SubTaskController::class);
 Route::apiResource('updates', UpdateController::class);
 Route::apiResource('team-members', TeamMemberController::class);
+Route::post('/updates/{id}/read', [UpdateController::class, 'markAsRead']);
 
 Route::post('login', [UserController::class, 'login']);
