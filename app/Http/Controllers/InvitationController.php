@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Invitation;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 use Illuminate\Http\Request;
 
 class InvitationController extends Controller
@@ -22,14 +24,23 @@ class InvitationController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'user_id' => 'required|exists:users,id',
-            'team_id' => 'required|exists:teams,id',
-            'status' => 'required|string',
+            'invited' => 'required|exists:users,id',
+            'board' => 'required|exists:boards,id',
+            'team' => 'required|exists:teams,id',
+            'role' => 'required|in:Member,Viewer(Read-only)',
             'email' => 'required|email',
-            'token' => 'required|unique:invitations,token',
         ]);
 
-        $invitation = Invitation::create($request->all());
+        $invitation = Invitation::create([
+            'inviter' => Auth::id(),
+            'invited' => $request->invited,
+            'board' => $request->board,
+            'team' => $request->team,
+            'status' => 'pending', // Assuming default status
+            'role' => $request->role,
+            'email' => $request->email,
+            'token' => Str::random(60),
+        ]);
 
         return response()->json($invitation, 201);
     }

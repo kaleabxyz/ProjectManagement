@@ -25,13 +25,23 @@ class UserController extends Controller
 {
     $user = Auth::user()->load([
         'workspaces',
-        'workspaces.boards',
-        'workspaces.boards.owner:id,user_name,email,profile_picture_url',
-        'workspaces.boards.team',
-        'workspaces.boards.team.members',
-        'workspaces.boards.tasks',
-        'workspaces.boards.tasks.updates',    
-        'workspaces.boards.discussions',
+    'workspaces.folders',
+            'workspaces.boards',
+            'workspaces.boards.owner:id,user_name,email,profile_picture_url',
+            'workspaces.boards.creator:id,user_name,email,profile_picture_url',
+            'workspaces.boards.team',
+            'workspaces.boards.team.members',
+            'workspaces.boards.tasks' => function ($query) {
+        $query->withCount('updates'); // Add this line to include update counts
+    },
+            'workspaces.boards.tasks.SubTasks',
+
+            'workspaces.boards.tasks.assignedUser:id,user_name,email,profile_picture_url',
+            'workspaces.boards.discussions.board:id,board_name',    
+            'workspaces.boards.discussions', 
+            'workspaces.boards.discussions.task:id,task_name', 
+            'workspaces.boards.discussions.user:id,user_name,email,profile_picture_url',   
+            'teamMembers', 
         // Add more relations if needed
     ]);
 
@@ -225,6 +235,12 @@ return response()->json([
 'type' => 'bearer',
 ]
 ]);
+}
+public function searchUsers(Request $request)
+{
+    $email = $request->query('email');
+    $users = User::where('email', 'like', "%{$email}%")->get([ 'id','user_name', 'email']);
+    return response()->json($users);
 }
 
     /**

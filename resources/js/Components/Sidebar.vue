@@ -29,8 +29,8 @@ const router = useRouter();
 const workspace_name = ref('New Workspace');
 const board_name = ref('New Board');
 const folder_name = ref('New Folder');
-
-
+const searchQuery = ref('');
+const searchQueryW = ref('');
 const showNav = ref("active");
 const showTrash = ref(false);
 const trash = ref(true);
@@ -67,9 +67,19 @@ user.value.workspaces.forEach(workspace => {
         });
     }
 });
+const filteredBoards = computed(() => {
+            const query = searchQuery.value.toLowerCase();
+            return selectedWorkspace.value.boards.filter(board => 
+                board.board_name.toLowerCase().includes(query)
+            );
+        });
 
-
-
+        const filteredWorkspaces = computed(() => {
+            const query = searchQueryW.value.toLowerCase();
+            return user.value.workspaces.filter(workspace =>
+                workspace.workspace_name.toLowerCase().includes(query)
+            );
+        });
 const toggleBoardOption = (index) => {
     showBoardOptions.value[index] = !showBoardOptions.value[index];
 };
@@ -566,10 +576,10 @@ onMounted(() => {
                     <router-link v-if="boards.board.is_favorite && boards.board.board_name"
                     :to="{
         name: 'project',
-    params: { boardName: boards.board.name } ,// Ensure `boards.board.name` is defined
+    params: { boardName: boards.board_name } ,// Ensure `boards.board.name` is defined
     query:{workspace: boards.workspace_id}}"
                     >
-                    {{ "hello", selectedWorkspace }}
+                    
                         <div
                             :class="
                                 boards.board_name == boardId
@@ -934,7 +944,9 @@ onMounted(() => {
       class="absolute bg-white z-10 left-0 top-14 p-4 w-66 rounded-lg shadow-lg h-fit"
     >
       <div class="relative">
-        <TextInput class="h-8 w-38 pl-6" placeholder="Search for a workspace"></TextInput>
+        <TextInput v-model="searchQueryW"
+        @click.stop
+         class="h-8 w-38 pl-6" placeholder="Search for a workspace"></TextInput>
         <i class="absolute left-2 top-3 fa fa-search text-xs text-gray-400"></i>
       </div>
       <h1 class="text-gray-500 my-4">My workspaces</h1>
@@ -942,7 +954,7 @@ onMounted(() => {
 
       <!-- Workspace List -->
       <div
-        v-for="workspace in user.workspaces"
+        v-for="workspace in filteredWorkspaces"
         :key="workspace.id"
         class="flex items-center relative overflow-y-auto max-h-10 hover:bg-gray-100"
         @click="selectWorkspace(workspace)"
@@ -996,6 +1008,7 @@ onMounted(() => {
                     <div class="w-fit flex relative items-center">
                         <div class="relative">
                             <TextInput
+                            v-model="searchQuery"
                                 class="h-10 my-2 w-44 pl-6 text-sm font-thin"
                                 placeholder="Search"
                             >
@@ -1063,7 +1076,7 @@ onMounted(() => {
                                 </div>
                     </div>
                     <div
-                        v-for="(boards, index) in selectedWorkspace.boards"
+                        v-for="(boards, index) in filteredBoards"
                         :key="boards.id"
                         class="group/project relative"
                     >
@@ -1073,7 +1086,7 @@ onMounted(() => {
     params: { boardName: boards.board_name },
    query: {workSpace: boards.workspace_id} // Pass boardName
                              }"
-                        >
+                        >{{ console.log("hellsssasdsadasdasdo", boards.board_name) }}
                             <div
                                 :class="
                                     boards.board_name == boardId

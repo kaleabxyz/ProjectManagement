@@ -36,7 +36,10 @@ const allUpdates = ref([]);
 const sideDetail = ref(false);
 const inviteVisible = ref(false);
 const updateVisible = ref(false);
-
+const email = ref('');
+const searchResults = ref([]);
+const selectedUser = ref(null);
+const selectedRole = ref('');
 const showProfile = ref(false);
 const showTrash = ref(false);
 const router = useRouter();
@@ -163,7 +166,46 @@ const fetchBoards = () => {
     console.log("showReplyInput", showReplyInput);
     console.log("All boards:", boards.value);
 };
+const fetchUsers = async () => {
+      if (email.value.trim()) {
+        try {
+          const response = await axios.get('/api/search-users', {
+            params: { email: email.value }
+          });
+            searchResults.value = response.data;
+        console.log('search results',searchResults.value)  
+        } catch (error) {
+          console.error('Error fetching users:', error);
+        }
+      } else {
+        searchResults.value = [];
+      }
+};
+const selectUser = (user) => {
+      selectedUser.value = user;
+      console.log('selected user invite',selectedUser.value.id)
+    };
 
+    const sendInvitation = async () => {
+        if (selectedUser.value && selectedRole.value) {
+      console.log('send invite',board,board.value.team.id)  
+        try {
+          await axios.post('/api/invitations', {
+            invited: selectedUser.value.id,
+            board: board.value.id,
+            team: board.value.team.id,
+            role: selectedRole.value,
+            email: selectedUser.value.email,
+          });
+          alert('Invitation sent!');
+          hideInvite();
+        } catch (error) {
+          console.error('Error sending invitation:', error);
+        }
+      } else {
+        alert('Please select a user and role.');
+      }
+    }; 
 const filteredUpdates = computed(() => {
     if (showUpdate.value === "allUpdates") {
         // Show all updates
@@ -1503,13 +1545,13 @@ onMounted(() => {
         </span>
     </SideDetail>
     <div
-        v-if="inviteVisible"
+        v-if="inviteVisible && boardName"
         class="bg-black flex p-4 fixed z-20 items-center justify-center inset-0 bg-opacity-40"
         @click.self="hideInvite"
     >
-        <div class="bg-white w-1/3 h-1/3 rounded-xl p-8">
+        <div class="bg-white w-1/3 h-fit rounded-xl p-8">
             <div class="flex justify-between items-center">
-                <h1 class="text-3xl">Invite to work management</h1>
+                <h1 class="text-3xl">Invite to {{boardName}}</h1>
                 <i
                     @click="hideInvite"
                     class="fa fa-times fa-font-extralight text-gray-500 text-2xl ml-2 p-1 hover:bg-gray-100 cursor-pointer"
@@ -1520,22 +1562,46 @@ onMounted(() => {
                 <h1>Invite with email</h1>
             </div>
             <TextInput
-                placeholder="Enter email address"
-                class="w-full my-4"
-            ></TextInput>
+        v-model="email"
+        @input="fetchUsers"
+        placeholder="Enter email address"
+        class="w-full my-4"
+      ></TextInput>
+      <div v-if="searchResults.length"class="border-b py-2 h-20 overflow-y-auto bg-white">
+        <div v-for="user2 in searchResults" :key="user.email"
+        
+         >
+         <div v-if = "user2.id !== user.id"
+         @click.stop="selectUser(user2)"
+         class = "hover:bg-gray-100 cursor-pointer"
+         :class = "{
+            'bg-blue-200' : selectedUser?.id == user2.id
+         }">
+
+          <h2 class="font-semibold">{{ user2.user_name }}</h2>
+          <p class="text-gray-500">{{ user2.email }}</p>
+         </div>
+
+        </div>
+      </div>
             <div class="flex items-center">
                 <div class="flex items-center mr-10">
-                    <Checkbox
+                    <Checkbox  v-model="selectedRole"
                         class="rounded-xl mr-2 hover:border-black"
                     ></Checkbox>
                     <h1 class="font-extralight text-md">Member</h1>
                 </div>
                 <div class="flex items-center">
-                    <Checkbox
+                    <Checkbox  v-model="selectedRole"
                         class="rounded-xl mr-2 hover:border-black"
                     ></Checkbox>
                     <h1 class="font-extralight text-md">Viewer(Read-only)</h1>
                 </div>
+            </div>
+            <div v-if = "selectedUser && selectedRole"
+            class= "w-full justify-end flex">
+
+                <button @click="sendInvitation" class = "bg-blue-500 p-2 text-white rounded-lg">Invite</button>
             </div>
         </div>
     </div>

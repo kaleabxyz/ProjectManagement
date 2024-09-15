@@ -22,6 +22,7 @@ use App\Http\Controllers\Auth\PasswordResetLinkController;
 // api.php (routes file)
 
 Route::middleware('auth:sanctum')->get('/user', [UserController::class, 'fetchUser']);
+Route::get('/search-users', [UserController::class, 'searchUsers']);
 Route::middleware('auth:sanctum')->patch('/password', [PasswordController::class, 'update']);
 Route::post('/password/reset-link', [PasswordResetLinkController::class, 'store']);
 

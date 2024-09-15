@@ -15,11 +15,17 @@ return new class extends Migration
 
         Schema::create('invitations', function (Blueprint $table) {
             $table->id();
-            $table->bigInteger('user_id')->index()->unsigned();
-            $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
-            $table->bigInteger('team_id')->index()->unsigned();
-            $table->foreign('team_id')->references('id')->on('teams')->onDelete('cascade')->onUpdate('cascade');
+            $table->bigInteger('invtier')->index()->unsigned();
+            $table->foreign('inviter')->references('id')->on('users')->onDelete('cascade');
+            $table->bigInteger('invited')->index()->unsigned();
+            $table->foreign('invited')->references('id')->on('users')->onDelete('cascade');
+            $table->bigInteger('board')->index()->unsigned();
+            $table->bigInteger('board')->index()->unsigned();
+            $table->foreign('team')->references('id')->on('boards')->onDelete('cascade')->onUpdate('cascade');
+            $table->foreign('team')->references('id')->on('teams')->onDelete('cascade')->onUpdate('cascade');
             $table->string('status');
+            $table->string('role');
+
             $table->string('email');
             $table->string('token')->unique();
         });

@@ -4,6 +4,7 @@ import Dashboard from '@/Pages/Dashboard.vue';
 import Login from '@/Pages/Auth/Login.vue';
 import Project from '@/Pages/Project.vue';
 import Register from '@/Pages/Auth/Register.vue';
+import ResetPassword from '@/Pages/Auth/ResetPassword.vue';
 
 // Function to check if the user is authenticated
 function isAuthenticated() {
@@ -28,11 +29,19 @@ const routes = [
     name: 'login',
     component: Login,
   },
+  {
+    path: '/password/reset',
+    name: 'password.reset',
+    component: ResetPassword
+  },
   // Catch-all route for undefined paths
-  { path: '/:pathMatch(.*)*', redirect: to => {
+  {
+    path: '/:pathMatch(.*)*',
+    redirect: (to) => {
       // Redirect based on authentication status
       return isAuthenticated() ? { name: 'home' } : { name: 'dashboard' };
-  }},
+    }
+  },
 ];
 
 const router = createRouter({

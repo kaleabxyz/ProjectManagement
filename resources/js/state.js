@@ -12,7 +12,6 @@ const loadUserFromStorage = () => {
   if (storedUser) {
     state.user = JSON.parse(storedUser); // Update the global state with user data
   }
-  console.log('user data', state.user);
 };
 
 // Function to set the user data directly

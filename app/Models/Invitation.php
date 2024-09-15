@@ -10,8 +10,12 @@ class Invitation extends Model
     use HasFactory;
 
     protected $fillable = [
-        'user_id',
-        'team_id',
+        'inviter',
+        'invited',
+
+        'team',
+        'role',
+        'board',
         'status',
         'email',
         'token',
@@ -20,11 +24,14 @@ class Invitation extends Model
     /**
      * Get the user associated with the invitation.
      */
-    public function user()
+    public function inviter()
     {
         return $this->belongsTo(User::class);
     }
-
+    public function invited()
+    {
+        return $this->belongsTo(User::class);
+    }
     /**
      * Get the team associated with the invitation.
      */

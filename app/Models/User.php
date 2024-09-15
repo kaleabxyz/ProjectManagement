@@ -24,6 +24,7 @@ class User extends Authenticatable
         'password',
         'location',
         'birthday',
+        'status',
         'skype',
         'job_title',
         'phone',

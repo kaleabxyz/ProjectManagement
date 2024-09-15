@@ -34,7 +34,7 @@ const showSide = (val) => {
         
             <div
                 
-                class="h-full flex-1 w-full overflow-hidden mt-14 bg-white rounded-lg pt-4"
+                class="min-h-screen flex-1 w-full overflow-hidden mt-14 bg-white rounded-lg pt-4"
             >
                 <div class="border-b-2 border-solid pb-4 shadow-lg">
                     <h2 class="font-thin mx-16 text-sm">

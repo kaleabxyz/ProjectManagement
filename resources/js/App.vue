@@ -3,7 +3,7 @@
     :class="bodyClass">
 
         <Navbar v-if="!isDashboardRoute"/>
-        <Sidebar v-if="!isDashboardRoute" @nav="showSide" />
+        <Sidebar v-if="!isDashboardRoute " @nav="showSide" />
     <router-view/> <!-- This will render the matched component -->
     </body>
   </template>
@@ -32,12 +32,12 @@ const bodyClass = computed(() =>
 );
 // Load the user from local storage and fetch from API if needed
 onMounted(() => {
-  state.loadUserFromStorage(); // Load user data from local storage
-  if (!state.state.user) {
-    state.fetchUser(); // Fetch user data if not available
-  }
-  console.log('user data', state.state.user);
-});
+      state.loadUserFromStorage(); // Load user data from local storage
+      if (!state.user) {
+        state.fetchUser(); // Fetch user data if not available
+      }
+      console.log('user data', state.state.user);
+    });
   </script>
   
   <style>
