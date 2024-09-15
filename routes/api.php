@@ -12,15 +12,20 @@ use App\Http\Controllers\SubTaskController;
 use App\Http\Controllers\WorkspaceController;
 use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\TeamMemberController;
+use App\Http\Controllers\Auth\PasswordController;
 use App\Http\Controllers\Auth\RegisteredUserController;
-use App\Http\Controllers\Auth\AuthenticatedSessionController;
+use App\Http\Controllers\Auth\PasswordResetLinkController;
+
 
 
 
 // api.php (routes file)
 
 Route::middleware('auth:sanctum')->get('/user', [UserController::class, 'fetchUser']);
+Route::middleware('auth:sanctum')->patch('/password', [PasswordController::class, 'update']);
+Route::post('/password/reset-link', [PasswordResetLinkController::class, 'store']);
 
+// Route to handle the password reset
 
 Route::post('/register', [RegisteredUserController::class, 'store']);
 Route::apiResource('tasks', TaskController::class);
@@ -34,5 +39,6 @@ Route::apiResource('sub-tasks', SubTaskController::class);
 Route::apiResource('updates', UpdateController::class);
 Route::apiResource('team-members', TeamMemberController::class);
 Route::post('/updates/{id}/read', [UpdateController::class, 'markAsRead']);
+
 
 Route::post('login', [UserController::class, 'login']);

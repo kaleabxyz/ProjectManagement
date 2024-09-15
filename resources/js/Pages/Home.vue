@@ -18,7 +18,7 @@ const showSide = (val) => {
 </script>
 
 <template>
-    <Head title="home" />
+   
     <body class="bg-custom-blue min-h-screen w-full flex flex-col">
         <Navbar></Navbar>
         <div class="flex h-full ">

@@ -471,7 +471,7 @@ onMounted(() => {
         </div>
     </div>
 
-    <aside
+    <aside v-if = "user"
         @mouseover="handleMouseOver"
         @mouseleave="handleMouseLeave"
         class="group resize-x z-10 fixed top-0 left-0 mt-14 bg-gradient-to-b from-white via-custom-blue to-custom-blue rounded-lg h-full w-fit min-h-screen px-1 pt-1"
@@ -493,12 +493,7 @@ onMounted(() => {
                 class="absolute right-0 top-0 p-2 px-2 bg-gray-100 fa fa-chevron-right text-sm ml-4"
             ></i>
         </span>
-        <transition
-            name="slide"
-            @before-enter="beforeEnter"
-            @enter="enter"
-            @leave="leave"
-        >
+       
             <div v-if="showNav === 'active'" class="resize-x">
                 <router-link to="/home">
                     <div
@@ -699,7 +694,7 @@ onMounted(() => {
     <h3 class="bg-gray-500 w-fit text-white py-0.5 px-1.5 rounded-md text-md">
       {{ selectedWorkspace.workspace_name.charAt(0) }}
     </h3>
-    <svg v-if ="selectedWorkspace.id == user.workspaces[0].id"
+    <svg v-if ="selectedWorkspace.id == user.workspaces[0]?.id"
       class="absolute left-3.5 top-7"
       width="20px"
       viewBox="0 0 24 24"
@@ -1402,7 +1397,7 @@ onMounted(() => {
                     </div>
                 </div>
             </div>
-        </transition>
+        
     </aside>
 </template>
 

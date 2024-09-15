@@ -1,5 +1,5 @@
 <script setup>
-import { ref, toRaw, onUnmounted,watch,onMounted, computed } from "vue";
+import { ref,reactive, toRaw, onUnmounted, watch, onMounted, computed } from "vue";
 import ResponsiveNavLink from "@/Components/ResponsiveNavLink.vue";
 import SideDetail from "@/Components/SideDetail.vue";
 import ApplicationLogo from "@/Components/ApplicationLogo.vue";
@@ -17,7 +17,7 @@ function handleImageError() {
 }
 const boards = ref([]);
 const board = ref([]);
-const userRole = ref('');
+const userRole = ref("");
 const showMembers = ref(false);
 const boardName = ref(null);
 const workSpace = ref(null);
@@ -29,7 +29,9 @@ const route = useRoute();
 const showRead = ref(true);
 const mentions = ref([]);
 const replyContent = ref("");
-
+const currentPassword = ref("");
+const newPassword = ref("");
+const confirmPassword = ref("");
 const allUpdates = ref([]);
 const sideDetail = ref(false);
 const inviteVisible = ref(false);
@@ -55,7 +57,20 @@ const birthday = ref("");
 const userName = ref("");
 const selectedStatus = ref("In the office");
 const selectedProfile = ref([]);
+const formErrors = reactive({
+  currentPassword: "",
+  newPassword: "",
+  confirmPassword: ""
+});
+axios.defaults.baseURL = "http://127.0.0.1:8000";
 
+// Include credentials with requests
+axios.defaults.withCredentials = true;
+
+// Fetch CSRF token (Only needed once when your app loads)
+const fetchCsrfToken = async () => {
+    await axios.get("/sanctum/csrf-cookie");
+};
 const statuses = [
     { id: "in-office", label: "In the office", icon: "fas fa-building" },
     {
@@ -111,26 +126,19 @@ const users = ref([
 ]);
 const user = computed(() => state.state.user);
 
-
-console.log("🚀 ~ userin project:", selectedProfile.value);
-const fetchBoard =  (workSpace,boardName) => {
-    console.log('hellow is this working',workSpace.value,boardName.value)
-    user.value.workspaces.forEach(workspace => {
-       if(workspace.id ==workSpace.value)
-       {
-           workspace.boards.forEach(b => {
-               if (b.board_name == boardName.value)
-           {
-           
-                   board.value = b;
-                   console.log('discusssss',board.value.id)
-                   
-                         
-            
-           }    
-     })
-    } 
-    })
+console.log("🚀 ~ userin navbar:", selectedProfile.value);
+const fetchBoard = (workSpace, boardName) => {
+    console.log("hellow is this working", workSpace.value, boardName.value);
+    user.value.workspaces.forEach((workspace) => {
+        if (workspace.id == workSpace.value) {
+            workspace.boards.forEach((b) => {
+                if (b.board_name == boardName.value) {
+                    board.value = b;
+                    console.log("discusssss", board.value.id);
+                }
+            });
+        }
+    });
 };
 
 const fetchBoards = () => {
@@ -157,57 +165,51 @@ const fetchBoards = () => {
 };
 
 const filteredUpdates = computed(() => {
-    if (showUpdate.value === 'allUpdates') {
+    if (showUpdate.value === "allUpdates") {
         // Show all updates
         if (showRead.value) {
             // Show all updates including read and unread
             return selectedUpdates.value;
         } else {
             // Show only unread updates
-            return selectedUpdates.value.filter(update => !update.is_read);
+            return selectedUpdates.value.filter((update) => !update.is_read);
         }
-    }else if (showUpdate.value === "mentioned") {
+    } else if (showUpdate.value === "mentioned") {
         // Show only updates where the user is mentioned, excluding replies
         if (showRead.value) {
             return mentions.value;
         } else {
-            return mentions.value.filter(
-            update =>
-                !update.is_read   
-        );
-        }   
-    } else if (showUpdate.value === "bookmarked" ) {
+            return mentions.value.filter((update) => !update.is_read);
+        }
+    } else if (showUpdate.value === "bookmarked") {
         // Show only bookmarked updates excluding replies
         if (showRead.value) {
-            return selectedUpdates.value.filter(
-            (update) =>   update.bookmark
-        );;
+            return selectedUpdates.value.filter((update) => update.bookmark);
         } else {
             return selectedUpdates.value.filter(
-            (update) =>  !update.is_read && update.bookmark
-        );
+                (update) => !update.is_read && update.bookmark
+            );
         }
-    }  else {
+    } else {
         // Default to showing all updates excluding replies
         return selectedUpdates.value.filter((update) => !update.reply);
     }
 });
 const userProfile = (user) => {
-    console.log('selected user for profile',user)
+    console.log("selected user for profile", user);
     selectedProfile.value = user;
     user.workspaces.forEach((workspace) => {
-            workspace.boards.forEach((b) => {
-                if (b.id === board.value.id) {
-                   
-                    b.team.members.forEach((member) => {
-                        if (member.id == user.id) {
-                             userRole.value = member.pivot.role;
-                            console.log('selected board for navbar', userRole)
-                      }
-                    })
-                }
-            });
+        workspace.boards.forEach((b) => {
+            if (b.id === board.value.id) {
+                b.team.members.forEach((member) => {
+                    if (member.id == user.id) {
+                        userRole.value = member.pivot.role;
+                        console.log("selected board for navbar", userRole);
+                    }
+                });
+            }
         });
+    });
     userName.value = user.user_name;
     jobTitle.value = user.job_title;
     phone.value = user.phone;
@@ -215,8 +217,7 @@ const userProfile = (user) => {
     location.value = user.location;
     skype.value = user.skype;
     birthday.value = user.birthday;
-
-}
+};
 const updateUserField = async (fieldName, newValue) => {
     // Exit if the input is empty or hasn't changed
     if (!newValue.trim() || newValue === user.value[fieldName]) {
@@ -240,7 +241,85 @@ const updateUserField = async (fieldName, newValue) => {
         console.error(`Error updating ${fieldName}:`, error);
     }
 };
+const getDisableReason = () => {
+  if (!currentPassword.value.trim()) {
+    return "Current password is required.";
+  }
+  if (!newPassword.value.trim()) {
+    return "New password is required.";
+  }
+  if (!confirmPassword.value.trim()) {
+    return "Password confirmation is required.";
+  }
+  if (newPassword.value !== confirmPassword.value) {
+    return "New password and confirmation do not match.";
+  }
+  if (newPassword.value.length < 8) {
+    return "New password must be at least 8 characters long.";
+  }
+  return "";
+};
 
+// Computed property to enable/disable the save button based on form validity
+const isFormValid = computed(() => {
+    return (
+        currentPassword.value.trim() !== "" &&
+        newPassword.value.trim() !== "" &&
+        confirmPassword.value.trim() !== "" &&
+        newPassword.value === confirmPassword.value &&
+        newPassword.value.length >= 8 // Check minimum length
+    );
+});
+
+// Function to update the password
+const updatePassword = async () => {
+    // Clear previous error messages
+    formErrors.currentPassword = "";
+    formErrors.newPassword = "";
+    formErrors.confirmPassword = "";
+
+    try {
+        // Send the request to update the password
+        const token = localStorage.getItem("token");
+        await axios.patch(
+            "/api/password",
+            {
+                current_password: currentPassword.value,
+                password: newPassword.value,
+                password_confirmation: confirmPassword.value,
+            },
+            {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            }
+        );
+
+        alert("Password updated successfully.");
+        currentPassword.value = "";
+        newPassword.value = "";
+        confirmPassword.value = "";
+    } catch (error) {
+        console.error("Error updating password:", error);
+        // Handle server-side validation errors
+        if (
+            error.response &&
+            error.response.data &&
+            error.response.data.errors
+        ) {
+            const errors = error.response.data.errors;
+            formErrors.currentPassword = errors.current_password
+                ? errors.current_password[0]
+                : "";
+            formErrors.newPassword = errors.password ? errors.password[0] : "";
+            formErrors.confirmPassword = errors.password_confirmation
+                ? errors.password_confirmation[0]
+                : "";
+        } else {
+            alert("Failed to update password. Please try again.");
+        }
+    }
+};
 
 const markAsRead = async (update) => {
     // Step 1: Update the local state
@@ -249,7 +328,9 @@ const markAsRead = async (update) => {
     // Step 2: Optionally, send the update to the server
     try {
         // Send the request to mark the update as read on the server
-        await axios.post(`/api/updates/${update.id}/read`, { user_id: user.value.id });
+        await axios.post(`/api/updates/${update.id}/read`, {
+            user_id: user.value.id,
+        });
 
         // Step 3: Update the user data locally
         user.value.workspaces.forEach((workspace) => {
@@ -273,31 +354,37 @@ const markAsRead = async (update) => {
 
         // Optionally, refresh the boards to ensure UI reflects the updated state
         fetchBoards();
-
-        console.log('Update marked as read:', update.id);
+        fetchBoard(workSpace, boardName);
+        console.log("Update marked as read:", update.id);
     } catch (error) {
-        console.error('Failed to mark update as read:', error);
+        console.error("Failed to mark update as read:", error);
     }
 };
 const markAllAsRead = async () => {
     try {
         // Step 1: Update the local state
-        selectedUpdates.value.forEach(update => {
+        selectedUpdates.value.forEach((update) => {
             update.is_read = true;
         });
 
         // Step 2: Send requests to mark each update as read on the server
         await Promise.all(
-            selectedUpdates.value.map(update =>
-                axios.post(`/api/updates/${update.id}/read`, { user_id: user.value.id })
+            selectedUpdates.value.map((update) =>
+                axios.post(`/api/updates/${update.id}/read`, {
+                    user_id: user.value.id,
+                })
             )
         );
 
         // Step 3: Update the user data locally
-        user.value.workspaces.forEach(workspace => {
-            workspace.boards.forEach(board => {
-                board.discussions.forEach(discussion => {
-                    if (selectedUpdates.value.some(update => update.id === discussion.id)) {
+        user.value.workspaces.forEach((workspace) => {
+            workspace.boards.forEach((board) => {
+                board.discussions.forEach((discussion) => {
+                    if (
+                        selectedUpdates.value.some(
+                            (update) => update.id === discussion.id
+                        )
+                    ) {
                         discussion.is_read = true;
                     }
                 });
@@ -309,10 +396,10 @@ const markAllAsRead = async () => {
 
         // Optionally, refresh the boards to ensure UI reflects the updated state
         fetchBoards();
-
-        console.log('All updates marked as read');
+        fetchBoard(workSpace, boardName);
+        console.log("All updates marked as read");
     } catch (error) {
-        console.error('Failed to mark all updates as read:', error);
+        console.error("Failed to mark all updates as read:", error);
     }
 };
 const toggleBookmark = async (update) => {
@@ -323,13 +410,13 @@ const toggleBookmark = async (update) => {
     try {
         // Send the request to update the bookmark status on the server
         await axios.patch(`/api/updates/${update.id}`, {
-            bookmark: newBookmarkStatus
+            bookmark: newBookmarkStatus,
         });
 
         // Update the local user data
-        user.value.workspaces.forEach(workspace => {
-            workspace.boards.forEach(board => {
-                board.discussions.forEach(discussion => {
+        user.value.workspaces.forEach((workspace) => {
+            workspace.boards.forEach((board) => {
+                board.discussions.forEach((discussion) => {
                     if (discussion.id === update.id) {
                         discussion.bookmark = newBookmarkStatus;
                     }
@@ -340,14 +427,11 @@ const toggleBookmark = async (update) => {
         // Save the updated user data in local storage
         localStorage.setItem("user", JSON.stringify(user.value));
 
-        console.log('Bookmark status updated:', update.id);
+        console.log("Bookmark status updated:", update.id);
     } catch (error) {
-        console.error('Failed to update bookmark status:', error);
+        console.error("Failed to update bookmark status:", error);
     }
 };
-
-
-
 
 const submitReply = async (
     updateId,
@@ -422,6 +506,7 @@ const submitReply = async (
         // Save the updated user data in local storage
         localStorage.setItem("user", JSON.stringify(user.value));
         fetchBoards();
+        fetchBoard(workSpace, boardName);
         // Clear the input content and hide the reply input
         replyContent.value = "";
         showReplyInput.value[index] = false;
@@ -467,11 +552,12 @@ const updateTaskHasReply = async (updateId, boardId) => {
         // Save the updated user data in local storage
         localStorage.setItem("user", JSON.stringify(user.value));
         fetchBoards();
+        fetchBoard(workSpace, boardName);
     } catch (error) {
         console.error("Error updating task:", error);
     }
 };
-const truncatedDescription = (update,parent) => {
+const truncatedDescription = (update, parent) => {
     const content = update.content; // Accessing content from the update
     const index = allUpdates.value.indexOf(update); // Find the index of the update
 
@@ -501,8 +587,6 @@ const truncatedDescription = (update,parent) => {
                         // If it's a reply, add the parent update to the mentions array
                         mentions.value.push(parent);
                     }
-                    
-
                 } else {
                     // If it's not a reply, add the current update to the mentions array
                     mentions.value.push(update);
@@ -579,22 +663,19 @@ watch(
     () => route.params.boardName,
     (newBoardId) => {
         if (newBoardId) {
-            const workSpace = route.query.workSpace;
-            fetchBoard(workSpace,newBoardId);
+             workSpace.value = route.query.workSpace;
+            fetchBoard(workSpace, newBoardId);
         }
     }
 );
 onMounted(() => {
     workSpace.value = route.query.workSpace;
-  boardName.value = route.params.boardName;
-    console.log('board and workspace',  workSpace.value);
+    boardName.value = route.params.boardName;
+    console.log("board and workspace", workSpace.value);
     if (boardName) {
         fetchBoard(workSpace, boardName);
-        fetchBoards(); 
+        fetchBoards();
     }
-    
-
-   
 });
 </script>
 
@@ -668,9 +749,10 @@ onMounted(() => {
                             @click="
                                 profile = true;
                                 workingStatus = false;
-                            password = false;
-                                
-   userProfile(user)                         "
+                                password = false;
+
+                                userProfile(user);
+                            "
                             :class="{
                                 'bg-blue-100': profile === true,
                                 'hover:bg-gray-200': profile !== true,
@@ -727,53 +809,54 @@ onMounted(() => {
                         <div class="flex p-6 justify-between">
                             <div class="flex h-fit">
                                 <template
-                                                                    v-if="
-                                                                        selectedProfile
-                                                                            ?.profile_picture_url
-                                                                    "
-                                                                >
-                                                                    <img
-                                                                        :src="
-                                                                            selectedProfile
-                                                                                .profile_picture_url
-                                                                        "
-                                                                        alt="Profile Picture"
-                                                                        class="w-20 h-20 object-cover rounded-full"
-                                                                    />
-                                                                </template>
+                                    v-if="selectedProfile?.profile_picture_url"
+                                >
+                                    <img
+                                        :src="
+                                            selectedProfile.profile_picture_url
+                                        "
+                                        alt="Profile Picture"
+                                        class="w-20 h-20 object-cover rounded-full"
+                                    />
+                                </template>
 
-                                                                <!-- Display h1 only if there is no profile_picture_url -->
-                                                                <template
-                                                                    v-else
-                                                                >
-                                                                    <h1
-                                                                        class="py-3 w-40 h-40 flex items-center justify-center z-15 text-8xl px-6 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
-                                                                    > 
-                                                                        {{
-                                                                            selectedProfile
-                                                                                ?.user_name
-                                                                                ? selectedProfile.user_name
-                                                                                      .charAt(
-                                                                                          0
-                                                                                      )
-                                                                                      .toUpperCase()
-                                                                                : "?"
-                                                                        }}
-                                                                    </h1>
-                                                                </template>
+                                <!-- Display h1 only if there is no profile_picture_url -->
+                                <template v-else>
+                                    <h1
+                                        class="py-3 w-40 h-40 flex items-center justify-center z-15 text-8xl px-6 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
+                                    >
+                                        {{
+                                            selectedProfile?.user_name
+                                                ? selectedProfile.user_name
+                                                      .charAt(0)
+                                                      .toUpperCase()
+                                                : "?"
+                                        }}
+                                    </h1>
+                                </template>
                                 <div class="flex flex-col">
                                     <input
                                         type="text"
                                         class="px-0 border-0 hover:border-gray-300 hover:border text-4xl font-medium py-1"
                                         v-model="userName"
-                                        @input="updateUserField('user_name', userName)"
+                                        @input="
+                                            updateUserField(
+                                                'user_name',
+                                                userName
+                                            )
+                                        "
                                     />
 
                                     <input
                                         type="text"
                                         class="px-0 border-0 hover:border-gray-300 hover:border text-sm py-1 text-gray-500"
                                         v-model="jobTitle"
-                                        @input="updateUserField('job_title', jobTitle)"
+                                        @input="
+                                            updateUserField(
+                                                'job_title',
+                                                jobTitle
+                                            )
+                                        "
                                         :placeholder="
                                             jobTitle ? '' : 'Add a job title'
                                         "
@@ -781,7 +864,7 @@ onMounted(() => {
                                     <h1
                                         class="mt-4 p-1 py-0 bg-blue-500 text-white flex items-center w-fit rounded-sm"
                                     >
-                                        {{userRole}}
+                                        {{ userRole }}
                                     </h1>
                                 </div>
                             </div>
@@ -826,7 +909,12 @@ onMounted(() => {
                                         type="text"
                                         class="px-0 ml-4 border-0 hover:border-gray-300 hover:border text-sm py-1 text-gray-500"
                                         v-model="mobilePhone"
-                                        @input="updateUserField('mobile_phone', mobilePhone)"
+                                        @input="
+                                            updateUserField(
+                                                'mobile_phone',
+                                                mobilePhone
+                                            )
+                                        "
                                         :placeholder="
                                             mobilePhone
                                                 ? ''
@@ -846,7 +934,12 @@ onMounted(() => {
                                         type="text"
                                         class="px-0 ml-4 border-0 hover:border-gray-300 hover:border text-sm py-1 text-gray-500"
                                         v-model="location"
-                                        @input="updateUserField('location', location)"
+                                        @input="
+                                            updateUserField(
+                                                'location',
+                                                location
+                                            )
+                                        "
                                         :placeholder="
                                             location ? '' : 'Add location'
                                         "
@@ -883,7 +976,9 @@ onMounted(() => {
                                     type="text"
                                     class="px-0 ml-4 border-0 hover:border-gray-300 hover:border text-sm py-1 text-gray-500"
                                     v-model="birthday"
-                                    @input="updateUserField('birthday', birthday)"
+                                    @input="
+                                        updateUserField('birthday', birthday)
+                                    "
                                     :placeholder="
                                         birthday ? '' : 'Add birthday'
                                     "
@@ -892,65 +987,62 @@ onMounted(() => {
                         </div>
                         <div class="w-1/2 border rounded-lg p-6">
                             <h1 class="text-5xl">Teams</h1>
-                            <div v-for = "teamBoard in boards"
-                            >
-                            <div>
-
-                                <div @click.stop = "showMembers = !showMembers"
-                                class = "m-4 w-3/4 p-2 bg-gray-100 cursor-pointer  "
-                                >
-                                <div class = "w-full flex text-xl font-bold justify-between" >
-                                    
-                                    {{ teamBoard.board_name }}
-                                    <span>
-                                        <i :class="{
-                        'fa-chevron-up': showMembers ,
-                        'fa-chevron-down': !showMembers ,
-                    }"
-                                         class = "fa " ></i>
-                                    </span>
-                                </div>
-                                <div v-if = "showMembers"
-                                    class = "m-2"
-                                >
-                                    <h1>Members</h1>
-                                    <div v-for = "user in teamBoard.team.members"
-                                    class = "bg-white p-2"
+                            <div v-for="teamBoard in boards">
+                                <div>
+                                    <div
+                                        @click.stop="showMembers = !showMembers"
+                                        class="m-4 w-3/4 p-2 bg-gray-100 cursor-pointer"
                                     >
-                                    <div 
-                                                    
+                                        <div
+                                            class="w-full flex text-xl font-bold justify-between"
+                                        >
+                                            {{ teamBoard.board_name }}
+                                            <span>
+                                                <i
+                                                    :class="{
+                                                        'fa-chevron-up':
+                                                            showMembers,
+                                                        'fa-chevron-down':
+                                                            !showMembers,
+                                                    }"
+                                                    class="fa"
+                                                ></i>
+                                            </span>
+                                        </div>
+                                        <div v-if="showMembers" class="m-2">
+                                            <h1>Members</h1>
+                                            <div
+                                                v-for="user in teamBoard.team
+                                                    .members"
+                                                class="bg-white p-2"
+                                            >
+                                                <div
                                                     class="flex relative items-center cursor-pointer w-44 mb-2 rounded-lg hover:bg-blue-100 px-3 py-1"
                                                 >
                                                     <!-- Conditional rendering: show initials if no profile picture -->
                                                     <h1
                                                         v-if="
-                                                            !user
-                                                                ?.profile_picture_url
+                                                            !user?.profile_picture_url
                                                         "
                                                         class="py-1 px-2.5 border-2 border-white text-white rounded-full bg-blue-300"
                                                     >
                                                         {{
-                                                            user
-                                                                ?.user_name
-                                                                ? user.user_name.charAt(
-                                                                      0
-                                                                  ).toUpperCase()
+                                                            user?.user_name
+                                                                ? user.user_name
+                                                                      .charAt(0)
+                                                                      .toUpperCase()
                                                                 : "?"
                                                         }}
                                                     </h1>
                                                     <!-- Show user name -->
                                                     <h1 class="ml-2">
-                                                        {{
-                                                            user?.user_name
-                                                        }}
+                                                        {{ user?.user_name }}
                                                     </h1>
                                                 </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
-
-                                </div>
-                            </div>
-
                             </div>
                         </div>
                     </div>
@@ -965,27 +1057,32 @@ onMounted(() => {
                         </p>
                         <div class="grid grid-cols-3 gap-4">
                             <div
-    v-for="(status, index) in statuses"
-    :key="index"
-    class="flex items-center"
->
-    <input
-        type="radio"
-        :id="status.id"
-        name="status"
-        :value="status.label"
-        v-model="selectedStatus"
-        @change="updateUserField('working_status', status.label)"
-        class="form-radio text-blue-600 h-4 w-4"
-    />
-    <label
-        :for="status.id"
-        class="ml-2 text-gray-700"
-    >
-        <i :class="status.icon" class="mr-1"></i>{{ status.label }}
-    </label>
-</div>
-
+                                v-for="(status, index) in statuses"
+                                :key="index"
+                                class="flex items-center"
+                            >
+                                <input
+                                    type="radio"
+                                    :id="status.id"
+                                    name="status"
+                                    :value="status.label"
+                                    v-model="selectedStatus"
+                                    @change="
+                                        updateUserField(
+                                            'working_status',
+                                            status.label
+                                        )
+                                    "
+                                    class="form-radio text-blue-600 h-4 w-4"
+                                />
+                                <label
+                                    :for="status.id"
+                                    class="ml-2 text-gray-700"
+                                >
+                                    <i :class="status.icon" class="mr-1"></i
+                                    >{{ status.label }}
+                                </label>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1006,13 +1103,19 @@ onMounted(() => {
                                     class="mt-1 block w-full border border-gray-300 rounded-md p-2"
                                     required
                                 />
+                                <span
+                                    v-if="formErrors.currentPassword"
+                                    class="text-red-500 text-sm"
+                                    >{{ formErrors.currentPassword }}</span
+                                >
                                 <div class="mt-2">
                                     <a
                                         href="#"
                                         class="text-sm text-blue-600 hover:underline"
-                                        >Forgot your password? <br />
-                                        Reset password via email</a
                                     >
+                                        Forgot your password? <br />
+                                        Reset password via email
+                                    </a>
                                 </div>
                             </div>
 
@@ -1029,6 +1132,11 @@ onMounted(() => {
                                     class="mt-1 block w-full border border-gray-300 rounded-md p-2"
                                     required
                                 />
+                                <span
+                                    v-if="formErrors.newPassword"
+                                    class="text-red-500 text-sm"
+                                    >{{ formErrors.newPassword }}</span
+                                >
                             </div>
 
                             <div class="mb-6">
@@ -1044,15 +1152,33 @@ onMounted(() => {
                                     class="mt-1 block w-full border border-gray-300 rounded-md p-2"
                                     required
                                 />
+                                <span
+                                    v-if="formErrors.confirmPassword"
+                                    class="text-red-500 text-sm"
+                                    >{{ formErrors.confirmPassword }}</span
+                                >
                             </div>
 
                             <button
                                 type="submit"
                                 :disabled="!isFormValid"
-                                class="bg-gray-200 text-gray-500 w-full py-2 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-300 focus:ring-opacity-50"
+                                :title="!isFormValid ? getDisableReason() : ''"
+                                :class="{
+                                    'bg-gray-300 text-white cursor-not-allowed':
+                                        !isFormValid,
+                                    'bg-blue-400 text-white hover:bg-blue-500':
+                                        isFormValid,
+                                }"
+                                class="w-full py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-300 focus:ring-opacity-50"
                             >
                                 Save
                             </button>
+                            <div
+      v-if="!isFormValid"
+      class="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-1 text-white bg-gray-800 rounded-md text-sm"
+    >
+      {{ getDisableReason() }}
+    </div>
                         </form>
                     </div>
                 </div>
@@ -1147,7 +1273,7 @@ onMounted(() => {
                                 <h1>Filter</h1>
                             </div>
                         </div>
-                        <h1
+                        <h1 @click = "inviteVisible = true"
                             class="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg cursor-pointer"
                         >
                             + Invite
@@ -1199,27 +1325,48 @@ onMounted(() => {
                                 </tr>
                             </thead>
                             <tbody>
+                                
                                 <tr
                                     class="border-b border-gray-200"
-                                    v-for="(user, index) in users"
+                                    v-for="(user, index) in board.team
+                                                    .members"
                                     :key="index"
-                                >
+                                >{{console.log('board singular',user.pivot.role)}}
                                     <td class="px-6 py-4">
                                         <div
                                             class="flex items-center space-x-3"
                                         >
-                                            <img
-                                                v-if="true"
-                                                :src="user.avatar"
-                                                alt="avatar"
-                                                class="w-10 h-10 rounded-full"
-                                            />
-                                            <h1
-                                                v-else
-                                                class="py-1 w-fit text-3xl px-3.5 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
-                                            >
-                                                K
-                                            </h1>
+                                        <template
+                                                                v-if="
+                                                                   user
+                                                                        ?.profile_picture_url
+                                                                "
+                                                            >
+                                                                <img
+                                                                    :src="
+                                                                        user
+                                                                            .profile_picture_url
+                                                                    "
+                                                                    alt="Profile Picture"
+                                                                    class="w-full h-full object-cover rounded-full"
+                                                                />
+                                                            </template>
+
+                                                            <!-- Display h1 only if there is no profile_picture_url -->
+                                                            <template v-else>
+                                                                <h1
+                                                                    class="py-1 w-12 h-12 flex items-center justify-center text-3xl px-3.5 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
+                                                                >
+                                                                    {{
+                                                                       user
+                                                                            ?.user_name
+                                                                            ? user.user_name.charAt(
+                                                                                  0
+                                                                              ).toUpperCase()
+                                                                            : "?"
+                                                                    }}
+                                                                </h1>
+                                                            </template>
 
                                             <span
                                                 class="font-medium text-gray-900"
@@ -1232,12 +1379,17 @@ onMounted(() => {
                                     </td>
                                     <td class="px-6 py-4">
                                         <select
-                                            v-model="user.role"
-                                            class="border border-gray-300 rounded-md p-2 bg-gray-50"
+                                            v-model="user.pivot.role"
+                                            class="border border-gray-300 w-24 rounded-md p-2 bg-gray-50"
                                         >
+                                        
+                                            <option value="owner" disabled>Owner</option>
                                             <option value="Admin">Admin</option>
                                             <option value="Member">
                                                 Member
+                                            </option>
+                                            <option value="Viewer">
+                                                Viewer
                                             </option>
                                         </select>
                                     </td>
@@ -1484,32 +1636,37 @@ onMounted(() => {
                 <div
                     class="flex mt-6 ml-10 font-extralight text-gray-700 text-lg"
                 >
-                    <div @click ="showUpdate = 'allUpdates'"
-                    :class="{
-                        'border-b-2 border-blue-400': showUpdate == 'allUpdates',
-                    }"
-                        class="p-4 py-1 flex  items-center hover:bg-gray-100 cursor-pointer"
+                    <div
+                        @click="showUpdate = 'allUpdates'"
+                        :class="{
+                            'border-b-2 border-blue-400':
+                                showUpdate == 'allUpdates',
+                        }"
+                        class="p-4 py-1 flex items-center hover:bg-gray-100 cursor-pointer"
                     >
                         <h3>All updates</h3>
                     </div>
-                    <div @click ="showUpdate = 'mentioned'"
-                    :class="{
-                        'border-b-2 border-blue-400': showUpdate == 'mentioned',
-                    }"
+                    <div
+                        @click="showUpdate = 'mentioned'"
+                        :class="{
+                            'border-b-2 border-blue-400':
+                                showUpdate == 'mentioned',
+                        }"
                         class="p-4 py-1 flex items-center hover:bg-gray-100 cursor-pointer"
                     >
                         <h3>@ I was mentioned</h3>
                     </div>
-                    <div @click = "showUpdate = 'bookmarked'"
-                    :class="{
-                        'border-b-2 border-blue-400': showUpdate == 'bookmarked',
-                    }"
+                    <div
+                        @click="showUpdate = 'bookmarked'"
+                        :class="{
+                            'border-b-2 border-blue-400':
+                                showUpdate == 'bookmarked',
+                        }"
                         class="p-4 py-1 flex items-center hover:bg-gray-100 cursor-pointer"
                     >
                         <i class="far fa-bookmark mr-2"></i>
                         <h3>Bookmarked</h3>
                     </div>
-                    
                 </div>
                 <div
                     class="w-full h-full py-6 px-10 bg-gray-50 overflow-y-auto"
@@ -1527,11 +1684,13 @@ onMounted(() => {
                                 <h1 v-if="showRead">All updates</h1>
                             </div>
                         </div>
-                        <div 
+                        <div
                             class="flex items-center px-2 rounded-lg py-2 ml- hover:bg-gray-200 cursor-pointer justify-between"
                         >
-                            <div  @click="markAllAsRead"
-                            class="flex items-center">
+                            <div
+                                @click="markAllAsRead"
+                                class="flex items-center"
+                            >
                                 <svg
                                     class="mr-2"
                                     width="16px"
@@ -1567,15 +1726,26 @@ onMounted(() => {
                     </div>
                     <div class="flex">
                         <div class="w-1/2">
-                            {{ console.log('selected Updates,filteredUpdates,  show Update, show Read', selectedUpdates, filteredUpdates, showUpdate, showRead) }}
+                            {{
+                                console.log(
+                                    "selected Updates,filteredUpdates,  show Update, show Read",
+                                    selectedUpdates,
+                                    filteredUpdates,
+                                    showUpdate,
+                                    showRead
+                                )
+                            }}
                             <div
                                 v-if="true"
-                                v-for="(update, index) in filteredUpdates.slice().reverse()"
+                                v-for="(update, index) in filteredUpdates
+                                    .slice()
+                                    .reverse()"
                                 :key="index"
                                 class="relative"
                             >
-                                <div @click="markAsRead(update)"
-                                    v-if="!update.reply && !update.is_read "
+                                <div
+                                    @click="markAsRead(update)"
+                                    v-if="!update.reply && !update.is_read"
                                     class="w-10 h-10 bg-blue-600 ml-6 mt-4 absolute -right-20 rounded-md flex items-center hover:bg-blue-700 justify-center"
                                 >
                                     <i
@@ -1774,19 +1944,23 @@ onMounted(() => {
                                                                     3h
                                                                 </h1>
                                                                 <span
-                                                                    
-                                                                    @click.stop="toggleBookmark(update)"
+                                                                    @click.stop="
+                                                                        toggleBookmark(
+                                                                            update
+                                                                        )
+                                                                    "
                                                                     class="h-full hover:bg-gray-100"
                                                                 >
-                                                                    <i :class="{
-    'fa': update.bookmark,
-       'far' : !update.bookmark                 
-                    }"
-                                                                        class=" fa-bookmark m-1 text-sm"
+                                                                    <i
+                                                                        :class="{
+                                                                            fa: update.bookmark,
+                                                                            far: !update.bookmark,
+                                                                        }"
+                                                                        class="fa-bookmark m-1 text-sm"
                                                                     ></i>
                                                                 </span>
                                                                 <span>
-                                                                    <i 
+                                                                    <i
                                                                         class="fa fa-ellipsis-h text-lg py-1 px-1 hover:bg-gray-100 cursor-pointer"
                                                                         aria-hidden="true"
                                                                     ></i>
@@ -1812,7 +1986,7 @@ onMounted(() => {
                                                                 href="#"
                                                                 class="hover:text-blue-600"
                                                             >
-                                                                <h1>To do </h1>
+                                                                <h1>To do</h1>
                                                             </a>
                                                             <a
                                                                 href="#"
@@ -1835,7 +2009,8 @@ onMounted(() => {
                                                     <p
                                                         v-html="
                                                             truncatedDescription(
-                                                                update,null
+                                                                update,
+                                                                null
                                                             )
                                                         "
                                                     ></p>
@@ -2069,7 +2244,8 @@ onMounted(() => {
                                                                             <p
                                                                                 v-html="
                                                                                     truncatedDescription(
-                                                                                        reply,update
+                                                                                        reply,
+                                                                                        update
                                                                                     )
                                                                                 "
                                                                             ></p>
@@ -2125,7 +2301,9 @@ onMounted(() => {
                                                 class="flex flex-row"
                                             >
                                                 <div>
-                                                    <div class = "bg-white rounded-l-lg roundend-b-lg border border-t-0" >
+                                                    <div
+                                                        class="bg-white rounded-l-lg roundend-b-lg border border-t-0"
+                                                    >
                                                         <template
                                                             v-if="
                                                                 user?.profile_picture_url
@@ -2339,7 +2517,10 @@ onMounted(() => {
                     <h1 class="text-gray-400">Account</h1>
                     <section class="text-sm">
                         <div
-                            @click="showProfile = true;userProfile(user) "
+                            @click="
+                                showProfile = true;
+                                userProfile(user);
+                            "
                             class="py-2 px-2 text-gray-600 flex items-center cursor-pointer hover:bg-gray-100"
                         >
                             <i class="far fa-user mr-2" aria-hidden="true"></i>
@@ -2371,7 +2552,7 @@ onMounted(() => {
                             <h1>Archive</h1>
                         </div>
                         <div
-                            @click="showAdminstration = true"
+                            @click="showAdminstration = true; "
                             class="py-2 px-2 text-gray-600 flex items-center cursor-pointer hover:bg-gray-100"
                         >
                             <i class="fa fa-cog mr-2" aria-hidden="true"></i>

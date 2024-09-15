@@ -37,6 +37,7 @@ const submit = async () => {
       
       if (token) {
         localStorage.setItem('token', token);
+        axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
         localStorage.setItem('user', JSON.stringify(user));
 
         
