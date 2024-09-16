@@ -1,5 +1,13 @@
 <script setup>
-import { ref,reactive, toRaw, onUnmounted, watch, onMounted, computed } from "vue";
+import {
+    ref,
+    reactive,
+    toRaw,
+    onUnmounted,
+    watch,
+    onMounted,
+    computed,
+} from "vue";
 import ResponsiveNavLink from "@/Components/ResponsiveNavLink.vue";
 import SideDetail from "@/Components/SideDetail.vue";
 import ApplicationLogo from "@/Components/ApplicationLogo.vue";
@@ -36,10 +44,10 @@ const allUpdates = ref([]);
 const sideDetail = ref(false);
 const inviteVisible = ref(false);
 const updateVisible = ref(false);
-const email = ref('');
+const email = ref("");
 const searchResults = ref([]);
 const selectedUser = ref(null);
-const selectedRole = ref('');
+const selectedRole = ref("");
 const showProfile = ref(false);
 const showTrash = ref(false);
 const router = useRouter();
@@ -56,14 +64,14 @@ const mobilePhone = ref("");
 const location = ref("");
 const skype = ref("");
 const birthday = ref("");
-
+const notifications = ref([]);
 const userName = ref("");
 const selectedStatus = ref("In the office");
 const selectedProfile = ref([]);
 const formErrors = reactive({
-  currentPassword: "",
-  newPassword: "",
-  confirmPassword: ""
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
 });
 axios.defaults.baseURL = "http://127.0.0.1:8000";
 
@@ -131,13 +139,13 @@ const user = computed(() => state.state.user);
 
 console.log("🚀 ~ userin navbar:", selectedProfile.value);
 const fetchBoard = (workSpace, boardName) => {
-    console.log("hellow is this working", workSpace.value, boardName.value);
+
     user.value.workspaces.forEach((workspace) => {
         if (workspace.id == workSpace.value) {
             workspace.boards.forEach((b) => {
                 if (b.board_name == boardName.value) {
                     board.value = b;
-                    console.log("discusssss", board.value.id);
+                    console.log("discusssss", board.value);
                 }
             });
         }
@@ -163,49 +171,154 @@ const fetchBoards = () => {
 
     selectedBoard.value = null;
 
-    console.log("showReplyInput", showReplyInput);
-    console.log("All boards:", boards.value);
+    
 };
+const fetchNotifications = async () => {
+    try {
+        const response = await axios.get("/api/notifications");
+        notifications.value = response.data;
+        
+    } catch (error) {
+        console.error("Error fetching notifications", error);
+    }
+};
+const markNotificationAsRead = async (notificationId) => {
+  try {
+    await axios.post(`/api/notifications/markAsRead/${notificationId}`);
+    console.log('Notification marked as read');
+  } catch (error) {
+    console.error('Error marking notification as read', error);
+  }
+};
+
+
+
+
+const handleAccept = async (notification) => {
+  try {
+    const boardId = notification.invitation.board.id; 
+    if (!boardId) {
+      throw new Error('Board ID not found in the invitation');
+    }
+
+    // Accept the invitation
+    await axios.post(`/api/invitations/accept/${notification.invitation.id}`);
+
+    // Fetch the new board data
+    const { data: newBoard } = await axios.get(`/api/boards/${boardId}`, {
+      params: {
+        with: ['owner', 'team', 'tasks'] // Include necessary relationships
+      },
+    });
+
+    // Find the user's main workspace (first created workspace)
+    const workspace = state.state.user.workspaces.sort((a, b) => new Date(a.created_at) - new Date(b.created_at))[0];
+
+    if (workspace) {
+      // Push the new board into the workspace's boards array
+      workspace.boards.push(newBoard);
+
+      // Update the user state with the modified workspace
+      const updatedUser = {
+        ...state.state.user,
+        workspaces: state.state.user.workspaces.map(w =>
+          w.id === workspace.id ? workspace : w
+        ),
+      };
+      
+      // Update state and local storage
+      state.setUser(updatedUser);
+    }
+
+    // Mark the notification as read
+    // (Add code here to mark the notification as read if needed)
+
+    // Refresh the notifications list
+    fetchNotifications();
+    
+    // Optionally, refresh the user data to ensure consistency
+    await state.fetchUser();
+
+  } catch (error) {
+    console.error("Error handling invitation acceptance:", error);
+  }
+};
+
+
+
+const handleNoThanks = async (notification) => {
+  try {
+    // Decline the invitation
+    await axios.post('/api/invitations/decline', {
+      invitation_id: notification.invitation.id,
+    });
+
+    // Mark the notification as read using the existing function
+   
+
+    // Optionally refresh the user data and notifications
+    // Refresh the user's data
+    fetchNotifications(); // Refresh the notifications list
+
+    console.log('Invitation declined and notification marked as read');
+  } catch (error) {
+    console.error('Error declining invitation and marking notification as read', error);
+  }
+};
+
+
+
 const fetchUsers = async () => {
-      if (email.value.trim()) {
+    console.log('board name for invite',board.value.board_name,)
+    if (email.value.trim()) {
         try {
-          const response = await axios.get('/api/search-users', {
-            params: { email: email.value }
-          });
+            const response = await axios.get("/api/search-users", {
+                params: { email: email.value },
+            });
             searchResults.value = response.data;
-        console.log('search results',searchResults.value)  
+            console.log("search results", searchResults.value);
+
         } catch (error) {
-          console.error('Error fetching users:', error);
+            console.error("Error fetching users:", error);
         }
-      } else {
+    } else {
         searchResults.value = [];
-      }
+    }
 };
 const selectUser = (user) => {
-      selectedUser.value = user;
-      console.log('selected user invite',selectedUser.value.id)
-    };
+    
+    console.log("send invite", board.value);
+    selectedUser.value = user;
+    console.log("selected user invite", selectedUser.value.id);
+};
 
-    const sendInvitation = async () => {
-        if (selectedUser.value && selectedRole.value) {
-      console.log('send invite',board,board.value.team.id)  
+const sendInvitation = async () => {
+    if (selectedUser.value && selectedRole.value) {
+        
         try {
-          await axios.post('/api/invitations', {
-            invited: selectedUser.value.id,
-            board: board.value.id,
-            team: board.value.team.id,
-            role: selectedRole.value,
-            email: selectedUser.value.email,
-          });
-          alert('Invitation sent!');
-          hideInvite();
+                await axios.post("/api/invitations", {
+                    invited: selectedUser.value.id,
+                    board: board.value.id,
+                    team: board.value.team.id,
+                    role: selectedRole.value,
+                    email: selectedUser.value.email,
+                    board_name:board.value.board_name,
+                });
+            email.value = '';
+            searchResults.value = [];
+                selectedRole.value = null;
+                selectedUser.value = null
+                alert("Invitation sent!");
+                
+
+            hideInvite();
         } catch (error) {
-          console.error('Error sending invitation:', error);
+            console.error("Error sending invitation:", error);
         }
-      } else {
-        alert('Please select a user and role.');
-      }
-    }; 
+    } else {
+        alert("Please select a user and role.");
+    }
+};
 const filteredUpdates = computed(() => {
     if (showUpdate.value === "allUpdates") {
         // Show all updates
@@ -284,22 +397,22 @@ const updateUserField = async (fieldName, newValue) => {
     }
 };
 const getDisableReason = () => {
-  if (!currentPassword.value.trim()) {
-    return "Current password is required.";
-  }
-  if (!newPassword.value.trim()) {
-    return "New password is required.";
-  }
-  if (!confirmPassword.value.trim()) {
-    return "Password confirmation is required.";
-  }
-  if (newPassword.value !== confirmPassword.value) {
-    return "New password and confirmation do not match.";
-  }
-  if (newPassword.value.length < 8) {
-    return "New password must be at least 8 characters long.";
-  }
-  return "";
+    if (!currentPassword.value.trim()) {
+        return "Current password is required.";
+    }
+    if (!newPassword.value.trim()) {
+        return "New password is required.";
+    }
+    if (!confirmPassword.value.trim()) {
+        return "Password confirmation is required.";
+    }
+    if (newPassword.value !== confirmPassword.value) {
+        return "New password and confirmation do not match.";
+    }
+    if (newPassword.value.length < 8) {
+        return "New password must be at least 8 characters long.";
+    }
+    return "";
 };
 
 // Computed property to enable/disable the save button based on form validity
@@ -705,12 +818,14 @@ watch(
     () => route.params.boardName,
     (newBoardId) => {
         if (newBoardId) {
-             workSpace.value = route.query.workSpace;
-            fetchBoard(workSpace, newBoardId);
+            workSpace.value = route.query.workSpace;
+            boardName.value = newBoardId;
+            fetchBoard(workSpace, boardName);
         }
     }
 );
 onMounted(() => {
+    
     workSpace.value = route.query.workSpace;
     boardName.value = route.params.boardName;
     console.log("board and workspace", workSpace.value);
@@ -718,6 +833,12 @@ onMounted(() => {
         fetchBoard(workSpace, boardName);
         fetchBoards();
     }
+    fetchNotifications();
+
+    // Polling every 30 seconds
+    setInterval(() => {
+        fetchNotifications();
+    }, 30000);
 });
 </script>
 
@@ -1031,6 +1152,7 @@ onMounted(() => {
                             <h1 class="text-5xl">Teams</h1>
                             <div v-for="teamBoard in boards">
                                 <div>
+                                    {{console.log('teamBoard in boards',teamBoard)}}
                                     <div
                                         @click.stop="showMembers = !showMembers"
                                         class="m-4 w-3/4 p-2 bg-gray-100 cursor-pointer"
@@ -1054,8 +1176,7 @@ onMounted(() => {
                                         <div v-if="showMembers" class="m-2">
                                             <h1>Members</h1>
                                             <div
-                                                v-for="user in teamBoard.team
-                                                    .members"
+                                                v-for="user in teamBoard.team?.members"
                                                 class="bg-white p-2"
                                             >
                                                 <div
@@ -1216,11 +1337,11 @@ onMounted(() => {
                                 Save
                             </button>
                             <div
-      v-if="!isFormValid"
-      class="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-1 text-white bg-gray-800 rounded-md text-sm"
-    >
-      {{ getDisableReason() }}
-    </div>
+                                v-if="!isFormValid"
+                                class="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-1 text-white bg-gray-800 rounded-md text-sm"
+                            >
+                                {{ getDisableReason() }}
+                            </div>
                         </form>
                     </div>
                 </div>
@@ -1315,7 +1436,8 @@ onMounted(() => {
                                 <h1>Filter</h1>
                             </div>
                         </div>
-                        <h1 @click = "inviteVisible = true"
+                        <h1
+                            @click="inviteVisible = true"
                             class="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg cursor-pointer"
                         >
                             + Invite
@@ -1367,48 +1489,47 @@ onMounted(() => {
                                 </tr>
                             </thead>
                             <tbody>
-                                
                                 <tr
                                     class="border-b border-gray-200"
-                                    v-for="(user, index) in board.team
-                                                    .members"
+                                    v-for="(user, index) in board.team.members"
                                     :key="index"
-                                >{{console.log('board singular',user.pivot.role)}}
+                                >
+                                    {{
+                                        console.log(
+                                            "board singular",
+                                            user.pivot.role
+                                        )
+                                    }}
                                     <td class="px-6 py-4">
                                         <div
                                             class="flex items-center space-x-3"
                                         >
-                                        <template
-                                                                v-if="
-                                                                   user
-                                                                        ?.profile_picture_url
-                                                                "
-                                                            >
-                                                                <img
-                                                                    :src="
-                                                                        user
-                                                                            .profile_picture_url
-                                                                    "
-                                                                    alt="Profile Picture"
-                                                                    class="w-full h-full object-cover rounded-full"
-                                                                />
-                                                            </template>
+                                            <template
+                                                v-if="user?.profile_picture_url"
+                                            >
+                                                <img
+                                                    :src="
+                                                        user.profile_picture_url
+                                                    "
+                                                    alt="Profile Picture"
+                                                    class="w-full h-full object-cover rounded-full"
+                                                />
+                                            </template>
 
-                                                            <!-- Display h1 only if there is no profile_picture_url -->
-                                                            <template v-else>
-                                                                <h1
-                                                                    class="py-1 w-12 h-12 flex items-center justify-center text-3xl px-3.5 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
-                                                                >
-                                                                    {{
-                                                                       user
-                                                                            ?.user_name
-                                                                            ? user.user_name.charAt(
-                                                                                  0
-                                                                              ).toUpperCase()
-                                                                            : "?"
-                                                                    }}
-                                                                </h1>
-                                                            </template>
+                                            <!-- Display h1 only if there is no profile_picture_url -->
+                                            <template v-else>
+                                                <h1
+                                                    class="py-1 w-12 h-12 flex items-center justify-center text-3xl px-3.5 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
+                                                >
+                                                    {{
+                                                        user?.user_name
+                                                            ? user.user_name
+                                                                  .charAt(0)
+                                                                  .toUpperCase()
+                                                            : "?"
+                                                    }}
+                                                </h1>
+                                            </template>
 
                                             <span
                                                 class="font-medium text-gray-900"
@@ -1424,8 +1545,9 @@ onMounted(() => {
                                             v-model="user.pivot.role"
                                             class="border border-gray-300 w-24 rounded-md p-2 bg-gray-50"
                                         >
-                                        
-                                            <option value="owner" disabled>Owner</option>
+                                            <option value="owner" disabled>
+                                                Owner
+                                            </option>
                                             <option value="Admin">Admin</option>
                                             <option value="Member">
                                                 Member
@@ -1515,33 +1637,44 @@ onMounted(() => {
                         aria-hidden="true"
                     ></i>
                 </div>
-            </div>
-            <div class="flex mt-4 bg-gray-200 p-3 rounded-lg justify-between">
-                <div class="relative flex items-center">
-                    <i class="fa fa-user-circle text-4xl"></i>
-                    <i
-                        class="fa fa-user-circle text-4xl left-6 border border-white p-0 rounded-full absolute"
-                    ></i>
-                    <i
-                        class="fa text-white bg-blue-600 fa-plus text-2xl left-12 border border-white p-2 rounded-full absolute"
-                    ></i>
-                    <div class="ml-24 text-base text-md">
-                        Invite your teammates and start collaborating
-                    </div>
-                </div>
-                <div class="items-center flex">
-                    <button
-                        class="text-black px-4 py-2 rounded-lg hover:bg-gray-300 mr-4 text-sm"
-                    >
-                        No thanks
-                    </button>
-                    <button
-                        class="bg-blue-600 text-white px-4 py-2 text-sm rounded-lg hover:bg-blue-700"
-                    >
-                        Invite
-                    </button>
-                </div>
-            </div>
+            </div>{{ console.log('notifications',notifications)  }}
+            <div v-for="notification in notifications" :key="notification.id" class="flex mt-4 bg-gray-200 p-3 rounded-lg justify-between">
+    <div class="flex justify-between">
+      <div class="relative flex items-center">
+        <div class="flex flex-col items-center">
+          <h1
+            v-if="!notification.invitation.inviter?.profile_picture_url"
+            class="py-1 w-fit px-2.5 border-2 border-white text-white rounded-full bg-blue-300"
+          >
+            {{
+              notification.invitation.inviter?.user_name
+                ? notification.invitation.inviter.user_name.charAt(0).toUpperCase()
+                : "?"
+            }}
+          </h1>
+          <!-- Show user name -->
+          <h1 class="ml-2">{{ notification.invitation.inviter?.user_name }}</h1>
+        </div>
+        <div class="ml-4 text-base text-md">
+          {{ notification.body }} as a {{ notification.invitation.role }}
+        </div>
+      </div>
+      <div class="items-center flex">
+        <button
+          @click="handleNoThanks(notification)"
+          class="text-black px-4 py-2 rounded-lg hover:bg-gray-300 mr-4 text-sm"
+        >
+          No thanks
+        </button>
+        <button
+          @click="handleAccept(notification)"
+          class="bg-blue-600 text-white px-4 py-2 text-sm rounded-lg hover:bg-blue-700"
+        >
+          Accept
+        </button>
+      </div>
+    </div>
+  </div>
         </span>
     </SideDetail>
     <div
@@ -1551,7 +1684,7 @@ onMounted(() => {
     >
         <div class="bg-white w-1/3 h-fit rounded-xl p-8">
             <div class="flex justify-between items-center">
-                <h1 class="text-3xl">Invite to {{boardName}}</h1>
+                <h1 class="text-3xl">Invite to {{ board?.board_name }}</h1>
                 <i
                     @click="hideInvite"
                     class="fa fa-times fa-font-extralight text-gray-500 text-2xl ml-2 p-1 hover:bg-gray-100 cursor-pointer"
@@ -1562,46 +1695,63 @@ onMounted(() => {
                 <h1>Invite with email</h1>
             </div>
             <TextInput
-        v-model="email"
-        @input="fetchUsers"
-        placeholder="Enter email address"
-        class="w-full my-4"
-      ></TextInput>
-      <div v-if="searchResults.length"class="border-b py-2 h-20 overflow-y-auto bg-white">
-        <div v-for="user2 in searchResults" :key="user.email"
-        
-         >
-         <div v-if = "user2.id !== user.id"
-         @click.stop="selectUser(user2)"
-         class = "hover:bg-gray-100 cursor-pointer"
-         :class = "{
-            'bg-blue-200' : selectedUser?.id == user2.id
-         }">
+                v-model="email"
+               
+                @input="fetchUsers"
 
-          <h2 class="font-semibold">{{ user2.user_name }}</h2>
-          <p class="text-gray-500">{{ user2.email }}</p>
-         </div>
-
-        </div>
-      </div>
+                placeholder="Enter email address"
+                class="w-full my-4"
+            ></TextInput>
+            <div
+                v-if="searchResults.length"
+                class="border-b py-2 h-20 overflow-y-auto bg-white"
+            >
+                <div v-for="user2 in searchResults" :key="user.email">
+                    <div
+                        v-if="user2.id !== user.id"
+                        @click.stop="selectUser(user2)"
+                        class="hover:bg-gray-100 cursor-pointer"
+                        :class="{
+                            'bg-blue-200': selectedUser?.id == user2.id,
+                        }"
+                    >
+                        <h2 class="font-semibold">{{ user2.user_name }}</h2>
+                        <p class="text-gray-500">{{ user2.email }}</p>
+                    </div>
+                </div>
+            </div>
             <div class="flex items-center">
                 <div class="flex items-center mr-10">
-                    <Checkbox  v-model="selectedRole"
-                        class="rounded-xl mr-2 hover:border-black"
-                    ></Checkbox>
+                    <input
+        type="radio"
+        id="member"
+        value="Member"
+        v-model="selectedRole"
+        class="mr-2"
+      />
                     <h1 class="font-extralight text-md">Member</h1>
                 </div>
                 <div class="flex items-center">
-                    <Checkbox  v-model="selectedRole"
-                        class="rounded-xl mr-2 hover:border-black"
-                    ></Checkbox>
+                    <input
+        type="radio"
+        id="viewer"
+        value="Viewer(Read-only)"
+        v-model="selectedRole"
+        class="mr-2"
+      />
                     <h1 class="font-extralight text-md">Viewer(Read-only)</h1>
                 </div>
             </div>
-            <div v-if = "selectedUser && selectedRole"
-            class= "w-full justify-end flex">
-
-                <button @click="sendInvitation" class = "bg-blue-500 p-2 text-white rounded-lg">Invite</button>
+            <div
+                v-if="selectedUser && selectedRole"
+                class="w-full justify-end flex"
+            >
+                <button
+                    @click="sendInvitation"
+                    class="bg-blue-500 p-2 text-white rounded-lg"
+                >
+                    Invite
+                </button>
             </div>
         </div>
     </div>
@@ -2618,7 +2768,7 @@ onMounted(() => {
                             <h1>Archive</h1>
                         </div>
                         <div
-                            @click="showAdminstration = true; "
+                            @click="showAdminstration = true"
                             class="py-2 px-2 text-gray-600 flex items-center cursor-pointer hover:bg-gray-100"
                         >
                             <i class="fa fa-cog mr-2" aria-hidden="true"></i>

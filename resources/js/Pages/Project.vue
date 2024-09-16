@@ -7,7 +7,7 @@ import SideDetail from "@/Components/SideDetail.vue";
 import TextInput from "@/Components/TextInput.vue";
 import axios from "axios";
 import { useRoute } from "vue-router";
-import state from "../state";
+import state from "../state.js";
 
 import { ref, reactive, watch, onMounted, computed, onUnmounted } from "vue";
 
@@ -26,6 +26,7 @@ const filteredTeam = ref([]);
 const filtereName = ref("");
 const isEditing = ref(false);
 const mentions = ref([]);
+const newTaskName = ref("");
 const projectName = ref("Project managemnt");
 const ProjectDetail = ref(false);
 const replyContent = ref("");
@@ -39,7 +40,7 @@ const selectedValue = ref("");
 const selectOwner = ref([]);
 const selectPriority = ref([]);
 const selectStatus = ref([]);
-const selectOwnerSub = ref([]);
+const selectedBoardId = ref("");
 const selectPrioritySub = ref([]);
 const selectStatusSub = ref([]);
 const showAll = ref(false);
@@ -125,6 +126,7 @@ const fetchBoard = (workSpace, boardName) => {
             workspace.boards.forEach((b) => {
                 if (b.board_name == boardName.value) {
                     board.value = b;
+                    selectedBoardId.value = board.value.id;
                     console.log("discusssss", board.value.discussions);
                     b.discussions.forEach((update) => {
                         if (!update.reply) {
@@ -172,11 +174,14 @@ const filteredTasks = computed(() => {
 
         // Priority filter
         if (selectedFilters.priority) {
-            matchesPriority = task.priority === selectedFilters.priority;
+            (matchesPriority < router - link == task.priority) ===
+                selectedFilters.priority;
         }
 
         // Task must match all filters
-        return matchesTaskName && matchesOwner && matchesStatus && matchesPriority;
+        return (
+            matchesTaskName && matchesOwner && matchesStatus && matchesPriority
+        );
     });
 
     // React to selectedColumn, selectedCondition, and selectedValue
@@ -230,22 +235,86 @@ const filteredTasks = computed(() => {
     });
 });
 
+const clearInput = () => {
+  newTaskName.value = "";
+};
+
+// Task creation logic
+const handleNewTask = async () => {
+    // If newTaskName is empty, exit
+    console.log("Task name for new task:", newTaskName.value);
+  
+  if (!newTaskName.value) return;
+
+  // Define the task data with the entered name
+  const taskData = ref({
+    task_name: newTaskName.value,
+    status: "Not Started",
+    priority: "Medium",
+    due_date: null, // Set due date or keep it null
+    board_id: selectedBoardId.value, // Change this to the appropriate board ID
+    assigned_to: null, // Set this if there is an assigned user
+    budget: 0,
+    notes: "",
+    column: 1, // Set this to the appropriate column if needed
+  });
+
+  try {
+    // Create the new task via API
+    const response = await axios.post("/api/tasks", taskData.value);
+    const taskId = response.data.task.id; // Get the task ID from the response
+
+    // Fetch the newly created task from the database
+    const { data: newTask } = await axios.get(`/api/tasks/${taskId}`, {
+      params: {
+        with: ['assignedUser', 'subTasks', 'updates'] // Include any necessary relationships
+      }
+    });
+
+    console.log("Task fetched from database:", newTask);
+
+    // Find the correct workspace and board
+    user.value.workspaces.forEach((workspace) => {
+      workspace.boards.forEach((board) => {
+        // Check if this is the correct board for the new task
+        if (board.id === taskData.value.board_id) {
+          // Add the fetched task to the board's tasks array
+          board.tasks.push(newTask);
+        }
+      });
+    });
+
+    // Update the user data in local storage
+    localStorage.setItem("user", JSON.stringify(user.value));
+    console.log("User data updated in local storage");
+
+    // Clear the input field after task creation
+    newTaskName.value = "";
+
+  } catch (error) {
+    console.error("Error creating task or fetching from database:", error);
+  }
+};
+
+// Check if task name is not empty before creating the task
+const checkAndCreateTask = () => {
+  if (newTaskName.value.trim() !== "") {
+    handleNewTask();
+  }
+};
 
 function selectTaskName(taskName) {
     if (selectedFilters.taskName == taskName) {
         selectedFilters.taskName = null;
     } else {
-
         selectedFilters.taskName = taskName;
     }
-   
 }
 
 function selectedOwner(ownerId) {
     if (selectedFilters.ownerId == ownerId) {
         selectedFilters.ownerId = null;
     } else {
-
         selectedFilters.ownerId = ownerId;
     }
 }
@@ -254,20 +323,16 @@ function selectedStatus(status) {
     if (selectedFilters.status == status) {
         selectedFilters.status = null;
     } else {
-
         selectedFilters.status = status;
     }
-   
 }
 
 function selectedPriority(priority) {
     if (selectedFilters.priority == priority) {
         selectedFilters.priority = null;
     } else {
-
         selectedFilters.priority = priority;
     }
-    
 }
 
 function clearAllFilters() {
@@ -278,9 +343,9 @@ function clearAllFilters() {
     selectedFilters.priority = null;
 
     // Clear advanced filters
-    selectedColumn.value = ''; // or null, depending on how you want to reset
-    selectedCondition.value = ''; // or null
-    selectedValue.value = ''; // or null
+    selectedColumn.value = ""; // or null, depending on how you want to reset
+    selectedCondition.value = ""; // or null
+    selectedValue.value = ""; // or null
 }
 
 console.log("board tasks and filtered tasks", board.tasks, filteredTasks);
@@ -407,22 +472,30 @@ const setOwner = async (userId, taskId) => {
 const setStatus = async (status, taskId) => {
     console.log("status", status);
     try {
+        // Make the API request to update the task status
         await axios.patch(`/api/tasks/${taskId}`, {
             status: status,
         });
+
+        // Loop through workspaces and boards to find the correct task
         user.value.workspaces.forEach((workspace) => {
             workspace.boards.forEach((board) => {
-                const task = board.tasks.find((task) => task.id === taskId);
-                if (task) {
-                    task.status = status;
+                const taskIndex = board.tasks.findIndex((task) => task.id === taskId);
+                if (taskIndex !== -1) {
+                    // Use Object.assign to update the task status
+                    board.tasks[taskIndex] = Object.assign({}, board.tasks[taskIndex], { status });
                 }
             });
         });
+
+        // Save the updated user data to local storage
         localStorage.setItem("user", JSON.stringify(user.value));
+
     } catch (error) {
         console.error("Error updating task status:", error);
     }
 };
+
 const setPriority = async (priority, taskId) => {
     try {
         await axios.patch(`/api/tasks/${taskId}`, {
@@ -706,7 +779,7 @@ watch(
     (newBoardId) => {
         if (newBoardId) {
             boardName.value = newBoardId;
-             workSpace.value = route.query.workSpace;
+            workSpace.value = route.query.workSpace;
             console.log("hello00000", workSpace);
             fetchBoard(workSpace, boardName);
         }
@@ -853,9 +926,7 @@ const totalBudget = computed(() => {
 const enableEditing = () => {
     isEditing.value = true;
 };
-const clearInput = () => {
-    addTask.value = ""; // Clear the input field content
-};
+
 
 const disableEditing = () => {
     isEditing.value = false;
@@ -864,8 +935,6 @@ const disableEditing = () => {
 const showSide = (val) => {
     side.value = val;
 };
-
-
 
 watch(
     filteredUpdates,
@@ -954,7 +1023,8 @@ const handleClickOutside = (event) => {
             showHide.value ||
             showReplyInput.value ||
             activateSearch.value ||
-            filterField.value == "task_name" || showFilter)
+            filterField.value == "task_name" ||
+            showFilter)
     ) {
         hidesideDetail();
     }
@@ -1638,15 +1708,16 @@ onUnmounted(() => {
                 </div>
                 <div class="my-4 flex">
                     <div class="flex items-center bg-blue-600 w-fit rounded-md">
-                        <div
-                            class="p-2 py-1 text-white text-sm border-r border-gray-600 hover:bg-blue-700 rounded-md cursor-pointer"
-                        >
-                            New task
-                        </div>
-                        <i
-                            class="fa fa-chevron-down p-2 py-1 text-xs text-white hover:bg-blue-700 rounded-md cursor-pointer"
-                        ></i>
-                    </div>
+    <div
+      @click="newTaskName = 'New Task'; handleNewTask();"
+      class="p-2 py-1 text-white text-sm border-r border-gray-600 hover:bg-blue-700 rounded-md cursor-pointer"
+    >
+      New task
+    </div>
+    <i
+      class="fa fa-chevron-down p-2 py-1 text-xs text-white hover:bg-blue-700 rounded-md cursor-pointer"
+    ></i>
+  </div>
                     <div
                         v-if="!activateSearch"
                         @click="
@@ -1727,7 +1798,12 @@ onUnmounted(() => {
                         <div
                             :class="{
                                 'bg-blue-200 border-solid border-r-2':
-                                    showFilter || selectedFilters.taskName ||selectedFilters.ownerId || selectedFilters.priority || selectedFilters.status || selectedColumn,
+                                    showFilter ||
+                                    selectedFilters.taskName ||
+                                    selectedFilters.ownerId ||
+                                    selectedFilters.priority ||
+                                    selectedFilters.status ||
+                                    selectedColumn,
                             }"
                             class="flex py-1 items-center pr-2 group-hover:border-solid group-hover:border-r-2 group-hover:border-white"
                         >
@@ -1738,7 +1814,13 @@ onUnmounted(() => {
                         <i
                             :class="{
                                 'bg-blue-200 ml-0 group-hover:bg-blue-200':
-                                    showFilter || showFilter || selectedFilters.taskName ||selectedFilters.ownerId || selectedFilters.priority || selectedFilters.status || selectedColumn,
+                                    showFilter ||
+                                    showFilter ||
+                                    selectedFilters.taskName ||
+                                    selectedFilters.ownerId ||
+                                    selectedFilters.priority ||
+                                    selectedFilters.status ||
+                                    selectedColumn,
                                 'group-hover:bg-gray-300': !showFilter,
                             }"
                             @click.stop="
@@ -1768,7 +1850,8 @@ onUnmounted(() => {
                                         Showing {{ filteredTasks.length }} tasks
                                     </h1>
                                 </div>
-                                <h1 @click.stop="clearAllFilters"
+                                <h1
+                                    @click.stop="clearAllFilters"
                                     class="mr-10 font-extralight text-gray-600 cursor-pointer p-3 hover:bg-gray-100 rounded-md h-fit"
                                 >
                                     Clear All
@@ -1778,7 +1861,7 @@ onUnmounted(() => {
                             <div
                                 v-if="!advancedFilter"
                                 @click.stop
-                                class="m-6 flex overflow-x-auto "
+                                class="m-6 flex overflow-x-auto"
                             >
                                 <!-- Task Name -->
                                 <div class="ml-6">
@@ -1798,11 +1881,11 @@ onUnmounted(() => {
                                                 'bg-blue-200':
                                                     selectedFilters.taskName ===
                                                     task.task_name,
-                                                    'bg-gray-100 hover:bg-gray-200' : selectedFilters.taskName !==
+                                                'bg-gray-100 hover:bg-gray-200':
+                                                    selectedFilters.taskName !==
                                                     task.task_name,
                                             }"
-                                            class="p-2 w-44 py-2  my-1 text-sm rounded-md"
-                                            
+                                            class="p-2 w-44 py-2 my-1 text-sm rounded-md"
                                         >
                                             {{ task.task_name }}
                                         </h1>
@@ -1821,12 +1904,13 @@ onUnmounted(() => {
                                     >
                                         <div
                                             @click="selectedOwner(user.id)"
-                                            class="flex relative items-center  cursor-pointer my-1 p-2 w-44 py-1 mb-2 "
+                                            class="flex relative items-center cursor-pointer my-1 p-2 w-44 py-1 mb-2"
                                             :class="{
                                                 'bg-blue-200':
                                                     selectedFilters.ownerId ===
                                                     user.id,
-                                                    'bg-gray-100 hover:bg-gray-200' : selectedFilters.ownerId !==
+                                                'bg-gray-100 hover:bg-gray-200':
+                                                    selectedFilters.ownerId !==
                                                     user.id,
                                             }"
                                         >
@@ -1850,12 +1934,13 @@ onUnmounted(() => {
                                     >
                                         <div
                                             @click="selectedStatus('Completed')"
-                                            class="p-2 w-44 py-2 flex items-center  my-1 text-sm rounded-md"
+                                            class="p-2 w-44 py-2 flex items-center my-1 text-sm rounded-md"
                                             :class="{
                                                 'bg-blue-200':
                                                     selectedFilters.status ===
                                                     'Completed',
-                                                    'bg-gray-100 hover:bg-gray-200' : selectedFilters.status !==
+                                                'bg-gray-100 hover:bg-gray-200':
+                                                    selectedFilters.status !==
                                                     'Completed',
                                             }"
                                         >
@@ -1868,12 +1953,13 @@ onUnmounted(() => {
                                             @click="
                                                 selectedStatus('In Progress')
                                             "
-                                            class="p-2 w-44 py-2 flex items-center  my-1 text-sm rounded-md"
+                                            class="p-2 w-44 py-2 flex items-center my-1 text-sm rounded-md"
                                             :class="{
                                                 'bg-blue-200':
                                                     selectedFilters.status ===
                                                     'In Progress',
-                                                    'bg-gray-100 hover:bg-gray-200' : selectedFilters.status !==
+                                                'bg-gray-100 hover:bg-gray-200':
+                                                    selectedFilters.status !==
                                                     'In Progress',
                                             }"
                                         >
@@ -1884,12 +1970,13 @@ onUnmounted(() => {
                                         </div>
                                         <div
                                             @click="selectedStatus('Stuck')"
-                                            class="p-2 pr-14 py-2 flex items-center  my-1 text-sm rounded-md"
+                                            class="p-2 pr-14 py-2 flex items-center my-1 text-sm rounded-md"
                                             :class="{
                                                 'bg-blue-200':
                                                     selectedFilters.status ===
                                                     'Stuck',
-                                                    'bg-gray-100 hover:bg-gray-200' : selectedFilters.status !==
+                                                'bg-gray-100 hover:bg-gray-200':
+                                                    selectedFilters.status !==
                                                     'Stuck',
                                             }"
                                         >
@@ -1899,15 +1986,17 @@ onUnmounted(() => {
                                             <h1>Stuck</h1>
                                         </div>
                                         <div
-                                            @click="selectedStatus('Not Started')"
-                                            class="p-2 pr-14 py-2 flex items-center  my-1 text-sm rounded-md"
+                                            @click="
+                                                selectedStatus('Not Started')
+                                            "
+                                            class="p-2 pr-14 py-2 flex items-center my-1 text-sm rounded-md"
                                             :class="{
                                                 'bg-blue-200':
                                                     selectedFilters.status ===
                                                     'Not Started',
-                                                    'bg-gray-100 hover:bg-gray-200' : selectedFilters.status !==
+                                                'bg-gray-100 hover:bg-gray-200':
+                                                    selectedFilters.status !==
                                                     'Not Started',
-                                                    
                                             }"
                                         >
                                             <span
@@ -1927,15 +2016,17 @@ onUnmounted(() => {
                                         class="overflow-y-auto h-44 overflow-x-hidden"
                                     >
                                         <div
-                                            @click="selectedPriority('Critical')"
-                                            class="p-2 w-44 py-2 flex items-center  my-1 text-sm rounded-md"
+                                            @click="
+                                                selectedPriority('Critical')
+                                            "
+                                            class="p-2 w-44 py-2 flex items-center my-1 text-sm rounded-md"
                                             :class="{
                                                 'bg-blue-200':
                                                     selectedFilters.priority ===
                                                     'Critical',
-                                                    'bg-gray-100 hover:bg-gray-200' : selectedFilters.priority !==
+                                                'bg-gray-100 hover:bg-gray-200':
+                                                    selectedFilters.priority !==
                                                     'Critical',
-                                                    
                                             }"
                                         >
                                             <span
@@ -1945,14 +2036,14 @@ onUnmounted(() => {
                                         </div>
                                         <div
                                             @click="selectedPriority('High')"
-                                            class="p-2 w-44 py-2 flex items-center  my-1 text-sm rounded-md"
+                                            class="p-2 w-44 py-2 flex items-center my-1 text-sm rounded-md"
                                             :class="{
                                                 'bg-blue-200':
                                                     selectedFilters.priority ===
-        'High',
-        'bg-gray-100 hover:bg-gray-200' : selectedFilters.priority !==
-        'High',
-                                                    
+                                                    'High',
+                                                'bg-gray-100 hover:bg-gray-200':
+                                                    selectedFilters.priority !==
+                                                    'High',
                                             }"
                                         >
                                             <span
@@ -1962,12 +2053,13 @@ onUnmounted(() => {
                                         </div>
                                         <div
                                             @click="selectedPriority('Medium')"
-                                            class="p-2 pr-14 py-2 flex items-center  my-1 text-sm rounded-md"
+                                            class="p-2 pr-14 py-2 flex items-center my-1 text-sm rounded-md"
                                             :class="{
                                                 'bg-blue-200':
                                                     selectedFilters.priority ===
                                                     'Medium',
-                                                    'bg-gray-100 hover:bg-gray-200' :  selectedFilters.priority !==
+                                                'bg-gray-100 hover:bg-gray-200':
+                                                    selectedFilters.priority !==
                                                     'Medium',
                                             }"
                                         >
@@ -1978,12 +2070,13 @@ onUnmounted(() => {
                                         </div>
                                         <div
                                             @click="selectedPriority('Low')"
-                                            class="p-2 pr-14 py-2 flex items-center  my-1 text-sm rounded-md"
+                                            class="p-2 pr-14 py-2 flex items-center my-1 text-sm rounded-md"
                                             :class="{
                                                 'bg-blue-200':
                                                     selectedFilters.priority ===
                                                     'Low',
-                                                    'bg-gray-100 hover:bg-gray-200' : selectedFilters.priority !==
+                                                'bg-gray-100 hover:bg-gray-200':
+                                                    selectedFilters.priority !==
                                                     'Low',
                                             }"
                                         >
@@ -2123,7 +2216,12 @@ onUnmounted(() => {
                                     "
                                     class="text-sm text-gray-500 hover:bg-gray-100 p-1"
                                 >
-                                    Switch to {{advancedFilter?  "Quick filters":"Advanced filters"}}
+                                    Switch to
+                                    {{
+                                        advancedFilter
+                                            ? "Quick filters"
+                                            : "Advanced filters"
+                                    }}
                                 </h1>
                             </div>
                         </div>
@@ -3836,12 +3934,11 @@ onUnmounted(() => {
                                     <input
                                         type="text"
                                         @focus="clearInput"
-                                        v-model="addTask"
-                                        :placeholder="
-                                            addTask ? '' : '+ Add task'
-                                        "
+                                        v-model="newTaskName"
+                                        @keyup.enter="checkAndCreateTask"
+                                        placeholder="+ Add task"
                                         ref="editableInput"
-                                        class="border-0 px-0 focus: h-fit border-gray-300 text-sm rounded p-2 py-1 w-full"
+                                        class="border-0 px-0 focus:h-fit border-gray-300 text-sm rounded p-2 py-1 w-full"
                                     />
                                 </td>
                             </tr>

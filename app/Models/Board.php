@@ -5,12 +5,12 @@ namespace App\Models;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Board extends Model
 {
     use HasFactory;
     protected $fillable = [
-        'workspace_id',
         'folder_id',
         'team',
         'owner',
@@ -40,10 +40,12 @@ public function trashedBy()
     /**
      * Get the workspace that owns the board.
      */
-    public function workspace()
+    public function workspaces()
     {
-        return $this->belongsTo(Workspace::class, 'workspace_id');
+        return $this->belongsToMany(Workspace::class, 'workspace_board', 'board_id', 'workspace_id');
     }
+    
+
 
     /**
      * Get the folder that owns the board.

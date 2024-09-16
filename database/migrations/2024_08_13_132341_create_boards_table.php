@@ -15,8 +15,6 @@ return new class extends Migration
 
         Schema::create('boards', function (Blueprint $table) {
             $table->id();
-            $table->bigInteger('workspace_id')->unsigned();  // Foreign key for projects
-            $table->foreign('workspace_id')->references('id')->on('workspaces')->onUpdate('cascade'); 
             $table->bigInteger('folder_id')->unsigned()->nullable();  
             $table->foreign('folder_id')->references('id')->on('folders')->onUpdate('cascade'); 
             $table->bigInteger('team')->unsigned()->nullable();  // Foreign key for projects

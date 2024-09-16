@@ -77,9 +77,15 @@ class User extends Authenticatable
         return $this->hasMany(Board::class, 'trashed_by');
     }
     public function workspaces()
+{
+    return $this->hasMany(Workspace::class, 'created_by'); // If workspaces are created by the user
+}
+
+    public function notifications()
     {
-        return $this->hasMany(Workspace::class, 'created_by');
+        return $this->hasMany(Notification::class);
     }
+   
     public function readUpdates()
     {
         return $this->belongsToMany(Update::class, 'user_update_read_status')

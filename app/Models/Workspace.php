@@ -2,8 +2,9 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Workspace extends Model
 {
@@ -30,14 +31,17 @@ class Workspace extends Model
     {
         return $this->belongsTo(User::class, 'created_by');
     }
+    
 
     /**
      * Get the boards associated with the workspace.
      */
     public function boards()
     {
-        return $this->hasMany(Board::class, 'workspace_id');
+        return $this->belongsToMany(Board::class, 'workspace_board', 'workspace_id', 'board_id')
+                    ->withPivot('created_at', 'updated_at');
     }
+    
     public function folders()
     {
         return $this->hasMany(Folder::class,'workspace_id');

@@ -1,23 +1,22 @@
-// src/state.js
 import { reactive } from 'vue';
 import axios from 'axios';
 
 const state = reactive({
-  user: null, // Store the authenticated user data here
+  user: {}, // Initialize as an empty object to ensure reactivity
 });
 
 // Function to load the user from local storage
 const loadUserFromStorage = () => {
   const storedUser = localStorage.getItem('user');
   if (storedUser) {
-    state.user = JSON.parse(storedUser); // Update the global state with user data
+    Object.assign(state.user, JSON.parse(storedUser)); // Assign user data reactively
   }
 };
 
 // Function to set the user data directly
 const setUser = (user) => {
-  state.user = user; // Update the global state
-  localStorage.setItem('user', JSON.stringify(user)); // Persist user data to local storage
+  Object.assign(state.user, user); // Update state reactively using Object.assign
+  localStorage.setItem('user', JSON.stringify(state.user)); // Persist user data to local storage
 };
 
 // Function to fetch the user data from the server

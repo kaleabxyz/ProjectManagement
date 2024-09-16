@@ -50,9 +50,10 @@ const showFolderOptions = ref([]);
 
 // Access the user data from the global state
 const user = computed(() => state.state.user);
+const userId = computed(() => state.state.user?.id); // Use a unique key to trigger re-render
 console.log("🚀 ~ user:", user.value);
 const selectedWorkspace = ref(user.value.workspaces[0]); // Initially select "Main workspace"
-console.log("🚀 ~ selected workspace:", selectedWorkspace.value.id)
+
 user.value.workspaces.forEach(workspace => {
     console.log("🚀 ~ workspace:", workspace);
     if (workspace.boards) {
@@ -68,10 +69,12 @@ user.value.workspaces.forEach(workspace => {
     }
 });
 const filteredBoards = computed(() => {
-            const query = searchQuery.value.toLowerCase();
+    const query = searchQuery.value.toLowerCase();
+    
             return selectedWorkspace.value.boards.filter(board => 
                 board.board_name.toLowerCase().includes(query)
             );
+            
         });
 
         const filteredWorkspaces = computed(() => {
@@ -167,46 +170,59 @@ const createFolder = async () => {
   }
 };
 const createBoard = async () => {
-    const boardData = {
-  board_name: board_name.value,
-  workspace_id: selectedWorkspace.value.id,
-  owner: user.value.id,
-  is_trashed: false,
-  is_archived: false,
-  trashed_by: null,
-  folder_id: null,
-  description: null,
-  trashed_at: null,
-  is_favorite: false,
-  created_by: user.value.id,
-};
+  const boardData = {
+    board_name: board_name.value,
+    owner: user.value.id,
+    is_trashed: false,
+    is_archived: false,
+    trashed_by: null,
+    folder_id: null,
+    description: null,
+    trashed_at: null,
+    is_favorite: false,
+    created_by: user.value.id,
+    workspace_id: selectedWorkspace.value.id, // This is used to associate the board with the workspace in the backend
+  };
 
-// Log the form data to the console before making the request
-console.log("🚀 ~ Form Data:", boardData);
-    try {
-        const response = await axios.post('/api/boards', boardData);
-        console.log("🚀 ~ Response Data:", response.data);
-        board_name.value = 'New Board';
-      
+  console.log("🚀 ~ Form Data:", boardData);
+
+  try {
+    // Send the board creation request
+    const response = await axios.post('/api/boards', boardData);
+    console.log("🚀 ~ Response Data:", response.data);
+
+    const createdBoardId = response.data.board.id;
+
+    // Fetch the newly created board with its relationships
+    const { data: newBoard } = await axios.get(`/api/boards/${createdBoardId}`, {
+      params: {
+        with: ['owner', 'team', 'tasks'] // Include necessary relationships
+      },
+    });
     
-        const newBoard = response.data.board;
-    // Push the new board into the appropriate workspace
+
+    // Find the workspace where the new board belongs
     const workspace = user.value.workspaces.find(w => w.id === selectedWorkspace.value.id);
+
     if (workspace) {
+      // Push the new board into the workspace's boards array
       workspace.boards.push(newBoard);
     }
 
-    // Optionally, update localStorage
-    localStorage.setItem('user', JSON.stringify(user.value))
-   
-      // Clear input after submission
-    // Reset privacy to default
+    console.log("🚀 ~ Full Response:", workspace);
+    // Update localStorage
+    localStorage.setItem('user', JSON.stringify(user.value));
+      
+    // Reset the board name input and hide the modal
+    board_name.value = 'New Board';
     hideAddWorkspace(); // Close the modal after creation
+
   } catch (error) {
     console.error('Error creating board:', error);
     alert('Failed to create board.');
   }
 };
+
 // Select a workspace
 const selectWorkspace = (workspace) => {
   selectedWorkspace.value = workspace;
@@ -295,6 +311,11 @@ watch(
         boardId.value = newBoardId; // Update reactive reference
     }
 );
+watch(user, (newUser) => {
+    console.log('User data updated:', newUser);
+    selectedWorkspace.value = { ...selectedWorkspace.value };
+}, { deep: true });
+
 
 onMounted(() => {
       const storedUser = localStorage.getItem('user');
@@ -565,15 +586,15 @@ onMounted(() => {
                         </span>
                     </div>
                 </div>
-                
+                <div class = " max-h-[70vh] overflow-y-auto">
                 <div
                     v-if="showFavorites"
-                    v-for="boards in user.teams"
+                    v-for="(boards, index) in filteredBoards"
                     :key="boards.id"
-                    class="group/project relative"
+                    class="group/project relative "
                 >
                 
-                    <router-link v-if="boards.board.is_favorite && boards.board.board_name"
+                    <router-link v-if="boards.is_favorite && boards.board_name"
                     :to="{
         name: 'project',
     params: { boardName: boards.board_name } ,// Ensure `boards.board.name` is defined
@@ -586,7 +607,7 @@ onMounted(() => {
                                     ? 'bg-blue-100'
                                     : 'bg-gray-200'
                             "
-                            class="flex my-2 mx-1 items-center group-hover/project:bg-blue-100 cursor-pointer p-2 rounded-md"
+                            class="flex my-1 mx-1 items-center group-hover/project:bg-blue-100 cursor-pointer p-2 rounded-md"
                         >
                           
                             <svg
@@ -696,6 +717,7 @@ onMounted(() => {
                         ></i>
                     </span>
                 </div>
+            </div>
                 <div v-if="!showFavorites" class="flex flex-col w-fit">
                     <div class="flex mt-2 w-fit">
                         <div class="flex relative items-center mr-4">
@@ -1075,16 +1097,18 @@ onMounted(() => {
                                     
                                 </div>
                     </div>
+                    <div :key="userId"
+                    class = " max-h-[70vh] overflow-y-auto ">{{console.log('filtered Boards after pivot',filteredBoards)}}
                     <div
                         v-for="(boards, index) in filteredBoards"
                         :key="boards.id"
                         class="group/project relative"
                     >
-                        <router-link v-if = "boards.workspace_id == selectedWorkspace.id"
+                        <router-link v-if = "boards?.pivot.workspace_id == selectedWorkspace.id"
                         :to="{
                                 name: 'project',
     params: { boardName: boards.board_name },
-   query: {workSpace: boards.workspace_id} // Pass boardName
+   query: {workSpace: boards.pivot.workspace_id} // Pass boardName
                              }"
                         >{{ console.log("hellsssasdsadasdasdo", boards.board_name) }}
                             <div
@@ -1408,6 +1432,7 @@ onMounted(() => {
                             ></i>
                         </span>
                     </div>
+                </div>
                 </div>
             </div>
         

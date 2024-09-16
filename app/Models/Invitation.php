@@ -26,7 +26,7 @@ class Invitation extends Model
      */
     public function inviter()
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class,'inviter');
     }
     public function invited()
     {
@@ -38,5 +38,13 @@ class Invitation extends Model
     public function team()
     {
         return $this->belongsTo(Team::class);
+    }
+    public function board()
+    {
+        return $this->belongsTo(Board::class,'board');
+    }
+    public function notification()
+    {
+        return $this->hasOne(Notification::class);
     }
 }

@@ -1,11 +1,12 @@
 <?php
 
 namespace App\Http\Controllers;
-use Illuminate\Support\Facades\Log;
-use App\Models\Board;
 use App\Models\Team;
+use App\Models\Board;
+use App\Models\Workspace;
 use App\Models\TeamMember;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class BoardController extends Controller
 {
@@ -13,10 +14,29 @@ class BoardController extends Controller
      * Display a listing of the boards.
      */
     public function index()
-    {
-        $boards = Board::all();
-        return response()->json($boards);
-    }
+{
+    // Fetch boards with related data including the pivot relationships
+    $boards = Board::with([
+        'workspaces' => function ($query) {
+            $query->withPivot('created_at','workspace_id', 'board_id',); // If you need any pivot data like 'created_at'
+        },
+        'owner:id,user_name,email,profile_picture_url',
+        'creator:id,user_name,email,profile_picture_url',
+        'team',
+        'team.members',
+        'tasks' => function ($query) {
+            $query->withCount('updates');
+        },
+        'tasks.SubTasks',
+        'tasks.assignedUser:id,user_name,email,profile_picture_url',
+        'discussions' => function ($query) {
+            $query->with(['user:id,user_name,email,profile_picture_url', 'task:id,task_name']);
+        }
+    ])->get();
+
+    return response()->json($boards);
+}
+
     public function create()
     {
         // You may not need this for an API. For web apps, return a view.
@@ -39,14 +59,17 @@ class BoardController extends Controller
     // Log the validated data
     Log::info('Validated Board Data:', $validatedData);
     
-    // Create a new board
+    // Create a new board (without workspace_id since it's now in the pivot table)
     $board = Board::create([
-        'workspace_id' => $request->workspace_id,
         'board_name' => $request->board_name,
         'owner' => $request->owner,
         'created_by' => $request->created_by ?? $request->owner, // Default to owner if not provided
         // Assuming the team ID is added later
     ]);
+
+    // Attach the board to the workspace using the pivot table
+    $workspace = Workspace::find($request->workspace_id);
+    $workspace->boards()->attach($board->id);
 
     // Create a new team and associate it with the created board
     $team = Team::create([
@@ -56,7 +79,7 @@ class BoardController extends Controller
     ]);
 
     // Update the board with the correct team ID (if necessary)
-    $board->update(['team' => $team->id]); // This assumes the board has a 'team' column to reference the team ID
+    $board->update(['team' => $team->id]); // Assuming the board has a 'team' column to reference the team ID
 
     // Add the board creator as the first team member
     TeamMember::create([
@@ -75,10 +98,43 @@ class BoardController extends Controller
      * Display the specified board.
      */
     public function show($id)
-    {
-        $board = Board::with(['owner', 'createdBy', 'workspace', 'folder', 'team', 'trashedBy'])->findOrFail($id);
-        return response($board);
-    }
+{
+    $board = Board::with([
+        'workspaces' => function ($query) {
+            // Fetch pivot data like workspace_id, board_id, and created_at
+            $query->withPivot('workspace_id', 'board_id', 'created_at', 'updated_at');
+        },
+        'owner:id,user_name,email,profile_picture_url',
+        'creator:id,user_name,email,profile_picture_url',
+        'team',
+        'team.members',
+        'tasks' => function ($query) {
+            $query->withCount('updates');
+        },
+        'tasks.SubTasks',
+        'tasks.assignedUser:id,user_name,email,profile_picture_url',
+        'discussions' => function ($query) {
+            $query->with(['user:id,user_name,email,profile_picture_url', 'task:id,task_name']);
+        }
+    ])->findOrFail($id);
+
+    // Extract pivot data and add it directly to the board object
+    $board->workspaces->each(function ($workspace) use (&$board) {
+        $board->pivot = [
+            'workspace_id' => $workspace->pivot->workspace_id,
+            'board_id' => $workspace->pivot->board_id,
+            'created_at' => $workspace->pivot->created_at,
+            'updated_at' => $workspace->pivot->updated_at
+        ];
+    });
+
+    // Optionally, remove the workspaces relationship if not needed anymore
+    unset($board->workspaces);
+
+    return response()->json($board);
+}
+
+    
 
     /**
      * Update the specified board in storage.

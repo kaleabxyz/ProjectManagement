@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
 class UserController extends Controller
@@ -24,25 +25,26 @@ class UserController extends Controller
     public function fetchUser()
 {
     $user = Auth::user()->load([
-        'workspaces',
-    'workspaces.folders',
-            'workspaces.boards',
-            'workspaces.boards.owner:id,user_name,email,profile_picture_url',
-            'workspaces.boards.creator:id,user_name,email,profile_picture_url',
-            'workspaces.boards.team',
-            'workspaces.boards.team.members',
-            'workspaces.boards.tasks' => function ($query) {
-        $query->withCount('updates'); // Add this line to include update counts
-    },
-            'workspaces.boards.tasks.SubTasks',
-
-            'workspaces.boards.tasks.assignedUser:id,user_name,email,profile_picture_url',
-            'workspaces.boards.discussions.board:id,board_name',    
-            'workspaces.boards.discussions', 
-            'workspaces.boards.discussions.task:id,task_name', 
-            'workspaces.boards.discussions.user:id,user_name,email,profile_picture_url',   
-            'teamMembers', 
-        // Add more relations if needed
+        'workspaces.boards' => function ($query) {
+            $query->with([
+                'owner:id,user_name,email,profile_picture_url',
+                'creator:id,user_name,email,profile_picture_url',
+                'team',
+                'team.members',
+                'tasks' => function ($query) {
+                    $query->withCount('updates'); // Include update counts
+                },
+                'tasks.SubTasks',
+                'tasks.assignedUser:id,user_name,email,profile_picture_url',
+                'discussions' => function ($query) {
+                    $query->with([
+                        'user:id,user_name,email,profile_picture_url',
+                        'task:id,task_name'
+                    ]);
+                }
+            ]);
+        },
+        'teamMembers'
     ]);
 
     return response()->json(['user' => $user], 200);
@@ -184,58 +186,74 @@ class UserController extends Controller
     }
     public function login(Request $request)
 {
-$credentials = $request->only('email', 'password');
-try {
-$token = Auth::attempt($credentials);
-if (!$token) {
-return response()->json(['error' => 'Invalid Credentials'], 400);
-}
-}
-catch (Exception $e) {
-return response()->json(['error' => 'Could not create token'], 500);
-}
-$user = Auth::user()->load([
-    'workspaces',
-    'workspaces.folders',
-            'workspaces.boards',
-            'workspaces.boards.owner:id,user_name,email,profile_picture_url',
-            'workspaces.boards.creator:id,user_name,email,profile_picture_url',
-            'workspaces.boards.team',
-            'workspaces.boards.team.members',
-            'workspaces.boards.tasks' => function ($query) {
-        $query->withCount('updates'); // Add this line to include update counts
-    },
-            'workspaces.boards.tasks.SubTasks',
+    $credentials = $request->only('email', 'password');
+    
+    try {
+        $token = Auth::attempt($credentials);
+        if (!$token) {
+            return response()->json(['error' => 'Invalid Credentials'], 400);
+        }
+    } catch (Exception $e) {
+        return response()->json(['error' => 'Could not create token'], 500);
+    }
+    
+    // Enable query log
+    DB::enableQueryLog();
+    
+    $user = Auth::user()->load([
+        'workspaces' => function ($query) {
+            $query->with([
+                'boards' => function ($query) {
+                    $query->with([
+                        'owner:id,user_name,email,profile_picture_url',
+                        'creator:id,user_name,email,profile_picture_url',
+                        'team',
+                        'team.members',
+                        'tasks' => function ($query) {
+                            $query->withCount('updates');
+                        },
+                        'tasks.SubTasks',
+                        'tasks.assignedUser:id,user_name,email,profile_picture_url',
+                        'discussions' => function ($query) {
+                            $query->with([
+                                'user:id,user_name,email,profile_picture_url',
+                                'task:id,task_name'
+                            ]);
+                        }
+                    ]);
+                }
+            ]);
+        },
+        'teamMembers'
+    ]);
 
-            'workspaces.boards.tasks.assignedUser:id,user_name,email,profile_picture_url',
-            'workspaces.boards.discussions.board:id,board_name',    
-            'workspaces.boards.discussions', 
-            'workspaces.boards.discussions.task:id,task_name', 
-            'workspaces.boards.discussions.user:id,user_name,email,profile_picture_url',   
-            'teamMembers', 
-]);
-     // Will display user data in the browser and stop further execution
-     $user->workspaces->each(function ($workspace) use ($user) {
+    // Log queries
+    $queries = DB::getQueryLog();
+    Log::info('SQL Queries: ' . print_r($queries, true));
+    
+    // Update discussions with user role
+    $user->workspaces->each(function ($workspace) use ($user) {
         $workspace->boards->each(function ($board) use ($user) {
-            // Fetch the role of the user in this board's team
             $teamMember = $user->teamMembers->where('team_id', $board->team_id)->first();
             $userRole = $teamMember ? $teamMember->role : 'Not Assigned';
 
-            // Assign role to discussions
             $board->discussions->each(function ($discussion) use ($userRole) {
                 $discussion->user_role = $userRole;
             });
         });
     });
-return response()->json([
-'status' => 'success',
-'user' => $user,
-'authorisation' => [
-'token' => $token,
-'type' => 'bearer',
-]
-]);
+
+    return response()->json([
+        'status' => 'success',
+        'user' => $user,
+        'authorisation' => [
+            'token' => $token,
+            'type' => 'bearer',
+        ]
+    ]);
 }
+
+    
 public function searchUsers(Request $request)
 {
     $email = $request->query('email');

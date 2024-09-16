@@ -25,10 +25,7 @@ class TaskController extends Controller
         // Validate the incoming request data
         $validatedData = $request->validate([
             'task_name' => 'required|string|max:255',
-            'status' => 'nullable|string|in:In Progress,Completed,Pending',
-            'selectStatus' => 'boolean',
-            'selectOwner' => 'boolean',
-            'selectPriority' => 'boolean',
+            'status' => 'nullable|string|in:In Progress,Completed,Not Started',
             'showUpdates' => 'boolean',
             'priority' => 'nullable|string|in:Critical,Low,Medium,High',
             'due_date' => 'nullable|date',

@@ -19,10 +19,12 @@ return new class extends Migration
             $table->foreign('user_id')->references('id')->on('users')->onUpdate('cascade')->onDelete('cascade');
             $table->bigInteger('icon');
             $table->text('body');
-            $table->bigInteger('action_url');
-            $table->dateTime('created_at');
+            $table->morphs('notifiable');
+            $table->unsignedBigInteger('invitation_id')->nullable();
+            $table->foreign('invitation_id')->references('id')->on('invitations')->onDelete('cascade');
             $table->boolean('read')->default(false);
             $table->index(['user_id', 'created_at']);
+            $table->timestamps();
         });
 
         Schema::enableForeignKeyConstraints();
