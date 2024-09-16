@@ -6,6 +6,7 @@ import Sidebar from "@/Components/Sidebar.vue";
 import SideDetail from "@/Components/SideDetail.vue";
 import TextInput from "@/Components/TextInput.vue";
 import axios from "axios";
+import { useUserStore } from '@/Stores/userStore';
 import { useRoute } from "vue-router";
 import state from "../state.js";
 
@@ -93,7 +94,8 @@ const selectedFilters = reactive({
 
 //previous
 
-const user = computed(() => state.state.user);
+const userStore = useUserStore();
+const user = computed(() => userStore.user);
 console.log("🚀 ~ userin project:", user.value);
 
 const fetchTasks = async () => {
@@ -470,30 +472,13 @@ const setOwner = async (userId, taskId) => {
     }
 };
 const setStatus = async (status, taskId) => {
-    console.log("status", status);
-    try {
-        // Make the API request to update the task status
-        await axios.patch(`/api/tasks/${taskId}`, {
-            status: status,
-        });
-
-        // Loop through workspaces and boards to find the correct task
-        user.value.workspaces.forEach((workspace) => {
-            workspace.boards.forEach((board) => {
-                const taskIndex = board.tasks.findIndex((task) => task.id === taskId);
-                if (taskIndex !== -1) {
-                    // Use Object.assign to update the task status
-                    board.tasks[taskIndex] = Object.assign({}, board.tasks[taskIndex], { status });
-                }
-            });
-        });
-
-        // Save the updated user data to local storage
-        localStorage.setItem("user", JSON.stringify(user.value));
-
-    } catch (error) {
-        console.error("Error updating task status:", error);
-    }
+  try {
+    await userStore.updateTaskStatus(taskId, status);
+      console.log('Task status updated and user data saved', user.value);
+      fetchBoard(workSpace, boardName);
+  } catch (error) {
+    console.error('Error updating task status:', error);
+  }
 };
 
 const setPriority = async (priority, taskId) => {
@@ -3262,6 +3247,7 @@ onUnmounted(() => {
                                         </div>
                                     </div>
                                 </SideDetail>
+                                {{console.log("board tasks and filtered tasks", board.tasks, filteredTasks)}}
                                 <div
                                     v-for="(task, index) in filteredTasks"
                                     :key="task.id"

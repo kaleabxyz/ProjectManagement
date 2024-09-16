@@ -15,6 +15,9 @@ import Checkbox from "@/Components/Checkbox.vue";
 import axios from "axios";
 import TextInput from "@/Components/TextInput.vue";
 import { useRouter, useRoute } from "vue-router";
+import { useUserStore } from '@/Stores/userStore.js';
+import { useNotificationsStore } from '@/Stores/notificationsStore.js';
+
 import state from "./../state";
 
 function handleImageError() {
@@ -40,7 +43,7 @@ const replyContent = ref("");
 const currentPassword = ref("");
 const newPassword = ref("");
 const confirmPassword = ref("");
-const allUpdates = ref([]);
+
 const sideDetail = ref(false);
 const inviteVisible = ref(false);
 const updateVisible = ref(false);
@@ -135,9 +138,30 @@ const users = ref([
         lastActive: "Never logged in",
     },
 ]);
-const user = computed(() => state.state.user);
+onMounted(() => {
+    userStore.loadUserFromStorage(); // Optionally load user from storage
+  userStore.fetchUser(); 
+   
+    workSpace.value = route.query.workSpace;
+    boardName.value = route.params.boardName;
+    console.log("board and workspace", workSpace.value);
+    if (boardName) {
+        fetchBoard(workSpace, boardName);
+        fetchBoards();
+    }
+    fetchNotifications();
 
-console.log("🚀 ~ userin navbar:", selectedProfile.value);
+    // Polling every 30 seconds
+    setInterval(() => {
+        fetchNotifications();
+    }, 30000);
+});
+const userStore = useUserStore();
+const notificationsStore = useNotificationsStore();
+const user = computed(() => userStore.user);
+  
+
+console.log("🚀 ~ userin navbar:", user.value);
 const fetchBoard = (workSpace, boardName) => {
 
     user.value.workspaces.forEach((workspace) => {
@@ -151,18 +175,19 @@ const fetchBoard = (workSpace, boardName) => {
         }
     });
 };
-
+const allUpdates = computed(() => {
+  return boards.value.flatMap((board) =>
+    board?.discussions?.length > 0 ? board.discussions : []
+  );
+});
 const fetchBoards = () => {
     // Directly set the boards array by flattening all boards from all workspaces
     boards.value = user.value.workspaces.flatMap(
         (workspace) => workspace.boards
     );
-    allUpdates.value = boards.value.flatMap((board) =>
-        board.discussions && board.discussions.length > 0
-            ? board.discussions
-            : []
-    );
+    
     selectedUpdates.value = allUpdates.value;
+    console.log('selected updates after all updates',allUpdates.value,selectedUpdates.value)
     selectedUpdates.value.forEach((update) => {
         if (!update.reply) {
             showReplyInput.value.push(false);
@@ -196,49 +221,8 @@ const markNotificationAsRead = async (notificationId) => {
 
 const handleAccept = async (notification) => {
   try {
-    const boardId = notification.invitation.board.id; 
-    if (!boardId) {
-      throw new Error('Board ID not found in the invitation');
-    }
-
-    // Accept the invitation
-    await axios.post(`/api/invitations/accept/${notification.invitation.id}`);
-
-    // Fetch the new board data
-    const { data: newBoard } = await axios.get(`/api/boards/${boardId}`, {
-      params: {
-        with: ['owner', 'team', 'tasks'] // Include necessary relationships
-      },
-    });
-
-    // Find the user's main workspace (first created workspace)
-    const workspace = state.state.user.workspaces.sort((a, b) => new Date(a.created_at) - new Date(b.created_at))[0];
-
-    if (workspace) {
-      // Push the new board into the workspace's boards array
-      workspace.boards.push(newBoard);
-
-      // Update the user state with the modified workspace
-      const updatedUser = {
-        ...state.state.user,
-        workspaces: state.state.user.workspaces.map(w =>
-          w.id === workspace.id ? workspace : w
-        ),
-      };
-      
-      // Update state and local storage
-      state.setUser(updatedUser);
-    }
-
-    // Mark the notification as read
-    // (Add code here to mark the notification as read if needed)
-
-    // Refresh the notifications list
-    fetchNotifications();
-    
-    // Optionally, refresh the user data to ensure consistency
-    await state.fetchUser();
-
+      await userStore.acceptInvitation(notification);
+      await notificationsStore.markNotificationAsRead(notification); 
   } catch (error) {
     console.error("Error handling invitation acceptance:", error);
   }
@@ -252,7 +236,7 @@ const handleNoThanks = async (notification) => {
     await axios.post('/api/invitations/decline', {
       invitation_id: notification.invitation.id,
     });
-
+    await notificationsStore.markNotificationAsRead(notification.id);
     // Mark the notification as read using the existing function
    
 
@@ -824,22 +808,7 @@ watch(
         }
     }
 );
-onMounted(() => {
-    
-    workSpace.value = route.query.workSpace;
-    boardName.value = route.params.boardName;
-    console.log("board and workspace", workSpace.value);
-    if (boardName) {
-        fetchBoard(workSpace, boardName);
-        fetchBoards();
-    }
-    fetchNotifications();
 
-    // Polling every 30 seconds
-    setInterval(() => {
-        fetchNotifications();
-    }, 30000);
-});
 </script>
 
 <template>
@@ -1667,7 +1636,7 @@ onMounted(() => {
           No thanks
         </button>
         <button
-          @click="handleAccept(notification)"
+          @click="handleAccept(notification.id)"
           class="bg-blue-600 text-white px-4 py-2 text-sm rounded-lg hover:bg-blue-700"
         >
           Accept

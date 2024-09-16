@@ -75,7 +75,7 @@ public function trashedBy()
         return $this->hasMany(Update::class)
                     ->with(['readers' => function ($query) {
                         $query->where('user_id', Auth::id()); // Filter by current user
-                    }]);
+                    },'board:id,board_name']);
     }
     /**
      * Get the user who trashed the board.

@@ -14,8 +14,9 @@
 import Sidebar from '@/Components/Sidebar.vue'
   import { ref,computed, onMounted } from "vue";
   import { useRoute } from 'vue-router';
+  import { useUserStore } from '@/Stores/userStore.js';
   import state from './state'; 
-
+  const userStore = useUserStore();
 
   const side = ref("active");
 const sideDetail = ref(false);
@@ -32,12 +33,11 @@ const bodyClass = computed(() =>
 );
 // Load the user from local storage and fetch from API if needed
 onMounted(() => {
-      state.loadUserFromStorage(); // Load user data from local storage
-      if (!state.user) {
-        state.fetchUser(); // Fetch user data if not available
-      }
-      console.log('user data', state.state.user);
-    });
+  userStore.loadUserFromStorage(); // Optionally load user from storage
+  userStore.fetchUser(); 
+      
+});
+  
   </script>
   
   <style>

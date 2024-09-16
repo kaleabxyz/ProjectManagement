@@ -14,7 +14,7 @@ class UpdateController extends Controller
      */
     public function index()
     {
-        $updates = Update::with(['user', 'task', 'user.teamMembers'])->get()
+        $updates = Update::with(['user','board', 'task', 'user.teamMembers'])->get()
         ->map(function ($update) {
             // Fetch the role of the user from team_members table
             $teamMember = $update->user->teamMembers->where('board', $update->board_id)->first();

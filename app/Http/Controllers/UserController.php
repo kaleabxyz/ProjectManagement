@@ -217,7 +217,8 @@ class UserController extends Controller
                         'discussions' => function ($query) {
                             $query->with([
                                 'user:id,user_name,email,profile_picture_url',
-                                'task:id,task_name'
+                                'task:id,task_name',
+                                'board:id,board_name'
                             ]);
                         }
                     ]);

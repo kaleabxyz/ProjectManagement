@@ -4,6 +4,7 @@ import TextInput from "@/Components/TextInput.vue";
 import { ref, watch, onMounted, computed } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import axios from "axios";
+import { useUserStore } from '@/Stores/userStore';
 import state from '../state'; // Import the global state
 
 function handleImageError() {
@@ -47,12 +48,15 @@ const showFolderOptions = ref([]);
 
 
 
+onMounted(() => {
+    userStore.fetchUser();
 
+    });
 // Access the user data from the global state
-const user = computed(() => state.state.user);
-const userId = computed(() => state.state.user?.id); // Use a unique key to trigger re-render
-console.log("🚀 ~ user:", user.value);
-const selectedWorkspace = ref(user.value.workspaces[0]); // Initially select "Main workspace"
+const userStore = useUserStore();
+const user = computed(() => userStore.user); // Use a unique key to trigger re-render
+const selectedWorkspace = computed(() => userStore.selectedWorkspace);// Initially select "Main workspace"
+console.log("🚀 ~ user in sidebar:", selectedWorkspace.value);
 
 user.value.workspaces.forEach(workspace => {
     console.log("🚀 ~ workspace:", workspace);
@@ -69,20 +73,18 @@ user.value.workspaces.forEach(workspace => {
     }
 });
 const filteredBoards = computed(() => {
-    const query = searchQuery.value.toLowerCase();
-    
-            return selectedWorkspace.value.boards.filter(board => 
-                board.board_name.toLowerCase().includes(query)
-            );
-            
-        });
+  const query = searchQuery.value.toLowerCase();
+  return selectedWorkspace.value ? selectedWorkspace.value.boards.filter(board =>
+    board.board_name.toLowerCase().includes(query)
+  ) : [];
+});
 
-        const filteredWorkspaces = computed(() => {
-            const query = searchQueryW.value.toLowerCase();
-            return user.value.workspaces.filter(workspace =>
-                workspace.workspace_name.toLowerCase().includes(query)
-            );
-        });
+const filteredWorkspaces = computed(() => {
+  const query = searchQueryW.value.toLowerCase();
+  return userStore.user ? userStore.user.workspaces.filter(workspace =>
+    workspace.workspace_name.toLowerCase().includes(query)
+  ) : [];
+});
 const toggleBoardOption = (index) => {
     showBoardOptions.value[index] = !showBoardOptions.value[index];
 };
@@ -102,126 +104,32 @@ const toggleAdd = (item) => {
 };
 const hideAddWorkspace = () => {
     addVisible.value = '';
+};const createWorkspace = async () => {
+  await userStore.createWorkspace(workspace_name.value);
+  workspace_name.value = 'New Workspace'; // Clear input
+  hideAddWorkspace(); // Close the modal
 };
-const createWorkspace = async () => {
-    try {
-    const response = await axios.post('/api/workspaces', {
-      workspace_name: workspace_name.value,
-        is_trashed: false,
-        is_archived: false,
-        trashed_by: null,
-        trashed_at: null,
-        folder_id: null,
-       
-      is_favorite:false,
-      created_by: user.value.id,
-    });
-        workspace_name.value = 'New Workspace';
-        
-    const newWorkspace = response.data;
-    console.log("🚀 ~ createWorkspace ~ newWorkspace:", newWorkspace)
-    user.value.workspaces.push(newWorkspace);
-    console.log("🚀 ~ createWorkspace ~ user.workspace:", user.value.workspaces);
-    localStorage.setItem('user', JSON.stringify(user.value));
-    
-      // Clear input after submission
-    // Reset privacy to default
-    hideAddWorkspace(); // Close the modal after creation
-  } catch (error) {
-    console.error('Error creating workspace:', error);
-    alert('Failed to create workspace.');
-  }
-};
+
 const createFolder = async () => {
-    const folderData = {
-        folder_name: folder_name.value,
-        workspace_id: selectedWorkspace.value.id,
-        is_trashed: false,
-        is_archived: false,
-        trashed_by: null,
-        trashed_at: null,
-      is_favorite:false,
-    }
-    console.log("🚀 ~ createFolder ~ folder data:", folderData)
-    try {
-    const response = await axios.post('/api/folders', folderData);
-        folder_name.value = 'New Folder';
-        
-    const newFolder = response.data;
-        console.log("🚀 ~ createWorkspace ~ newWorkspace:", newFolder)
-    
-        const workspace = user.value.workspaces.find(w => w.id === selectedWorkspace.value.id);
-        console.log("🚀 ~ createFolder ~ workspace.folders:", workspace.folders)
-        if (workspace) {
-            console.log("🚀 ~ createFolder ~ workspace.folders:", workspace.folders)
-      workspace.folders.push(newFolder);
-    }
-      
-
-    // Optionally, update localStorage
-    localStorage.setItem('user', JSON.stringify(user.value))
-    
-      // Clear input after submission
-    // Reset privacy to default
-    hideAddWorkspace(); // Close the modal after creation
-  } catch (error) {
-    console.error('Error creating workspace:', error);
-    alert('Failed to create workspace.');
+  if (selectedWorkspace.value) {
+    await userStore.createFolder(folder_name.value, selectedWorkspace.value.id);
+    folder_name.value = 'New Folder'; // Clear input
+    hideAddWorkspace(); // Close the modal
+  } else {
+    alert('No workspace selected.');
   }
 };
+
 const createBoard = async () => {
-  const boardData = {
-    board_name: board_name.value,
-    owner: user.value.id,
-    is_trashed: false,
-    is_archived: false,
-    trashed_by: null,
-    folder_id: null,
-    description: null,
-    trashed_at: null,
-    is_favorite: false,
-    created_by: user.value.id,
-    workspace_id: selectedWorkspace.value.id, // This is used to associate the board with the workspace in the backend
-  };
-
-  console.log("🚀 ~ Form Data:", boardData);
-
-  try {
-    // Send the board creation request
-    const response = await axios.post('/api/boards', boardData);
-    console.log("🚀 ~ Response Data:", response.data);
-
-    const createdBoardId = response.data.board.id;
-
-    // Fetch the newly created board with its relationships
-    const { data: newBoard } = await axios.get(`/api/boards/${createdBoardId}`, {
-      params: {
-        with: ['owner', 'team', 'tasks'] // Include necessary relationships
-      },
-    });
-    
-
-    // Find the workspace where the new board belongs
-    const workspace = user.value.workspaces.find(w => w.id === selectedWorkspace.value.id);
-
-    if (workspace) {
-      // Push the new board into the workspace's boards array
-      workspace.boards.push(newBoard);
-    }
-
-    console.log("🚀 ~ Full Response:", workspace);
-    // Update localStorage
-    localStorage.setItem('user', JSON.stringify(user.value));
-      
-    // Reset the board name input and hide the modal
-    board_name.value = 'New Board';
-    hideAddWorkspace(); // Close the modal after creation
-
-  } catch (error) {
-    console.error('Error creating board:', error);
-    alert('Failed to create board.');
+  if (selectedWorkspace.value) {
+    await userStore.createBoard(board_name.value, selectedWorkspace.value.id);
+    board_name.value = 'New Board'; // Clear input
+    hideAddWorkspace(); // Close the modal
+  } else {
+    alert('No workspace selected.');
   }
 };
+
 
 // Select a workspace
 const selectWorkspace = (workspace) => {
@@ -311,23 +219,9 @@ watch(
         boardId.value = newBoardId; // Update reactive reference
     }
 );
-watch(user, (newUser) => {
-    console.log('User data updated:', newUser);
-    selectedWorkspace.value = { ...selectedWorkspace.value };
-}, { deep: true });
 
 
-onMounted(() => {
-      const storedUser = localStorage.getItem('user');
-      if (storedUser) {
-        user.value = JSON.parse(storedUser);
-      } else {
-        fetchUserData();
-      }
-      if (!state.state.user) {
-    state.fetchUser(); // Fetch user data if not available
-  }
-    });
+
 </script>
 
 <template>
@@ -724,9 +618,9 @@ onMounted(() => {
   <div @click="toggleWorkspaces" class="flex  items-center  hover:bg-gray-200">
     <!-- Display Selected Workspace Name -->
     <h3 class="bg-gray-500 w-fit text-white py-0.5 px-1.5 rounded-md text-md">
-      {{ selectedWorkspace.workspace_name.charAt(0) }}
+      {{ selectedWorkspace?.workspace_name.charAt(0) }}
     </h3>
-    <svg v-if ="selectedWorkspace.id == user.workspaces[0]?.id"
+    <svg v-if ="selectedWorkspace?.id == user.workspaces[0]?.id"
       class="absolute left-3.5 top-7"
       width="20px"
       viewBox="0 0 24 24"
@@ -745,7 +639,7 @@ onMounted(() => {
       </g>
     </svg>
     <div class="cursor-pointer flex p-2 pl-1 justify-between w-ful items-center">
-      <h1 class="text-md  font-bold">{{ selectedWorkspace.workspace_name }}</h1>
+      <h1 class="text-md  font-bold">{{ selectedWorkspace?.workspace_name }}</h1>
       <i class="fa fa-chevron-down text-xs ml-4" aria-hidden="true"></i>
       <div
                             @mouseleave="option1 = false"
@@ -1318,7 +1212,7 @@ onMounted(() => {
                         </span>
                     </div>
                     <div
-                        v-for="(boards, index) in selectedWorkspace.folders"
+                        v-for="(boards, index) in selectedWorkspace?.folders"
                         :key="boards.id"
                         class="group/project relative"
                     >
