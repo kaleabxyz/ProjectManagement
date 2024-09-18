@@ -29,7 +29,7 @@ function handleImageError() {
 const boards = ref([]);
 const board = ref([]);
 const userRole = ref("");
-const showMembers = ref(false);
+const showMembers = ref([]);
 const boardName = ref(null);
 const workSpace = ref(null);
 const showReplyInput = ref([]);
@@ -185,6 +185,9 @@ const fetchBoards = () => {
     boards.value = user.value.workspaces.flatMap(
         (workspace) => workspace.boards
     );
+    boards.value.forEach((b) => {
+        showMembers.value.push(false);
+    })
     
     selectedUpdates.value = allUpdates.value;
     console.log('selected updates after all updates',allUpdates.value,selectedUpdates.value)
@@ -197,6 +200,10 @@ const fetchBoards = () => {
     selectedBoard.value = null;
 
     
+};
+
+const toggleShowMembers = (index) => {
+    showMembers.value[index] = !showMembers.value[index];
 };
 const fetchNotifications = async () => {
     try {
@@ -222,7 +229,9 @@ const markNotificationAsRead = async (notificationId) => {
 const handleAccept = async (notification) => {
   try {
       await userStore.acceptInvitation(notification);
-      await notificationsStore.markNotificationAsRead(notification); 
+      await notificationsStore.markNotificationAsRead(notification.id); 
+      fetchBoard(workSpace, boardName);
+      
   } catch (error) {
     console.error("Error handling invitation acceptance:", error);
   }
@@ -253,13 +262,19 @@ const handleNoThanks = async (notification) => {
 
 
 const fetchUsers = async () => {
-    console.log('board name for invite',board.value.board_name,)
+    console.log('board name for invite', board.value.board_name);
     if (email.value.trim()) {
         try {
             const response = await axios.get("/api/search-users", {
                 params: { email: email.value },
             });
-            searchResults.value = response.data;
+            
+            // Fetch team members of the current board
+            const boardTeamMembers = board.value.team.members.map(member => member.email);
+            
+            // Filter out users who are already in the team members list
+            searchResults.value = response.data.filter(user => !boardTeamMembers.includes(user.email));
+            
             console.log("search results", searchResults.value);
 
         } catch (error) {
@@ -269,6 +284,7 @@ const fetchUsers = async () => {
         searchResults.value = [];
     }
 };
+
 const selectUser = (user) => {
     
     console.log("send invite", board.value);
@@ -1117,32 +1133,33 @@ watch(
                                 />
                             </div>
                         </div>
-                        <div class="w-1/2 border rounded-lg p-6">
+                        <div class="w-1/2 border rounded-lg p-6 overflow-y-auto">
                             <h1 class="text-5xl">Teams</h1>
-                            <div v-for="teamBoard in boards">
+                            <div v-for="(teamBoard,index) in boards"
+                            class = "overflow-y-auto">
                                 <div>
                                     {{console.log('teamBoard in boards',teamBoard)}}
                                     <div
-                                        @click.stop="showMembers = !showMembers"
+                                        @click.stop="toggleShowMembers(index)"
                                         class="m-4 w-3/4 p-2 bg-gray-100 cursor-pointer"
                                     >
                                         <div
-                                            class="w-full flex text-xl font-bold justify-between"
+                                            class="w-full flex text-xl font-bold overflow-y-auto  justify-between"
                                         >
                                             {{ teamBoard.board_name }}
                                             <span>
                                                 <i
                                                     :class="{
                                                         'fa-chevron-up':
-                                                            showMembers,
+                                                            showMembers[index],
                                                         'fa-chevron-down':
-                                                            !showMembers,
+                                                            !showMembers[index],
                                                     }"
                                                     class="fa"
                                                 ></i>
                                             </span>
                                         </div>
-                                        <div v-if="showMembers" class="m-2">
+                                        <div v-if="showMembers[index]" class="m-2 overflow-y-auto">
                                             <h1>Members</h1>
                                             <div
                                                 v-for="user in teamBoard.team?.members"
@@ -1636,7 +1653,7 @@ watch(
           No thanks
         </button>
         <button
-          @click="handleAccept(notification.id)"
+          @click="handleAccept(notification)"
           class="bg-blue-600 text-white px-4 py-2 text-sm rounded-lg hover:bg-blue-700"
         >
           Accept
@@ -1673,20 +1690,29 @@ watch(
             ></TextInput>
             <div
                 v-if="searchResults.length"
-                class="border-b py-2 h-20 overflow-y-auto bg-white"
+                
             >
-                <div v-for="user2 in searchResults" :key="user.email">
+                <div v-for="user2 in searchResults" :key="user.email"
+                  
+                >
+                <div class="border-b py-2 h-20 overflow-y-auto bg-white"
+                 v-if="user2.id !== user.id"
+                >
+
+                
                     <div
-                        v-if="user2.id !== user.id"
+                       
                         @click.stop="selectUser(user2)"
-                        class="hover:bg-gray-100 cursor-pointer"
+                        class=" px-2 rounded-md cursor-pointer"
                         :class="{
                             'bg-blue-200': selectedUser?.id == user2.id,
+                            'hover:bg-gray-100': selectedUser?.id !== user2.id,
                         }"
                     >
                         <h2 class="font-semibold">{{ user2.user_name }}</h2>
                         <p class="text-gray-500">{{ user2.email }}</p>
                     </div>
+                </div>
                 </div>
             </div>
             <div class="flex items-center">

@@ -4,16 +4,43 @@ import SideDetail from "@/Components/SideDetail.vue";
 import Navbar from "@/Components/Navbar.vue";
 import TextInput from "@/Components/TextInput.vue";
 import Sidebar from "@/Components/Sidebar.vue";
-import { ref } from "vue";
+import { ref,computed,onMounted } from "vue";
+import { useUserStore } from '@/Stores/userStore';
+import { useNotificationsStore } from '@/Stores/notificationsStore.js';
 
 const side = ref("active");
 const sideDetail = ref(false);
 const showUpdateFeed = ref(true);
 const showRecentVisited = ref(true);
 const showMyWorkspaces = ref(true);
-
+const notifications =ref ([]);
 const showSide = (val) => {
     side.value = val;
+};
+
+onMounted(() => {
+    userStore.loadUserFromStorage(); // Optionally load user from storage
+  userStore.fetchUser(); 
+   
+    
+    
+});
+const userStore = useUserStore();
+const user = computed(() => userStore.user);
+
+
+const selectWorkspace = (workspace) => {
+  userStore.selectWorkspace(workspace);  // Use the Pinia store action
+};
+const fetchNotifications = async () => {
+    try {
+        const response = await axios.get("/api/notifications");
+        notifications.value = response.data;
+        {{ console.log('notification in home',notifications.value) }}
+    } catch (error) {
+        console.error("Error fetching notifications", error);
+    }
+    
 };
 </script>
 
@@ -38,7 +65,7 @@ const showSide = (val) => {
             >
                 <div class="border-b-2 border-solid pb-4 shadow-lg">
                     <h2 class="font-thin mx-16 text-sm">
-                        Good afternoon, kaleab!
+                        Good afternoon, {{user.user_name}}!
                     </h2>
                     <h2 class="font-light mx-16 text-md">
                         Quickly access your recent boards, inbox and workspaces
@@ -181,7 +208,7 @@ const showSide = (val) => {
                             class="fa fa-chevron-down cursor-pointer mr-2 text-xs"
                             aria-hidden="true"
                         ></i>
-                        <h2 class="font-bold text-lg">Update feed(inbox)</h2>
+                        <h2 class="font-bold text-lg">Notifications(inbox)</h2>
                         <h3 class="bg-blue-500 px-2 rounded-full text-white">
                             1
                         </h3>
@@ -193,18 +220,43 @@ const showSide = (val) => {
                         <div
                             class="flex items-center w-full justify-between border-b border-gray-300 pb-4"
                         >
-                            <div class="flex items-center mr-72">
-                                <img
-                                    class="rounded-full w-10 h-10 object-cover mr-4"
-                                    src="/images/logoC.png"
-                                    alt="loading"
-                                />
-
-                                <div>
-                                    <h3 class="text-md">Roy Mann</h3>
-                                    <h3 class="text-md">Hi @kaleab,</h3>
-                                </div>
-                            </div>
+                        <div v-for="notification in notifications.value" :key="notification.id" class="flex mt-4 bg-gray-200 p-3 rounded-lg justify-between">
+    <div class="flex justify-between">
+      <div class="relative flex items-center">
+        <div class="flex flex-col items-center">
+          <h1
+            v-if="!notification.invitation.inviter?.profile_picture_url"
+            class="py-1 w-fit px-2.5 border-2 border-white text-white rounded-full bg-blue-300"
+          >
+            {{
+              notification.invitation.inviter?.user_name
+                ? notification.invitation.inviter.user_name.charAt(0).toUpperCase()
+                : "?"
+            }}
+          </h1>
+          <!-- Show user name -->
+          <h1 class="ml-2">{{ notification.invitation.inviter?.user_name }}</h1>
+        </div>
+        <div class="ml-4 text-base text-md">
+          {{ notification.body }} as a {{ notification.invitation.role }}
+        </div>
+      </div>
+      <div class="items-center flex">
+        <button
+          @click="handleNoThanks(notification)"
+          class="text-black px-4 py-2 rounded-lg hover:bg-gray-300 mr-4 text-sm"
+        >
+          No thanks
+        </button>
+        <button
+          @click="handleAccept(notification)"
+          class="bg-blue-600 text-white px-4 py-2 text-sm rounded-lg hover:bg-blue-700"
+        >
+          Accept
+        </button>
+      </div>
+    </div>
+  </div>
                             <div class="flex items-center">
                                 <i
                                     class="far fa-clock text-xs"
@@ -222,20 +274,21 @@ const showSide = (val) => {
                         ></i>
                         <h2 class="font-bold text-lg">My workspaces</h2>
                     </div>
-                    <div
+                    <div v-for = "workspace in user.workspaces"
                         v-if="showMyWorkspaces"
                         class="flex w-full gap-8 items-center flex-wrap"
                     >
-                        <div
-                            class="flex p-8 w-fit border rounded-lg border-gray-300 mt-4"
+                        <div div v-if = "workspace.is_archived == false && workspace.is_trashed == false"
+                        @click="selectWorkspace(workspace)"
+                            class="flex p-8 w-fit border cursor-pointer hover:shadow-lg rounded-lg border-gray-300 mt-4"
                         >
                             <div class="relative mr-6">
                                 <h3
                                     class="bg-gray-500 w-fit text-white py-2 px-4 rounded-lg text-2xl"
                                 >
-                                    M
+                                {{ workspace.workspace_name[0] }}
                                 </h3>
-                                <svg
+                                <svg v-if ="workspace.id == user.workspaces[0].id"
                                     class="absolute left-8 top-5"
                                     width="34px"
                                     viewBox="0 0 24 24"
@@ -262,7 +315,7 @@ const showSide = (val) => {
                                 </svg>
                             </div>
                             <div class="mr-56">
-                                <h2 class="text-xl">Main workspace</h2>
+                                <h2 class="text-xl">{{workspace.workspace_name}}</h2>
                                 <div class="flex">
                                     <img
                                         class="w-7 mr-2"
@@ -273,28 +326,7 @@ const showSide = (val) => {
                                 </div>
                             </div>
                         </div>
-                        <div
-                            class="flex p-8 w-fit border rounded-lg border-gray-300 mt-4"
-                        >
-                            <div class="relative mr-6">
-                                <h3
-                                    class="bg-gray-500 w-fit text-white py-2 px-4 rounded-lg text-2xl"
-                                >
-                                    N
-                                </h3>
-                            </div>
-                            <div class="mr-56">
-                                <h2 class="text-xl">New workspace</h2>
-                                <div class="flex">
-                                    <img
-                                        class="w-7 mr-2"
-                                        src="images/logoC.png"
-                                        alt=""
-                                    />
-                                    <h2>work managment</h2>
-                                </div>
-                            </div>
-                        </div>
+                        
                     </div>
                 </div>
             </div>

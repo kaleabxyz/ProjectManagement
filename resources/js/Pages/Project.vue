@@ -6,16 +6,20 @@ import Sidebar from "@/Components/Sidebar.vue";
 import SideDetail from "@/Components/SideDetail.vue";
 import TextInput from "@/Components/TextInput.vue";
 import axios from "axios";
-import { useUserStore } from '@/Stores/userStore';
+import { useUserStore } from "@/Stores/userStore";
 import { useRoute } from "vue-router";
 import state from "../state.js";
-
+import DatePicker from "@vuepic/vue-datepicker";
+import "@vuepic/vue-datepicker/dist/main.css";
+import { formatDistanceToNow } from 'date-fns';
 import { ref, reactive, watch, onMounted, computed, onUnmounted } from "vue";
 
 const activateSearch = ref(false);
 const addTask = ref("+ AddTask");
 const advancedFilter = ref(false);
 const board = ref([]);
+const customPosition = () => ({ top: 0});
+
 const showFilter = ref(false);
 const boardName = ref(null);
 const discussionActive = ref(false);
@@ -42,6 +46,7 @@ const selectOwner = ref([]);
 const selectPriority = ref([]);
 const selectStatus = ref([]);
 const selectedBoardId = ref("");
+const selectedDate = ref(null);
 const selectPrioritySub = ref([]);
 const selectStatusSub = ref([]);
 const showAll = ref(false);
@@ -55,7 +60,7 @@ const showFilesS = ref(true);
 const showFullDescription = ref([]);
 const showGroup = ref(true);
 const showHide = ref(false);
-const showLastUpdate = ref(false);
+const showLastUpdate = ref(true);
 const showLastUpdateS = ref(true);
 const showNotes = ref(true);
 const showNotesS = ref(true);
@@ -82,6 +87,8 @@ const teams = ref([]);
 const updateContent = ref("");
 const updates = ref([]);
 const users = ref([]);
+const visibleDatePicker = ref(null); // Track which task's date picker is visible
+
 const workSpace = ref(null);
 
 const workspaces = ref([]);
@@ -92,7 +99,38 @@ const selectedFilters = reactive({
     priority: null,
 });
 
+const showDatePicker = (taskId) => {
+  visibleDatePicker.value = taskId;
+  console.log("🚀 ~ showDatePicker ~ visibleDatePicker.value:", visibleDatePicker.value)
+};
+
+const updateDueDate = async (taskId, date) => {
+  // Hide the date picker after selecting a date
+  visibleDatePicker.value = null;
+
+  // Call a function to update the due date for the task
+  const formattedDate = formatDateForDatabase(new Date(date));
+  userStore.updateTaskField(taskId, 'due_date', formattedDate);
+};
+
+const formatDateForDatabase = (date) => {
+  // Convert date to a MySQL-compatible format: YYYY-MM-DD HH:MM:SS
+  return date.toISOString().slice(0, 19).replace('T', ' ');
+};
+const timeBeforeDue = (updatedAt) => {
+  if (!updatedAt) return 'N/A';
+  const distance = formatDistanceToNow(new Date(updatedAt), { addSuffix: true });
+  return distance;
+};
+const timeSinceLastUpdate = (updatedAt) => {
+    if (!updatedAt) return 'N/A';
+    const distance = formatDistanceToNow(new Date(updatedAt), { addSuffix: true });
+    return distance;
+};
+
 //previous
+
+const formattedDueDate = computed(() => formatDateForDisplay(dueDate.value));
 
 const userStore = useUserStore();
 const user = computed(() => userStore.user);
@@ -148,6 +186,7 @@ const fetchBoard = (workSpace, boardName) => {
         }
     });
 };
+
 const filteredTasks = computed(() => {
     if (!board.value || !board.value.tasks) {
         return []; // Return an empty array if tasks are not available
@@ -238,71 +277,71 @@ const filteredTasks = computed(() => {
 });
 
 const clearInput = () => {
-  newTaskName.value = "";
+    newTaskName.value = "";
 };
 
 // Task creation logic
 const handleNewTask = async () => {
     // If newTaskName is empty, exit
     console.log("Task name for new task:", newTaskName.value);
-  
-  if (!newTaskName.value) return;
 
-  // Define the task data with the entered name
-  const taskData = ref({
-    task_name: newTaskName.value,
-    status: "Not Started",
-    priority: "Medium",
-    due_date: null, // Set due date or keep it null
-    board_id: selectedBoardId.value, // Change this to the appropriate board ID
-    assigned_to: null, // Set this if there is an assigned user
-    budget: 0,
-    notes: "",
-    column: 1, // Set this to the appropriate column if needed
-  });
+    if (!newTaskName.value) return;
 
-  try {
-    // Create the new task via API
-    const response = await axios.post("/api/tasks", taskData.value);
-    const taskId = response.data.task.id; // Get the task ID from the response
-
-    // Fetch the newly created task from the database
-    const { data: newTask } = await axios.get(`/api/tasks/${taskId}`, {
-      params: {
-        with: ['assignedUser', 'subTasks', 'updates'] // Include any necessary relationships
-      }
+    // Define the task data with the entered name
+    const taskData = ref({
+        task_name: newTaskName.value,
+        status: "Not Started",
+        priority: "Medium",
+        due_date: null, // Set due date or keep it null
+        board_id: selectedBoardId.value, // Change this to the appropriate board ID
+        assigned_to: null, // Set this if there is an assigned user
+        budget: 0,
+        notes: "",
+        column: 1, // Set this to the appropriate column if needed
     });
 
-    console.log("Task fetched from database:", newTask);
+    try {
+        // Create the new task via API
+        const response = await axios.post("/api/tasks", taskData.value);
+        const taskId = response.data.task.id; // Get the task ID from the response
 
-    // Find the correct workspace and board
-    user.value.workspaces.forEach((workspace) => {
-      workspace.boards.forEach((board) => {
-        // Check if this is the correct board for the new task
-        if (board.id === taskData.value.board_id) {
-          // Add the fetched task to the board's tasks array
-          board.tasks.push(newTask);
-        }
-      });
-    });
+        // Fetch the newly created task from the database
+        const { data: newTask } = await axios.get(`/api/tasks/${taskId}`, {
+            params: {
+                with: ["assignedUser", "subTasks", "updates"], // Include any necessary relationships
+            },
+        });
 
-    // Update the user data in local storage
-    localStorage.setItem("user", JSON.stringify(user.value));
-    console.log("User data updated in local storage");
+        console.log("Task fetched from database:", newTask);
 
-    // Clear the input field after task creation
-    newTaskName.value = "";
+        // Find the correct workspace and board
+        user.value.workspaces.forEach((workspace) => {
+            workspace.boards.forEach((board) => {
+                // Check if this is the correct board for the new task
+                if (board.id === taskData.value.board_id) {
+                    // Add the fetched task to the board's tasks array
+                    board.tasks.push(newTask);
+                }
+            });
+        });
 
-  } catch (error) {
-    console.error("Error creating task or fetching from database:", error);
-  }
+        // Update the user data in local storage
+        userStore.updateUser(userStore.user);
+        fetchBoard(workSpace, boardName);
+        console.log("User data updated in local storage");
+
+        // Clear the input field after task creation
+        newTaskName.value = "";
+    } catch (error) {
+        console.error("Error creating task or fetching from database:", error);
+    }
 };
 
 // Check if task name is not empty before creating the task
 const checkAndCreateTask = () => {
-  if (newTaskName.value.trim() !== "") {
-    handleNewTask();
-  }
+    if (newTaskName.value.trim() !== "") {
+        handleNewTask();
+    }
 };
 
 function selectTaskName(taskName) {
@@ -445,7 +484,8 @@ const updateTaskName = async () => {
         });
 
         // Save the updated user data to localStorage
-        localStorage.setItem("user", JSON.stringify(user.value));
+        userStore.updateUser(userStore.user);
+        fetchBoard(workSpace, boardName);
 
         console.log("Task name updated successfully in user data.");
     } catch (error) {
@@ -472,13 +512,13 @@ const setOwner = async (userId, taskId) => {
     }
 };
 const setStatus = async (status, taskId) => {
-  try {
-    await userStore.updateTaskStatus(taskId, status);
-      console.log('Task status updated and user data saved', user.value);
-      fetchBoard(workSpace, boardName);
-  } catch (error) {
-    console.error('Error updating task status:', error);
-  }
+    try {
+        await userStore.updateTaskStatus(taskId, status);
+        console.log("Task status updated and user data saved", user.value);
+        fetchBoard(workSpace, boardName);
+    } catch (error) {
+        console.error("Error updating task status:", error);
+    }
 };
 
 const setPriority = async (priority, taskId) => {
@@ -594,7 +634,7 @@ const postUpdate = async (taskId) => {
             }
         });
 
-        localStorage.setItem("user", JSON.stringify(user.value));
+        userStore.updateUser(userStore.user);
         fetchBoard(workSpace, boardName);
 
         // Clear the input content after successful post
@@ -674,7 +714,7 @@ const submitReply = async (updateId, index) => {
         });
 
         // Save the updated user data in local storage
-        localStorage.setItem("user", JSON.stringify(user.value));
+        userStore.updateUser(userStore.user);
         fetchBoard(workSpace, boardName);
         // Clear the input content and hide the reply input
         replyContent.value = "";
@@ -716,7 +756,7 @@ const updateTaskHasReply = async (updateId) => {
         });
 
         // Save the updated user data in local storage
-        localStorage.setItem("user", JSON.stringify(user.value));
+        userStore.updateUser(userStore.user);
         fetchBoard(workSpace, boardName);
     } catch (error) {
         console.error("Error updating task:", error);
@@ -801,6 +841,18 @@ const filteredUpdates = computed(() => {
     // Reverse the updates to show the latest first
     return updates.slice().reverse();
 });
+const updateTaskField = (taskId, field, value) => {
+    console.log('update task field content', taskId,field,value)
+    userStore.updateTaskField(taskId, field, value);
+    fetchBoard(workSpace, boardName);
+};
+const updateTaskBudget = (taskId,newBudget) => {
+    if(newBudget !== ""){
+
+        userStore.updateTaskField(taskId, 'budget', newBudget);
+        fetchBoard(workSpace, boardName);
+    }
+}
 
 function formatDateForDisplay(dateString) {
     const date = new Date(dateString);
@@ -903,7 +955,7 @@ const segmentWidth = computed(() => {
 });
 const totalBudget = computed(() => {
     return filteredTasks.value.reduce(
-        (sum, task) => sum + (task.budget || 0),
+        (sum, task) => sum + (parseFloat(task.budget) || 0),
         0
     );
 });
@@ -911,7 +963,6 @@ const totalBudget = computed(() => {
 const enableEditing = () => {
     isEditing.value = true;
 };
-
 
 const disableEditing = () => {
     isEditing.value = false;
@@ -998,6 +1049,7 @@ const hidesideDetail = () => {
     activateSearch.value = false;
     filterContent.value = "";
     showFilter.value = false;
+    visibleDatePicker.value = null;
 };
 const handleClickOutside = (event) => {
     if (
@@ -1009,7 +1061,7 @@ const handleClickOutside = (event) => {
             showReplyInput.value ||
             activateSearch.value ||
             filterField.value == "task_name" ||
-            showFilter)
+            showFilter || visibleDatePicker !== null)
     ) {
         hidesideDetail();
     }
@@ -1693,16 +1745,19 @@ onUnmounted(() => {
                 </div>
                 <div class="my-4 flex">
                     <div class="flex items-center bg-blue-600 w-fit rounded-md">
-    <div
-      @click="newTaskName = 'New Task'; handleNewTask();"
-      class="p-2 py-1 text-white text-sm border-r border-gray-600 hover:bg-blue-700 rounded-md cursor-pointer"
-    >
-      New task
-    </div>
-    <i
-      class="fa fa-chevron-down p-2 py-1 text-xs text-white hover:bg-blue-700 rounded-md cursor-pointer"
-    ></i>
-  </div>
+                        <div
+                            @click="
+                                newTaskName = 'New Task';
+                                handleNewTask();
+                            "
+                            class="p-2 py-1 text-white text-sm border-r border-gray-600 hover:bg-blue-700 rounded-md cursor-pointer"
+                        >
+                            New task
+                        </div>
+                        <i
+                            class="fa fa-chevron-down p-2 py-1 text-xs text-white hover:bg-blue-700 rounded-md cursor-pointer"
+                        ></i>
+                    </div>
                     <div
                         v-if="!activateSearch"
                         @click="
@@ -2443,7 +2498,7 @@ onUnmounted(() => {
                     <h2 class="text-xl ml-3">To-Do</h2>
                 </div>
 
-                <div v-if="showTable" class="overflow-x-auto rounded-md">
+                <div v-if="showTable" class="overflow-x-auto overflow-y-auto min-h-screen max-h-screen rounded-md">
                     <table
                         class="min-w-full text-left border border-b-0 border-l-0 border-gray-300 border-t-0 text-sm text-gray-500"
                     >
@@ -3247,7 +3302,13 @@ onUnmounted(() => {
                                         </div>
                                     </div>
                                 </SideDetail>
-                                {{console.log("board tasks and filtered tasks", board.tasks, filteredTasks)}}
+                                {{
+                                    console.log(
+                                        "board tasks and filtered tasks",
+                                        board.tasks,
+                                        filteredTasks
+                                    )
+                                }}
                                 <div
                                     v-for="(task, index) in filteredTasks"
                                     :key="task.id"
@@ -3365,12 +3426,7 @@ onUnmounted(() => {
                                                     :key="user.id"
                                                 >
                                                     <div
-                                                        @click="
-                                                            setOwner(
-                                                                user.id,
-                                                                task.id
-                                                            )
-                                                        "
+                                                        @click="updateTaskField(task.id, 'assigned_to', user.id)"
                                                         class="flex relative items-center cursor-pointer w-44 mb-2 hover:bg-gray-100 px-3 py-2"
                                                     >
                                                         <!-- Conditional rendering: show initials if no profile picture -->
@@ -3428,34 +3484,19 @@ onUnmounted(() => {
                                                 class="absolute text-white justify-center flex flex-col items-center z-10 top-10 overflow-y-auto bg-white shadow-lg rounded-lg w-52 max-h-40"
                                             >
                                                 <div
-                                                    @click="
-                                                        setStatus(
-                                                            'Completed',
-                                                            task.id
-                                                        )
-                                                    "
+                                                    @click="updateTaskField(task.id, 'status', 'Completed')"
                                                     class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-green-500 bg-green-400 px-3 py-2"
                                                 >
                                                     <h1>Completed</h1>
                                                 </div>
                                                 <div
-                                                    @click="
-                                                        setStatus(
-                                                            'In Progress',
-                                                            task.id
-                                                        )
-                                                    "
+                                                    @click="updateTaskField(task.id, 'status', 'In Progress')"
                                                     class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-orange-500 bg-orange-400 px-3 py-2"
                                                 >
                                                     <h1>In Progress</h1>
                                                 </div>
                                                 <div
-                                                    @click="
-                                                        setStatus(
-                                                            'Not Started',
-                                                            task.id
-                                                        )
-                                                    "
+                                                @click="updateTaskField(task.id, 'status', 'Not Started')"
                                                     class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-gray-500 bg-gray-400 px-3 py-2"
                                                 >
                                                     <h1>Not Started</h1>
@@ -3468,10 +3509,14 @@ onUnmounted(() => {
                                                 showAll ||
                                                 showTasks
                                             "
-                                            class="px-2 py-1 w-40 flex items-center justify-start border"
+                                            @click.stop="
+                                                        showDatePicker(task.id)
+                                                    "
+                                            class="px-2 py-1 w-40 relative flex flex-col cursor-pointer items-start justify-center border"
                                         >
-                                            <div>
-                                                <i
+                                            <div class="flex relative"
+                                            >
+                                                <i v-if  = "visibleDatePicker !== task.id"
                                                     :class="{
                                                         'bg-red-500 fa-exclamation py-1 px-2.5':
                                                             task.status ===
@@ -3483,20 +3528,43 @@ onUnmounted(() => {
                                                             task.status ===
                                                             'Completed',
                                                     }"
-                                                    class="fa mr-4 text-sm rounded-full text-white"
+                                                    class="fa mr-4 text-sm h-fit rounded-full text-white"
                                                     aria-hidden="true"
                                                 ></i>
-                                                {{
-                                                    formatDateForDisplay(
-                                                        task.due_date
-                                                    )
-                                                }}
+                                                <div v-if  = "visibleDatePicker !== task.id"
+                                                    
+                                                >
+                                                    {{
+                                                        
+                                                        timeBeforeDue(task.due_date) 
+                                                        
+                                                    }}
+                                                </div>
                                             </div>
+                                            <DatePicker 
+                                                v-if="
+                                                   visibleDatePicker == task.id
+                                                "
+                                                class = " absolute"
+                                                :placement="'bottom'"
+                                                v-model="task.due_date"
+                                                @update:model-value="
+                                                    (date) =>
+                                                        updateDueDate(
+                                                            task.id,
+                                                            date
+                                                        )
+                                                "
+                                                :auto-position="false"  
+                                                :teleport="true"
+                                            />
                                         </td>
                                         <td
                                             @click="togglePriority(index)"
                                             @click.stop
                                             :class="{
+                                                'bg-gray-900' :
+                                                    task.priority === 'Critical',
                                                 'bg-purple-800':
                                                     task.priority === 'High',
                                                 'bg-blue-700 ':
@@ -3517,45 +3585,25 @@ onUnmounted(() => {
                                                 class="absolute pt-10 text-white justify-center flex flex-col items-center z-10 top-10 overflow-y-auto bg-white shadow-lg rounded-lg w-52 max-h-40"
                                             >
                                                 <div
-                                                    @click="
-                                                        setPriority(
-                                                            'Critical',
-                                                            task.id
-                                                        )
-                                                    "
+                                                    @click="updateTaskField(task.id, 'priority', 'Critical')"
                                                     class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-gray-900 bg-gray-700 px-3 py-2"
                                                 >
                                                     <h1>Critical</h1>
                                                 </div>
                                                 <div
-                                                    @click="
-                                                        setPriority(
-                                                            'High',
-                                                            task.id
-                                                        )
-                                                    "
+                                                    @click="updateTaskField(task.id, 'priority', 'High')"
                                                     class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-purple-900 bg-purple-800 px-3 py-2"
                                                 >
                                                     <h1>High</h1>
                                                 </div>
                                                 <div
-                                                    @click="
-                                                        setPriority(
-                                                            'Medium',
-                                                            task.id
-                                                        )
-                                                    "
+                                                    @click="updateTaskField(task.id, 'priority', 'Medium')"
                                                     class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-blue-800 bg-blue-700 px-3 py-2"
                                                 >
                                                     <h1>Medium</h1>
                                                 </div>
                                                 <div
-                                                    @click="
-                                                        setPriority(
-                                                            'Low',
-                                                            task.id
-                                                        )
-                                                    "
+                                                    @click="updateTaskField(task.id, 'priority', 'Low')"
                                                     class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-blue-500 bg-blue-400 px-3 py-2"
                                                 >
                                                     <h1>Low</h1>
@@ -3579,8 +3627,12 @@ onUnmounted(() => {
                                                 showTasks
                                             "
                                             class="px-6 py-1 border w-24 flex items-center justify-center"
+                                        >$
+                                        <input type="text" class = "w-full p-0 border-none"
+                                        v-model = task.budget
+                                        @input="updateTaskBudget(task.id,task.budget)"
                                         >
-                                            ${{ task.budget }}
+                                            
                                         </td>
                                         <td
                                             v-if="
@@ -3647,7 +3699,7 @@ onUnmounted(() => {
                                             class="px-6 py-1 w-44 border flex items-center justify-center"
                                         >
                                             <span class="text-gray-600"
-                                                >7 minutes ago</span
+                                                >{{ timeSinceLastUpdate(task.updated_at) }}</span
                                             >
                                         </td>
                                     </tr>
@@ -4014,6 +4066,8 @@ onUnmounted(() => {
                                             :key="task.id"
                                             :style="{ width: segmentWidth }"
                                             :class="{
+                                                'bg-gray-900' : 
+                                                    task.priority === 'Critical',
                                                 'bg-purple-800':
                                                     task.priority === 'High',
                                                 'bg-blue-700 ':
@@ -4033,7 +4087,8 @@ onUnmounted(() => {
                                 <td
                                     v-if="showBudget || showAll || showTasks"
                                     class="px-6 py-1 border w-24 flex items-center justify-center"
-                                ></td>
+                                > ${{totalBudget}}
+                            </td>
 
                                 <td
                                     v-if="showFiles || showAll || showTasks"

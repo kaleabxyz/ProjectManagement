@@ -1,13 +1,19 @@
 import { defineStore } from 'pinia';
 import axios from 'axios';
+import router from '@/router';
 
 export const useUserStore = defineStore('user', {
     state: () => ({
       user: null,
         selectedWorkspace: null,
-        notifications: [],
+    notifications: [],
+    unreadCount: 0,
     }),
-    actions: {
+  actions: {
+    updateUser(userData) {
+      this.user = { ...userData };
+      localStorage.setItem('user', JSON.stringify(this.user)); // Update local storage as well
+  },
       async fetchUser() {
         try {
           const response = await axios.get('/api/user');
@@ -19,8 +25,12 @@ export const useUserStore = defineStore('user', {
         } catch (error) {
           console.error('Error fetching user:', error);
         }
-      },
-   
+    },
+      
+      selectWorkspace(workspace) {
+        this.selectedWorkspace = workspace;
+        console.log("🚀 ~ Workspace selected:", workspace);
+    },
     async setUser(user) {
       this.user = user;
       localStorage.setItem('user', JSON.stringify(user));
@@ -92,29 +102,39 @@ export const useUserStore = defineStore('user', {
       },
       async updateTaskField(taskId, field, value) {
         try {
-          // Make the API request to update the specific task field
-          await axios.patch(`/api/tasks/${taskId}`, { [field]: value });
-      
-          // Loop through workspaces and boards to find the correct task
-          this.user.workspaces.forEach((workspace) => {
-            workspace.boards.forEach((board) => {
-              const taskIndex = board.tasks.findIndex((task) => task.id === taskId);
-              if (taskIndex !== -1) {
-                // Update the task field
-                board.tasks[taskIndex] = { ...board.tasks[taskIndex], [field]: value };
-              }
+            // Make the API request to update the specific task field
+            await axios.patch(`/api/tasks/${taskId}`, { [field]: value });
+    
+            // Fetch the updated task from the database
+            const response = await axios.get(`/api/tasks/${taskId}`);
+            const updatedTask = response.data;
+    
+            // Loop through workspaces and boards to find the correct task
+            this.user.workspaces.forEach((workspace) => {
+                workspace.boards.forEach((board) => {
+                    const taskIndex = board.tasks.findIndex((task) => task.id === taskId);
+                    if (taskIndex !== -1) {
+                        // Replace the old task with the updated task from the database
+                        board.tasks[taskIndex] = {
+                            ...updatedTask,
+                            updated_at: new Date().toISOString() // Update the timestamp here
+                        };
+                    }
+                });
             });
-          });
-      
-          // Save the updated user data to local storage
-          localStorage.setItem('user', JSON.stringify(this.user));
+    
+            // Save the updated user data to local storage
+            localStorage.setItem('user', JSON.stringify(this.user));
         } catch (error) {
-          console.error(`Error updating task ${field}:`, error);
+            console.error(`Error updating task ${field}:`, error);
         }
-      },
+    }
+    
+,      
       
           async acceptInvitation(notification) {
             try {
+              console.log('board id in accept invitation',notification.invitation)
               const boardId = notification.invitation.board.id;
               if (!boardId) {
                 throw new Error('Board ID not found in the invitation');
@@ -161,6 +181,25 @@ export const useUserStore = defineStore('user', {
             } catch (error) {
               console.error('Error fetching notifications:', error);
             }
-          },
+    },
+    async logout() {
+      console.log('looog ouuut');
+      this.user = null;
+      localStorage.removeItem("token");
+      localStorage.removeItem('user'); // Clear local storage
+      router.push('/login'); // Redirect to login page
+    },
   },
 });
+
+axios.interceptors.response.use(
+  response => response, // Pass through successful responses
+  error => {
+    if (error.response.status === 401) {
+      
+      const userStore = useUserStore();
+      userStore.logout(); // Log out the user on token expiration
+    }
+    return Promise.reject(error);
+  }
+);

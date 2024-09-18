@@ -49,7 +49,8 @@ const showFolderOptions = ref([]);
 
 
 onMounted(() => {
-    userStore.fetchUser();
+    userStore.fetchUser(); 
+    userStore.loadUserFromStorage(); // Optionally load user from storage
 
     });
 // Access the user data from the global state
@@ -58,7 +59,7 @@ const user = computed(() => userStore.user); // Use a unique key to trigger re-r
 const selectedWorkspace = computed(() => userStore.selectedWorkspace);// Initially select "Main workspace"
 console.log("🚀 ~ user in sidebar:", selectedWorkspace.value);
 
-user.value.workspaces.forEach(workspace => {
+user.value.workspaces?.forEach(workspace => {
     console.log("🚀 ~ workspace:", workspace);
     if (workspace.boards) {
         console.log("🚀 ~ boards:", workspace.boards);
@@ -133,8 +134,7 @@ const createBoard = async () => {
 
 // Select a workspace
 const selectWorkspace = (workspace) => {
-  selectedWorkspace.value = workspace;
-  workSpaces.value = false; // Close the dropdown after selection
+  userStore.selectWorkspace(workspace);  // Use the Pinia store action
 };
 const toggleOn = () => {
     showNav.value = "active";
@@ -422,7 +422,10 @@ watch(
             <div v-if="showNav === 'active'" class="resize-x">
                 <router-link to="/home">
                     <div
-                        class="group hover:w-56 flex items-center bg-blue-100 py-1 rounded-md hover:bg-gray-200 cursor-pointer"
+                    :class = "{
+                        'bg-blue-100' : route.path == '/home'
+                    }"
+                        class="group hover:w-56 flex items-center  py-1 rounded-md hover:bg-gray-200 cursor-pointer"
                     >
                         <svg
                             width="20px"
