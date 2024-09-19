@@ -17,8 +17,8 @@ import TextInput from "@/Components/TextInput.vue";
 import { useRouter, useRoute } from "vue-router";
 import { useUserStore } from '@/Stores/userStore.js';
 import { useNotificationsStore } from '@/Stores/notificationsStore.js';
+import Pusher from "pusher-js";
 
-import state from "./../state";
 
 function handleImageError() {
     document.getElementById("screenshot-container")?.classList.add("!hidden");
@@ -71,6 +71,7 @@ const notifications = ref([]);
 const userName = ref("");
 const selectedStatus = ref("In the office");
 const selectedProfile = ref([]);
+const notificationRead = ref(false)
 const formErrors = reactive({
     currentPassword: "",
     newPassword: "",
@@ -141,7 +142,8 @@ const users = ref([
 onMounted(() => {
     userStore.loadUserFromStorage(); // Optionally load user from storage
   userStore.fetchUser(); 
-   
+  fetchNotifications(); // Fetch existing notifications on load
+  initPusher();
     workSpace.value = route.query.workSpace;
     boardName.value = route.params.boardName;
     console.log("board and workspace", workSpace.value);
@@ -149,15 +151,39 @@ onMounted(() => {
         fetchBoard(workSpace, boardName);
         fetchBoards();
     }
-    fetchNotifications();
-
-    // Polling every 30 seconds
-    setInterval(() => {
-        fetchNotifications();
-    }, 30000);
+   
 });
+const initPusher = () => {
+    const pusher = new Pusher("464dddcaaa1a6c17607c", {
+        cluster: "eu",
+        encrypted: true,
+    });
+
+    const invitesChannel = pusher.subscribe("invites-channel");
+
+    // Listen for the 'new-invite' event
+    invitesChannel.bind("new-invite", (data) => {
+        
+
+        const updatedInvitation = {
+            ...data.invitation,
+            inviter: data.inviter,
+        };
+        // Add the new notification to the notifications array
+        notifications.value.push({
+            ...data.notification,
+            invitation: updatedInvitation,
+        });
+        
+
+        // Optionally, trigger any additional logic, e.g., show a toast notification
+    });
+};
 const userStore = useUserStore();
-const notificationsStore = useNotificationsStore();
+
+const unreadNotificationsCount = computed(() => {
+    return notifications.value.filter(notification => !notification.read).length;
+});
 const user = computed(() => userStore.user);
   
 
@@ -227,36 +253,44 @@ const markNotificationAsRead = async (notificationId) => {
 
 
 const handleAccept = async (notification) => {
-  try {
-      await userStore.acceptInvitation(notification);
-      await notificationsStore.markNotificationAsRead(notification.id); 
-      fetchBoard(workSpace, boardName);
-      
-  } catch (error) {
-    console.error("Error handling invitation acceptance:", error);
-  }
+    try {
+        // Accept the invitation
+        await axios.post(`/api/invitations/${notification.invitation.id}/accept`, {
+            notification_id: notification.id,
+        });
+        
+        // Mark the notification as read locally
+        const index = notifications.value.findIndex(n => n.id === notification.id);
+        if (index !== -1) {
+            notifications.value[index].read = true;
+            notifications.value[index].invitation.status = 'accepted';
+        }
+
+        console.log("Invitation accepted and notification marked as read");
+    } catch (error) {
+        console.error("Error handling invitation acceptance:", error);
+    }
 };
 
-
-
 const handleNoThanks = async (notification) => {
-  try {
-    // Decline the invitation
-    await axios.post('/api/invitations/decline', {
-      invitation_id: notification.invitation.id,
-    });
-    await notificationsStore.markNotificationAsRead(notification.id);
-    // Mark the notification as read using the existing function
-   
+    try {
+        // Decline the invitation
+        await axios.post("/api/invitations/decline", {
+            invitation_id: notification.invitation.id,
+            notification_id: notification.id,
+        });
 
-    // Optionally refresh the user data and notifications
-    // Refresh the user's data
-    fetchNotifications(); // Refresh the notifications list
+        // Mark the notification as read locally
+        const index = notifications.value.findIndex(n => n.id === notification.id);
+        if (index !== -1) {
+            notifications.value[index].read = true;
+            notifications.value[index].invitation.status = 'declined';
+        }
 
-    console.log('Invitation declined and notification marked as read');
-  } catch (error) {
-    console.error('Error declining invitation and marking notification as read', error);
-  }
+        console.log("Invitation declined and notification marked as read");
+    } catch (error) {
+        console.error("Error declining invitation and marking notification as read", error);
+    }
 };
 
 
@@ -1576,7 +1610,7 @@ watch(
         </div>
     </div>
 
-    <SideDetail v-if="sideDetail" @click.stop class="p-6">
+    <SideDetail v-if="sideDetail" @click.stop class="p-6 min-h-screen overflow-y-auto">
         <span>
             <div class="flex items-center justify-between">
                 <h1 class="text-2xl font-bold">Notifications</h1>
@@ -1594,38 +1628,27 @@ watch(
                 </div>
             </div>
             <div class="flex border-b-2 mt-6 font-extralight text-sm">
-                <div
-                    class="p-4 py-1 flex border-b-2 border-blue-400 items-center hover:bg-gray-100 cursor-pointer"
-                >
-                    <h3>All</h3>
-                </div>
-                <div
-                    class="p-4 py-1 flex items-center hover:bg-gray-100 cursor-pointer"
+                <div @click = "notificationRead = false"
+                :class = "{
+                    'border-b-2 border-blue-400' :!notificationRead 
+                }"
+                    class="p-4 py-1 flex  items-center hover:bg-gray-100 cursor-pointer"
                 >
                     <h3>Unread</h3>
                 </div>
-            </div>
-            <div class="mt-4 relative flex">
-                <TextInput
-                    class="w-96 h-8"
-                    placeholder="Search all notifications"
-                ></TextInput>
-                <i
-                    class="absolute right-52 top-2 fa fa-search text-sm text-gray-400"
-                ></i>
-                <div
-                    class="flex items-center ml-1 cursor-pointer hover:bg-gray-100 px-2"
+                <div @click = "notificationRead = true"
+                :class = "{
+                    'border-b-2 border-blue-400' :notificationRead 
+                }"
+                    class="p-4 py-1 flex items-center hover:bg-gray-100 cursor-pointer"
                 >
-                    <i class="far fa-user-circle mr-2"></i>
-                    <h1 class="text-sm">Fileter by person</h1>
-                    <i
-                        class="fa fa-chevron-down ml-2 text-xs"
-                        aria-hidden="true"
-                    ></i>
+                    <h3>Read</h3>
                 </div>
-            </div>{{ console.log('notifications',notifications)  }}
-            <div v-for="notification in notifications" :key="notification.id" class="flex mt-4 bg-gray-200 p-3 rounded-lg justify-between">
-    <div class="flex justify-between">
+            </div>
+            
+            <div v-for="notification in notifications" :key="notification.id" >
+    <div v-if = "notification.read == notificationRead"
+    class="flex mt-4 bg-gray-200 p-3 rounded-lg justify-between">
       <div class="relative flex items-center">
         <div class="flex flex-col items-center">
           <h1
@@ -1645,20 +1668,56 @@ watch(
           {{ notification.body }} as a {{ notification.invitation.role }}
         </div>
       </div>
-      <div class="items-center flex">
-        <button
-          @click="handleNoThanks(notification)"
-          class="text-black px-4 py-2 rounded-lg hover:bg-gray-300 mr-4 text-sm"
-        >
-          No thanks
-        </button>
-        <button
-          @click="handleAccept(notification)"
-          class="bg-blue-600 text-white px-4 py-2 text-sm rounded-lg hover:bg-blue-700"
-        >
-          Accept
-        </button>
-      </div>
+      <div
+                                            v-if="
+                                                notification.invitation
+                                                    .status !== 'pending'
+                                            "
+                                            class="px-4 flex items-center"
+                                        >
+                                            <h1
+                                                :class="{
+                                                    'bg-red-600':
+                                                        notification.invitation
+                                                            .status ==
+                                                        'declined',
+                                                    'bg-green-600':
+                                                        notification.invitation
+                                                            .status ==
+                                                        'accepted',
+                                                }"
+                                                class="text-white px-4 py-2 text-sm rounded-lg"
+                                            >
+                                                {{
+                                                    notification.invitation
+                                                        .status
+                                                }}
+                                            </h1>
+                                        </div>
+                                        <div
+                                            v-if="
+                                                notification.invitation
+                                                    .status == 'pending'
+                                            "
+                                            class="items-center flex"
+                                        >
+                                            <button
+                                                @click="
+                                                    handleNoThanks(notification)
+                                                "
+                                                class="text-black px-4 py-2 rounded-lg hover:bg-gray-300 mr-4 text-sm"
+                                            >
+                                                No thanks
+                                            </button>
+                                            <button
+                                                @click="
+                                                    handleAccept(notification)
+                                                "
+                                                class="bg-blue-600 text-white px-4 py-2 text-sm rounded-lg hover:bg-blue-700"
+                                            >
+                                                Accept
+                                            </button>
+                                        </div>
     </div>
   </div>
         </span>

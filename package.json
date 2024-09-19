@@ -22,7 +22,9 @@
     },
     "dependencies": {
         "@vuepic/vue-datepicker": "^9.0.3",
+        "laravel-echo": "^1.16.1",
         "pinia": "^2.2.2",
+        "pusher-js": "^8.4.0-rc2",
         "vue-router": "^4.4.3"
     }
 }

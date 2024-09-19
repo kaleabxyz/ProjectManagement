@@ -21,7 +21,7 @@ export const useUserStore = defineStore('user', {
           if (this.user?.workspaces?.length) {
             this.selectedWorkspace = this.user.workspaces[0]; // Set default workspace
           }
-          console.log("🚀 ~ selectedWorkspace in userStore:", this.selectedWorkspace);
+          
         } catch (error) {
           console.error('Error fetching user:', error);
         }

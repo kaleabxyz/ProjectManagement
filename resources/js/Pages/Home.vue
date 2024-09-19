@@ -1,78 +1,160 @@
 <script setup>
-
 import SideDetail from "@/Components/SideDetail.vue";
 import Navbar from "@/Components/Navbar.vue";
 import TextInput from "@/Components/TextInput.vue";
 import Sidebar from "@/Components/Sidebar.vue";
-import { ref,computed,onMounted } from "vue";
-import { useUserStore } from '@/Stores/userStore';
-import { useNotificationsStore } from '@/Stores/notificationsStore.js';
-
+import { ref, computed, onMounted } from "vue";
+import { useUserStore } from "@/Stores/userStore";
+import { useNotificationsStore } from "@/Stores/notificationsStore.js";
+import Pusher from "pusher-js";
+import axios from "axios";
 const side = ref("active");
 const sideDetail = ref(false);
 const showUpdateFeed = ref(true);
 const showRecentVisited = ref(true);
 const showMyWorkspaces = ref(true);
-const notifications =ref ([]);
+const notifications = ref([]);
 const showSide = (val) => {
     side.value = val;
 };
 
+const initPusher = () => {
+    const pusher = new Pusher("464dddcaaa1a6c17607c", {
+        cluster: "eu",
+        encrypted: true,
+    });
+
+    const invitesChannel = pusher.subscribe("invites-channel");
+
+    // Listen for the 'new-invite' event
+    invitesChannel.bind("new-invite", (data) => {
+        
+
+        const updatedInvitation = {
+            ...data.invitation,
+            inviter: data.inviter,
+        };
+        // Add the new notification to the notifications array
+        notifications.value.push({
+            ...data.notification,
+            invitation: updatedInvitation,
+        });
+        
+
+        // Optionally, trigger any additional logic, e.g., show a toast notification
+    });
+};
 onMounted(() => {
     userStore.loadUserFromStorage(); // Optionally load user from storage
-  userStore.fetchUser(); 
-   
-    
-    
+    userStore.fetchUser();
+    fetchNotifications(); // Fetch existing notifications on load
+    initPusher();
 });
+
 const userStore = useUserStore();
 const user = computed(() => userStore.user);
-
-
+const unreadNotificationsCount = computed(() => {
+    return notifications.value.filter(notification => !notification.read).length;
+});
 const selectWorkspace = (workspace) => {
-  userStore.selectWorkspace(workspace);  // Use the Pinia store action
+    userStore.selectWorkspace(workspace); // Use the Pinia store action
 };
 const fetchNotifications = async () => {
     try {
         const response = await axios.get("/api/notifications");
         notifications.value = response.data;
-        {{ console.log('notification in home',notifications.value) }}
+        {
+            {
+                console.log("notification in home", notifications.value);
+            }
+        }
     } catch (error) {
         console.error("Error fetching notifications", error);
     }
-    
 };
+const handleAccept = async (notification) => {
+    try {
+        // Accept the invitation
+        await axios.post(`/api/invitations/${notification.invitation.id}/accept`, {
+            notification_id: notification.id,
+        });
+        
+        // Mark the notification as read locally
+        const index = notifications.value.findIndex(n => n.id === notification.id);
+        if (index !== -1) {
+            notifications.value[index].read = true;
+            notifications.value[index].invitation.status = 'accepted';
+        }
+
+        console.log("Invitation accepted and notification marked as read");
+    } catch (error) {
+        console.error("Error handling invitation acceptance:", error);
+    }
+};
+
+const handleNoThanks = async (notification) => {
+    try {
+        // Decline the invitation
+        await axios.post("/api/invitations/decline", {
+            invitation_id: notification.invitation.id,
+            notification_id: notification.id,
+        });
+
+        // Mark the notification as read locally
+        const index = notifications.value.findIndex(n => n.id === notification.id);
+        if (index !== -1) {
+            notifications.value[index].read = true;
+            notifications.value[index].invitation.status = 'declined';
+        }
+
+        console.log("Invitation declined and notification marked as read");
+    } catch (error) {
+        console.error("Error declining invitation and marking notification as read", error);
+    }
+};
+
+function formatDateForDisplay(dateString) {
+    const date = new Date(dateString);
+    if (isNaN(date)) return "Invalid date"; // Handle invalid date case
+
+    const currentYear = new Date().getFullYear();
+    const taskYear = date.getFullYear();
+    const month = date.toLocaleString("default", { month: "short" });
+    const day = date.getDate();
+    const year =
+        taskYear !== currentYear ? `/${taskYear.toString().slice(-2)}` : "";
+
+    return `${month} ${day}${year}`;
+}
 </script>
 
 <template>
-   
     <body class="bg-custom-blue min-h-screen w-full flex flex-col">
         <Navbar></Navbar>
-        <div class="flex h-full ">
+        <div class="flex h-full">
             <Sidebar @nav="showSide" />
             <router-view />
         </div>
-        <div class="bg-custome-blue h-full w-full"
-        :class="{
-                    'pl-[275px] ': side === 'active',
-                    'pl-7': side === 'inactive',
-                }">
-
-        
+        <div
+            class="bg-custome-blue h-full w-full"
+            :class="{
+                'pl-[275px] ': side === 'active',
+                'pl-7': side === 'inactive',
+            }"
+        >
             <div
-                
                 class="min-h-screen flex-1 w-full overflow-hidden mt-14 bg-white rounded-lg pt-4"
             >
                 <div class="border-b-2 border-solid pb-4 shadow-lg">
                     <h2 class="font-thin mx-16 text-sm">
-                        Good afternoon, {{user.user_name}}!
+                        Good afternoon, {{ user.user_name }}!
                     </h2>
                     <h2 class="font-light mx-16 text-md">
                         Quickly access your recent boards, inbox and workspaces
                     </h2>
                 </div>
                 <div
-                    class="ml-16 mt-4 h-full  w-full pr-80 p-6 rounded-lg shadow-lg"
+                    class="ml-16 mt-4 h-full w-full pr-80 p-6 rounded-lg shadow-lg"
                 >
                     <div class="flex items-center">
                         <i
@@ -210,7 +292,7 @@ const fetchNotifications = async () => {
                         ></i>
                         <h2 class="font-bold text-lg">Notifications(inbox)</h2>
                         <h3 class="bg-blue-500 px-2 rounded-full text-white">
-                            1
+                            {{ unreadNotificationsCount }}
                         </h3>
                     </div>
                     <div
@@ -218,51 +300,118 @@ const fetchNotifications = async () => {
                         class="flex w-full flex-col p-8 border rounded-lg border-gray-300 mt-4"
                     >
                         <div
-                            class="flex items-center w-full justify-between border-b border-gray-300 pb-4"
+                            v-for="notification in notifications"
+                            :key="notification.id"
+                            
                         >
-                        <div v-for="notification in notifications.value" :key="notification.id" class="flex mt-4 bg-gray-200 p-3 rounded-lg justify-between">
-    <div class="flex justify-between">
-      <div class="relative flex items-center">
-        <div class="flex flex-col items-center">
-          <h1
-            v-if="!notification.invitation.inviter?.profile_picture_url"
-            class="py-1 w-fit px-2.5 border-2 border-white text-white rounded-full bg-blue-300"
-          >
-            {{
-              notification.invitation.inviter?.user_name
-                ? notification.invitation.inviter.user_name.charAt(0).toUpperCase()
-                : "?"
-            }}
-          </h1>
-          <!-- Show user name -->
-          <h1 class="ml-2">{{ notification.invitation.inviter?.user_name }}</h1>
-        </div>
-        <div class="ml-4 text-base text-md">
-          {{ notification.body }} as a {{ notification.invitation.role }}
-        </div>
-      </div>
-      <div class="items-center flex">
-        <button
-          @click="handleNoThanks(notification)"
-          class="text-black px-4 py-2 rounded-lg hover:bg-gray-300 mr-4 text-sm"
-        >
-          No thanks
-        </button>
-        <button
-          @click="handleAccept(notification)"
-          class="bg-blue-600 text-white px-4 py-2 text-sm rounded-lg hover:bg-blue-700"
-        >
-          Accept
-        </button>
-      </div>
-    </div>
-  </div>
-                            <div class="flex items-center">
-                                <i
-                                    class="far fa-clock text-xs"
-                                    aria-hidden="true"
-                                ></i>
-                                <h3 class="text-sm ml-1">12 jun</h3>
+                            <div  v-if = "notification && notification.read == false"
+                            class="flex items-center w-full justify-between border-b border-gray-300 pb-4" >
+                                <div
+                                    class="flex mt-4 bg-gray-200 p-3 rounded-lg justify-between"
+                                >
+                                    <div class="flex justify-between">
+                                        <div class="relative flex items-center">
+                                            
+                                            <div
+                                                class="flex flex-col items-center"
+                                            >
+                                                <h1
+                                                    v-if="
+                                                        !notification.invitation
+                                                            .inviter
+                                                            ?.profile_picture_url
+                                                    "
+                                                    class="py-1 w-fit px-2.5 border-2 border-white text-white rounded-full bg-blue-300"
+                                                >
+                                                    {{
+                                                        notification.invitation
+                                                            .inviter?.user_name
+                                                            ? notification.invitation.inviter.user_name
+                                                                  .charAt(0)
+                                                                  .toUpperCase()
+                                                            : "?"
+                                                    }}
+                                                </h1>
+                                                <!-- Show user name -->
+                                                <h1 class="ml-2">
+                                                    {{
+                                                        notification.invitation
+                                                            .inviter?.user_name
+                                                    }}
+                                                </h1>
+                                            </div>
+                                            <div class="ml-4 text-base text-md">
+                                                {{ notification.body }} as a
+                                                {{
+                                                    notification.invitation.role
+                                                }}
+                                            </div>
+                                        </div>
+                                        <div
+                                            v-if="
+                                                notification.invitation
+                                                    .status !== 'pending'
+                                            "
+                                            class="px-4 flex items-center"
+                                        >
+                                            <h1
+                                                :class="{
+                                                    'bg-red-600':
+                                                        notification.invitation
+                                                            .status ==
+                                                        'declined',
+                                                    'bg-green-600':
+                                                        notification.invitation
+                                                            .status ==
+                                                        'accepted',
+                                                }"
+                                                class="text-white px-4 py-2 text-sm rounded-lg"
+                                            >
+                                                {{
+                                                    notification.invitation
+                                                        .status
+                                                }}
+                                            </h1>
+                                        </div>
+                                        <div
+                                            v-if="
+                                                notification.invitation
+                                                    .status == 'pending'
+                                            "
+                                            class="items-center flex"
+                                        >
+                                            <button
+                                                @click="
+                                                    handleNoThanks(notification)
+                                                "
+                                                class="text-black px-4 py-2 rounded-lg hover:bg-gray-300 mr-4 text-sm"
+                                            >
+                                                No thanks
+                                            </button>
+                                            <button
+                                                @click="
+                                                    handleAccept(notification)
+                                                "
+                                                class="bg-blue-600 text-white px-4 py-2 text-sm rounded-lg hover:bg-blue-700"
+                                            >
+                                                Accept
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flex items-center">
+                                    <i
+                                        class="far fa-clock text-xs"
+                                        aria-hidden="true"
+                                    ></i>
+                                    <h3 class="text-sm ml-1">
+                                        {{
+                                            formatDateForDisplay(
+                                                notification.created_at
+                                            )
+                                        }}
+                                    </h3>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -274,21 +423,28 @@ const fetchNotifications = async () => {
                         ></i>
                         <h2 class="font-bold text-lg">My workspaces</h2>
                     </div>
-                    <div v-for = "workspace in user.workspaces"
+                    <div
+                        v-for="workspace in user.workspaces"
                         v-if="showMyWorkspaces"
                         class="flex w-full gap-8 items-center flex-wrap"
                     >
-                        <div div v-if = "workspace.is_archived == false && workspace.is_trashed == false"
-                        @click="selectWorkspace(workspace)"
+                        <div
+                            div
+                            v-if="
+                                workspace.is_archived == false &&
+                                workspace.is_trashed == false
+                            "
+                            @click="selectWorkspace(workspace)"
                             class="flex p-8 w-fit border cursor-pointer hover:shadow-lg rounded-lg border-gray-300 mt-4"
                         >
                             <div class="relative mr-6">
                                 <h3
                                     class="bg-gray-500 w-fit text-white py-2 px-4 rounded-lg text-2xl"
                                 >
-                                {{ workspace.workspace_name[0] }}
+                                    {{ workspace.workspace_name[0] }}
                                 </h3>
-                                <svg v-if ="workspace.id == user.workspaces[0].id"
+                                <svg
+                                    v-if="workspace.id == user.workspaces[0].id"
                                     class="absolute left-8 top-5"
                                     width="34px"
                                     viewBox="0 0 24 24"
@@ -315,7 +471,9 @@ const fetchNotifications = async () => {
                                 </svg>
                             </div>
                             <div class="mr-56">
-                                <h2 class="text-xl">{{workspace.workspace_name}}</h2>
+                                <h2 class="text-xl">
+                                    {{ workspace.workspace_name }}
+                                </h2>
                                 <div class="flex">
                                     <img
                                         class="w-7 mr-2"
@@ -326,7 +484,6 @@ const fetchNotifications = async () => {
                                 </div>
                             </div>
                         </div>
-                        
                     </div>
                 </div>
             </div>

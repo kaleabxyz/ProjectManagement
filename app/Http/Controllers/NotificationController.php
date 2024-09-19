@@ -17,8 +17,7 @@ class NotificationController extends Controller
         }
         $notifications = $user->notifications()
         ->where('notifiable_id', $user->id) // Ensure you use the correct user ID
-        ->where('notifiable_type', 'App\\Models\\User') // Ensure correct notifiable_type
-        ->where('read',false) // Use read_at if that's the column for unread notifications
+        ->where('notifiable_type', 'App\\Models\\User') // Use read_at if that's the column for unread notifications
         ->with(['invitation','invitation.board','invitation.inviter'])
         ->get();
         Log::info('Validated notification new data:', [$notifications,$user->id]);

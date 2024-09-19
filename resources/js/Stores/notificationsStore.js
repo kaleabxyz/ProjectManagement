@@ -21,6 +21,15 @@ export const useNotificationsStore = defineStore('notifications', {
         console.error('Error marking notification as read', error);
       }
     },
-    // Other actions for fetching and managing notifications
+    
+    async fetchNotifications() {
+      try {
+        const response = await axios.get("/api/notifications");
+        this.notifications = response.data;
+        console.log('Notifications fetched:', this.notifications);
+      } catch (error) {
+        console.error("Error fetching notifications", error);
+      }
+    }
   },
 });

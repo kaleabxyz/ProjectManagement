@@ -58,7 +58,8 @@ const userStore = useUserStore();
 const user = computed(() => userStore.user); // Use a unique key to trigger re-render
 const selectedWorkspace = computed(() => userStore.selectedWorkspace);// Initially select "Main workspace"
 console.log("🚀 ~ user in sidebar:", selectedWorkspace.value);
-
+if (user) {
+    
 user.value.workspaces?.forEach(workspace => {
     console.log("🚀 ~ workspace:", workspace);
     if (workspace.boards) {
@@ -73,6 +74,9 @@ user.value.workspaces?.forEach(workspace => {
         });
     }
 });
+}
+
+
 const filteredBoards = computed(() => {
   const query = searchQuery.value.toLowerCase();
   return selectedWorkspace.value ? selectedWorkspace.value.boards.filter(board =>
@@ -994,8 +998,8 @@ watch(
                                     
                                 </div>
                     </div>
-                    <div :key="userId"
-                    class = " max-h-[70vh] overflow-y-auto ">{{console.log('filtered Boards after pivot',filteredBoards)}}
+                    <div 
+                    class = " max-h-[70vh] overflow-y-auto ">
                     <div
                         v-for="(boards, index) in filteredBoards"
                         :key="boards.id"
@@ -1007,7 +1011,7 @@ watch(
     params: { boardName: boards.board_name },
    query: {workSpace: boards.pivot.workspace_id} // Pass boardName
                              }"
-                        >{{ console.log("hellsssasdsadasdasdo", boards.board_name) }}
+                        >
                             <div
                                 :class="
                                     boards.board_name == boardId
@@ -1016,7 +1020,7 @@ watch(
                                 "
                                 class="flex my-2 mx-1 items-center group-hover/project:bg-blue-100 cursor-pointer p-2 rounded-md"
                             >
-                                {{ console.log('board name',boards.workspace_id) }}
+                                
                                 <svg
                                     fill="#bfbbbb"
                                     width="24px"

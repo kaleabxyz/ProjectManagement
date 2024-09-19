@@ -1,0 +1,13 @@
+{
+    "appKey": "464dddcaaa1a6c17607c",
+    "appSecret": "9d95907f55cbc53d7a49",
+    "appId": "1867034",
+    "host": "127.0.0.1",
+    "port": "6001",
+    "database": "redis",
+    "redis": {
+        "host": "127.0.0.1",
+        "port": "6379",
+        "password": null
+    }
+}
