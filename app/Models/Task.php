@@ -45,6 +45,10 @@ class Task extends Model
     {
         return $this->belongsTo(User::class, 'trashed_by');
     }
+    public function activities()
+    {
+        return $this->hasMany(Activity::class, 'task_id');
+    }
 }
 
 

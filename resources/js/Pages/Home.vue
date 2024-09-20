@@ -13,7 +13,6 @@ const sideDetail = ref(false);
 const showUpdateFeed = ref(true);
 const showRecentVisited = ref(true);
 const showMyWorkspaces = ref(true);
-const notifications = ref([]);
 const showSide = (val) => {
     side.value = val;
 };
@@ -47,7 +46,7 @@ const initPusher = () => {
 onMounted(() => {
     userStore.loadUserFromStorage(); // Optionally load user from storage
     userStore.fetchUser();
-    fetchNotifications(); // Fetch existing notifications on load
+    // fetchNotifications(); // Fetch existing notifications on load
     initPusher();
 });
 
@@ -59,10 +58,12 @@ const unreadNotificationsCount = computed(() => {
 const selectWorkspace = (workspace) => {
     userStore.selectWorkspace(workspace); // Use the Pinia store action
 };
+const notifications = computed(() => userStore.notifications);
 const fetchNotifications = async () => {
     try {
         const response = await axios.get("/api/notifications");
-        notifications.value = response.data;
+        // notifications.value = response.data;
+        userStore.notifications = notifications.value;
         {
             {
                 console.log("notification in home", notifications.value);
@@ -78,14 +79,32 @@ const handleAccept = async (notification) => {
         await axios.post(`/api/invitations/${notification.invitation.id}/accept`, {
             notification_id: notification.id,
         });
-        
+        const boardId = notification.invitation.board; 
+        const { data: newBoard } = await axios.get(`/api/boards/${boardId}?workspace_id=${userStore.user.workspaces[0].id}`);
+        const workspace = userStore.user.workspaces[0];
+        if (workspace) {
+                // Push the new board into the workspace's boards array
+                workspace.boards.push(newBoard);
+      
+                // Update the user state with the modified workspace
+                userStore.user = {
+                  ...userStore.user,
+                  workspaces: userStore.user.workspaces.map(w =>
+                    w.id === workspace.id ? workspace : w
+                  ),
+                };
+                console.log('new board from invite and user',newBoard,userStore.user)
+                // Update local storage
+                
+              }
         // Mark the notification as read locally
         const index = notifications.value.findIndex(n => n.id === notification.id);
         if (index !== -1) {
             notifications.value[index].read = true;
             notifications.value[index].invitation.status = 'accepted';
         }
-
+        userStore.notifications = notifications.value;
+        localStorage.setItem('user', JSON.stringify(userStore.user));
         console.log("Invitation accepted and notification marked as read");
     } catch (error) {
         console.error("Error handling invitation acceptance:", error);
@@ -106,7 +125,9 @@ const handleNoThanks = async (notification) => {
             notifications.value[index].read = true;
             notifications.value[index].invitation.status = 'declined';
         }
-
+       
+        console.log('userstore notifications', userStore.notifications);
+        localStorage.setItem('user', JSON.stringify(userStore.user));
         console.log("Invitation declined and notification marked as read");
     } catch (error) {
         console.error("Error declining invitation and marking notification as read", error);
@@ -129,7 +150,8 @@ function formatDateForDisplay(dateString) {
 </script>
 
 <template>
-    <body class="bg-custom-blue min-h-screen w-full flex flex-col">
+    <body v-if="user"
+    class="bg-custom-blue min-h-screen w-full flex flex-col">
         <Navbar></Navbar>
         <div class="flex h-full">
             <Sidebar @nav="showSide" />

@@ -42,7 +42,7 @@ public function trashedBy()
      */
     public function workspaces()
     {
-        return $this->belongsToMany(Workspace::class, 'workspace_board', 'board_id', 'workspace_id');
+        return $this->belongsToMany(Workspace::class, 'workspace_board', 'board_id', 'workspace_id')->withPivot('created_at', 'workspace_id', 'board_id');;
     }
     
 

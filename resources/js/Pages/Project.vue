@@ -11,15 +11,23 @@ import { useRoute } from "vue-router";
 import state from "../state.js";
 import DatePicker from "@vuepic/vue-datepicker";
 import "@vuepic/vue-datepicker/dist/main.css";
-import { formatDistanceToNow } from 'date-fns';
-import { ref, reactive, watch, onMounted, computed, onUnmounted } from "vue";
-
+import { formatDistanceToNow } from "date-fns";
+import {
+    ref,
+    reactive,
+    watch,
+    watchEffect,
+    onMounted,
+    computed,
+    onUnmounted,
+} from "vue";
+const selectedGroup = ref("to-do");
 const activateSearch = ref(false);
 const addTask = ref("+ AddTask");
 const advancedFilter = ref(false);
 const board = ref([]);
-const customPosition = () => ({ top: 0});
-
+const customPosition = () => ({ top: 0 });
+const showGroupFilter = ref(false);
 const showFilter = ref(false);
 const boardName = ref(null);
 const discussionActive = ref(false);
@@ -100,42 +108,57 @@ const selectedFilters = reactive({
 });
 
 const showDatePicker = (taskId) => {
-  visibleDatePicker.value = taskId;
-  console.log("🚀 ~ showDatePicker ~ visibleDatePicker.value:", visibleDatePicker.value)
+    visibleDatePicker.value = taskId;
+    console.log(
+        "🚀 ~ showDatePicker ~ visibleDatePicker.value:",
+        visibleDatePicker.value
+    );
 };
 
 const updateDueDate = async (taskId, date) => {
-  // Hide the date picker after selecting a date
-  visibleDatePicker.value = null;
+    // Hide the date picker after selecting a date
+    visibleDatePicker.value = null;
 
-  // Call a function to update the due date for the task
-  const formattedDate = formatDateForDatabase(new Date(date));
-  userStore.updateTaskField(taskId, 'due_date', formattedDate);
+    // Call a function to update the due date for the task
+    const formattedDate = formatDateForDatabase(new Date(date));
+    updateTaskField(taskId, "due_date", formattedDate);
 };
 
 const formatDateForDatabase = (date) => {
-  // Convert date to a MySQL-compatible format: YYYY-MM-DD HH:MM:SS
-  return date.toISOString().slice(0, 19).replace('T', ' ');
+    // Convert date to a MySQL-compatible format: YYYY-MM-DD HH:MM:SS
+    return date.toISOString().slice(0, 19).replace("T", " ");
 };
 const timeBeforeDue = (updatedAt) => {
-  if (!updatedAt) return 'N/A';
-  const distance = formatDistanceToNow(new Date(updatedAt), { addSuffix: true });
-  return distance;
+    if (!updatedAt) return "N/A";
+    const distance = formatDistanceToNow(new Date(updatedAt), {
+        addSuffix: true,
+    });
+    return distance;
 };
 const timeSinceLastUpdate = (updatedAt) => {
-    if (!updatedAt) return 'N/A';
-    const distance = formatDistanceToNow(new Date(updatedAt), { addSuffix: true });
+    if (!updatedAt) return "N/A";
+    const distance = formatDistanceToNow(new Date(updatedAt), {
+        addSuffix: true,
+    });
     return distance;
 };
 
 //previous
 
 const formattedDueDate = computed(() => formatDateForDisplay(dueDate.value));
-
 const userStore = useUserStore();
+const newUpdate = computed(() => userStore.update);
 const user = computed(() => userStore.user);
 console.log("🚀 ~ userin project:", user.value);
+watchEffect(() => {
+    if (newUpdate.value) {
+        // Fetch the board when newUpdate is true
+        fetchBoard(workSpace, boardName);
 
+        // Reset the update state in the store
+        userStore.resetUpdate();
+    }
+});
 const fetchTasks = async () => {
     try {
         const response = await axios.get("/api/tasks");
@@ -282,44 +305,43 @@ const clearInput = () => {
 
 // Task creation logic
 const handleNewTask = async () => {
-    // If newTaskName is empty, exit
-    console.log("Task name for new task:", newTaskName.value);
-
     if (!newTaskName.value) return;
 
-    // Define the task data with the entered name
     const taskData = ref({
         task_name: newTaskName.value,
         status: "Not Started",
         priority: "Medium",
-        due_date: null, // Set due date or keep it null
-        board_id: selectedBoardId.value, // Change this to the appropriate board ID
-        assigned_to: null, // Set this if there is an assigned user
+        due_date: null,
+        board_id: selectedBoardId.value,
+        assigned_to: null,
         budget: 0,
         notes: "",
-        column: 1, // Set this to the appropriate column if needed
+        column: 1,
     });
 
     try {
         // Create the new task via API
         const response = await axios.post("/api/tasks", taskData.value);
-        const taskId = response.data.task.id; // Get the task ID from the response
+        const taskId = response.data.task.id;
+
+        // Log the activity in the backend
+        await axios.post(`/api/activities`, {
+            task_id: taskId,
+            user_id: userStore.user.id, // The user who created the task
+            action: "created",
+            description: `Task '${taskData.value.task_name}' was created`,
+        });
 
         // Fetch the newly created task from the database
         const { data: newTask } = await axios.get(`/api/tasks/${taskId}`, {
             params: {
-                with: ["assignedUser", "subTasks", "updates"], // Include any necessary relationships
+                with: ["assignedUser", "subTasks", "updates"],
             },
         });
 
-        console.log("Task fetched from database:", newTask);
-
-        // Find the correct workspace and board
         user.value.workspaces.forEach((workspace) => {
             workspace.boards.forEach((board) => {
-                // Check if this is the correct board for the new task
                 if (board.id === taskData.value.board_id) {
-                    // Add the fetched task to the board's tasks array
                     board.tasks.push(newTask);
                 }
             });
@@ -328,19 +350,17 @@ const handleNewTask = async () => {
         // Update the user data in local storage
         userStore.updateUser(userStore.user);
         fetchBoard(workSpace, boardName);
-        console.log("User data updated in local storage");
 
-        // Clear the input field after task creation
+        // Clear the input field
         newTaskName.value = "";
-    } catch (error) {
-        console.error("Error creating task or fetching from database:", error);
-    }
-};
 
-// Check if task name is not empty before creating the task
-const checkAndCreateTask = () => {
-    if (newTaskName.value.trim() !== "") {
-        handleNewTask();
+        // Trigger TaskCreated event (frontend)
+        await axios.post(`/api/taskCreated`, {
+            board_id: selectedBoardId.value,
+            task_id: taskId,
+        });
+    } catch (error) {
+        console.error("Error creating task:", error);
     }
 };
 
@@ -389,7 +409,6 @@ function clearAllFilters() {
     selectedValue.value = ""; // or null
 }
 
-console.log("board tasks and filtered tasks", board.tasks, filteredTasks);
 const initializeShowReplyInput = () => {
     if (board.value && board.value.discussions) {
         showReplyInput.value = board.value.discussions.map(() => false);
@@ -805,7 +824,7 @@ watch(
         if (newBoardId) {
             boardName.value = newBoardId;
             workSpace.value = route.query.workSpace;
-            console.log("hello00000", workSpace);
+
             fetchBoard(workSpace, boardName);
         }
     }
@@ -817,7 +836,6 @@ onMounted(() => {
     if (boardName) {
         fetchBoard(workSpace, boardName);
     }
-    console.log("board and workspace", board.value);
 });
 const filteredUpdates = computed(() => {
     if (!board.value || !board.value.discussions) {
@@ -833,6 +851,9 @@ const filteredUpdates = computed(() => {
     } else if (showUpdate.value == "mentioned") {
         // Show only updates where the user is mentioned, excluding replies
         updates = mentions.value || [];
+    } else if (showUpdate.value == "activities") {
+        // Show only updates where the user is mentioned, excluding replies
+        updates = selectedTask.value.activities || [];
     } else {
         // Default to showing all updates excluding replies
         updates = board.value.discussions;
@@ -842,17 +863,25 @@ const filteredUpdates = computed(() => {
     return updates.slice().reverse();
 });
 const updateTaskField = (taskId, field, value) => {
-    console.log('update task field content', taskId,field,value)
+    if (field == "task_name") {
+        if (
+            selectedTaskName.value.trim() === "" ||
+            selectedTaskName.value === selectedTask.value.task_name
+        ) {
+            return; // Exit if task name is empty or unchanged
+        }
+    }
+    console.log("update task field content", taskId, field, value);
     userStore.updateTaskField(taskId, field, value);
+
     fetchBoard(workSpace, boardName);
 };
-const updateTaskBudget = (taskId,newBudget) => {
-    if(newBudget !== ""){
-
-        userStore.updateTaskField(taskId, 'budget', newBudget);
+const updateTaskBudget = (taskId, newBudget) => {
+    if (newBudget !== "") {
+        userStore.updateTaskField(taskId, "budget", newBudget);
         fetchBoard(workSpace, boardName);
     }
-}
+};
 
 function formatDateForDisplay(dateString) {
     const date = new Date(dateString);
@@ -944,7 +973,7 @@ const toggleSubItem = (index) => {
 const toggleTaskUpdate = (taskId) => {
     selectedTask.value = board.value.tasks.find((task) => task.id === taskId);
     taskUpdate.value = !taskUpdate.value; // Toggle task updates
-    console.log("🚀 ~ toggleTaskUpdate ~ taskId:", taskId);
+    console.log("🚀 ~ toggleTaskUpdate ~ taskId:", selectedTask.value);
     selectedTaskName.value = selectedTask.value.task_name;
     selectedTaskId.value = taskId; // Set the selected task ID
     // Call to filter tasks by the selected ID
@@ -1061,7 +1090,8 @@ const handleClickOutside = (event) => {
             showReplyInput.value ||
             activateSearch.value ||
             filterField.value == "task_name" ||
-            showFilter || visibleDatePicker !== null)
+            showFilter ||
+            visibleDatePicker !== null)
     ) {
         hidesideDetail();
     }
@@ -1451,14 +1481,14 @@ onUnmounted(() => {
             </div>
         </SideDetail>
         <div
-            class="bg-custome-blue h-full flex flex-1 w-full"
+            class="bg-custome-blue h-full pt-14 flex flex-1 w-full"
             :class="{
                 'pl-[275px] ': side === 'active',
                 'pl-7': side === 'inactive',
             }"
         >
             <div
-                class="min-h-screen flex-grow w-98 overflow-x-hidden pr-8 mt-14 bg-white rounded-lg pl-10 pt-4"
+                class="min-h-screen flex-1 overflow-y-auto flex-grow w-98 overflow-x-hidden pr-8 bg-white rounded-lg pl-10 pt-4"
             >
                 <div class="flex justify-between relative">
                     <div
@@ -1632,7 +1662,9 @@ onUnmounted(() => {
                                 aria-hidden="true"
                             ></i>
                         </span>
-                        <i class="fa fa-user-circle ml-6 fa-xl"></i>
+                        <span @click.stop>
+                            <i class="fa fa-user-circle ml-6 fa-xl"></i
+                        ></span>
                         <div
                             class="flex border-2 ml-6 p-1 text-sm border-gray-300 border-solid hover:bg-gray-100 cursor-pointer"
                         >
@@ -1744,7 +1776,10 @@ onUnmounted(() => {
                     </div>
                 </div>
                 <div class="my-4 flex">
-                    <div class="flex items-center bg-blue-600 w-fit rounded-md">
+                    <div
+                        v-if="userStore.user.role == 'Admin'"
+                        class="flex items-center bg-blue-600 w-fit rounded-md"
+                    >
                         <div
                             @click="
                                 newTaskName = 'New Task';
@@ -2282,7 +2317,7 @@ onUnmounted(() => {
                         <div
                             v-if="showHide"
                             @click.stop
-                            class="absolute rounded-lg p-6 w-72 overflow-y-auto h-44 top-10 bg-white shadow-md"
+                            class="absolute z-20 rounded-lg p-6 w-72 overflow-y-auto h-44 top-10 bg-white shadow-md"
                         >
                             <h1 class="text-xl font-extralight">
                                 Display columns
@@ -2458,11 +2493,63 @@ onUnmounted(() => {
                         </div>
                     </div>
                     <div
-                        class="ml-2 p-4 py-1 flex items-center hover:bg-gray-100 cursor-pointer"
+                        @click.stop="showGroupFilter = !showGroupFilter"
+                        class="ml-2 p-4 py-1 flex relative items-center hover:bg-gray-100 cursor-pointer"
                     >
                         <i class="far fa-user-circle text-gray-500 mr-2"></i>
                         <h3>Group by</h3>
+                        <div
+                            v-if="showGroupFilter"
+                            class="absolute flex p-6 flex-col justify-between z-20 top-10 bg-white shadow-lg rounded-lg w-36 h-fit"
+                        >
+                            <h1
+                                class="p-2 rounded-md"
+                                :class="{
+                                    'bg-blue-200': selectedGroup === 'status',
+                                    'hover:bg-gray-100':
+                                        selectedGroup !== 'status',
+                                }"
+                                @click="selectGroup('status')"
+                            >
+                                Status
+                            </h1>
+                            <h1
+                                class="p-2 rounded-md"
+                                :class="{
+                                    'bg-blue-200': selectedGroup === 'priority',
+
+                                    'hover:bg-gray-100':
+                                        selectedGroup !== 'priority',
+                                }"
+                                @click="selectGroup('priority')"
+                            >
+                                Priority
+                            </h1>
+                            <h1
+                                class="p-2 rounded-md"
+                                :class="{
+                                    'bg-blue-200': selectedGroup === 'owner',
+                                    'hover:bg-gray-100':
+                                        selectedGroup !== 'owner',
+                                }"
+                                @click="selectGroup('owner')"
+                            >
+                                Owner
+                            </h1>
+                            <h1
+                                class="p-2 rounded-md w-full "
+                                :class="{
+                                    'bg-blue-200': selectedGroup === 'dueDate',
+                                    'hover:bg-gray-100':
+                                        selectedGroup !== 'dueDate',
+                                }"
+                                @click="selectGroup('dueDate')"
+                            >
+                                Due Date
+                            </h1>
+                        </div>
                     </div>
+
                     <div
                         class="ml-2 p-2 py-1 flex items-center hover:bg-gray-100 cursor-pointer"
                     >
@@ -2498,7 +2585,10 @@ onUnmounted(() => {
                     <h2 class="text-xl ml-3">To-Do</h2>
                 </div>
 
-                <div v-if="showTable" class="overflow-x-auto overflow-y-auto min-h-screen max-h-screen rounded-md">
+                <div
+                    v-if="showTable"
+                    class="overflow-x-auto overflow-y-auto h-full max-h-screen rounded-md"
+                >
                     <table
                         class="min-w-full text-left border border-b-0 border-l-0 border-gray-300 border-t-0 text-sm text-gray-500"
                     >
@@ -2597,7 +2687,13 @@ onUnmounted(() => {
                                             v-model="selectedTaskName"
                                             ref="editableInput"
                                             class="border-0 px-0 border-gray-300 text-2xl rounded p-2 w-full"
-                                            @input="updateTaskName"
+                                            @input="
+                                                updateTaskField(
+                                                    selectedTask.id,
+                                                    'task_name',
+                                                    selectedTaskName
+                                                )
+                                            "
                                         />
                                     </div>
                                     <div
@@ -2642,12 +2738,25 @@ onUnmounted(() => {
                                             class="w-0.5 h-4 bg-gray-400"
                                         ></span>
                                         <div
+                                            @click.stop="
+                                                showUpdate = 'activities'
+                                            "
+                                            :class="{
+                                                'border-b-2 border-blue-400':
+                                                    showUpdate == 'activities',
+                                            }"
                                             class="p-4 py-1 flex items-center hover:bg-gray-100 cursor-pointer"
                                         >
                                             <h3>Activity log</h3>
                                         </div>
                                     </div>
-                                    <div class="px-6 mt-16">
+                                    <div
+                                        v-if="
+                                            showUpdate == 'allUpdates' ||
+                                            showUpdate == 'mentioned'
+                                        "
+                                        class="px-6 mt-16"
+                                    >
                                         <TextInput
                                             v-model="updateContent"
                                             class="w-full border-indigo-500 hover:bg-gray-200"
@@ -2664,6 +2773,182 @@ onUnmounted(() => {
                                         )
                                     }}
                                     <div
+                                        v-if="showUpdate == 'activities'"
+                                        v-for="activity in filteredUpdates"
+                                        class="px-6 pt-4"
+                                    >
+                                        <div
+                                            class="bg-white p-4 border-b-2 flex items-center"
+                                        >
+                                            <i
+                                                class="far fa-clock mr-2 text-3xl"
+                                            ></i>
+                                            <h1 class="w-10 mr-4">
+                                                {{
+                                                    timeSinceLastUpdate(
+                                                        activity.created_at
+                                                    )
+                                                }}
+                                            </h1>
+                                            <div
+                                                class="flex w-full justify-between items-center"
+                                            >
+                                                <h1 class="mr-6">
+                                                    {{ activity.description }}
+                                                    By
+                                                </h1>
+                                                <div
+                                                    class="rounded-full w-12 h-12 flex items-center justify-center group/detail relative"
+                                                >
+                                                    <template
+                                                        v-if="
+                                                            activity.user
+                                                                ?.profile_picture_url
+                                                        "
+                                                    >
+                                                        <img
+                                                            :src="
+                                                                activity.user
+                                                                    .profile_picture_url
+                                                            "
+                                                            alt="Profile Picture"
+                                                            class="w-full h-full object-cover rounded-full"
+                                                        />
+                                                    </template>
+
+                                                    <!-- Display h1 only if there is no profile_picture_url -->
+                                                    <template v-else>
+                                                        <h1
+                                                            class="py-1 w-12 h-12 flex items-center justify-center text-3xl px-3.5 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
+                                                        >
+                                                            {{
+                                                                activity.user
+                                                                    ?.user_name
+                                                                    ? activity.user.user_name
+                                                                          .charAt(
+                                                                              0
+                                                                          )
+                                                                          .toUpperCase()
+                                                                    : "?"
+                                                            }}
+                                                        </h1>
+                                                    </template>
+                                                    <div
+                                                        class="w-64 transition-opacity hidden group-hover/detail:flex duration-1000 ease-in-out opacity-0 group-hover/detail:opacity-100 rounded-lg shadow-lg px-0 py-6 pb-0 -top-1 flex-col justify-between left-12 z-10 h-44 absolute bg-white"
+                                                    >
+                                                        <div
+                                                            class="flex px-8 w-20 h-20"
+                                                        >
+                                                            <template
+                                                                v-if="
+                                                                    activity
+                                                                        .user
+                                                                        ?.profile_picture_url
+                                                                "
+                                                            >
+                                                                <img
+                                                                    :src="
+                                                                        activity
+                                                                            .user
+                                                                            .profile_picture_url
+                                                                    "
+                                                                    alt="Profile Picture"
+                                                                    class="w-20 h-20 object-cover rounded-full"
+                                                                />
+                                                            </template>
+
+                                                            <!-- Display h1 only if there is no profile_picture_url -->
+                                                            <template v-else>
+                                                                <h1
+                                                                    class="py-3 w-20 h-20 flex items-center justify-center z-15 text-5xl px-6 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
+                                                                >
+                                                                    {{
+                                                                        activity
+                                                                            .user
+                                                                            ?.user_name
+                                                                            ? activity.user.user_name
+                                                                                  .charAt(
+                                                                                      0
+                                                                                  )
+                                                                                  .toUpperCase()
+                                                                            : "?"
+                                                                    }}
+                                                                </h1>
+                                                            </template>
+                                                            <div>
+                                                                <div
+                                                                    class="flex"
+                                                                >
+                                                                    <h1
+                                                                        class="font-extralight hover:underline cursor-pointer"
+                                                                    >
+                                                                        {{
+                                                                            activity
+                                                                                .user
+                                                                                .user_name
+                                                                        }}
+                                                                    </h1>
+                                                                    <span
+                                                                        class="w-3 h-3 rounded-full bg-green-400 ml-2"
+                                                                    ></span>
+                                                                </div>
+                                                                <h1
+                                                                    class="mt-4 p-1 bg-blue-100 flex items-center justify-center rounded-lg"
+                                                                >
+                                                                    {{
+                                                                        activity.user_role
+                                                                    }}
+                                                                </h1>
+                                                            </div>
+                                                        </div>
+                                                        <div
+                                                            class="border-t group/contact w-full relative border-gray-500 hover:bg-gray-100 cursor-pointer flex items-center justify-center border-b-0 py-4"
+                                                        >
+                                                            <h1>
+                                                                Contact Details
+                                                            </h1>
+                                                            <i
+                                                                class="fa fa-chevron-down ml-2 text-xs"
+                                                                aria-hidden="true"
+                                                            ></i>
+                                                            <div
+                                                                class="w-64 gr transition-opacity duration-1000 ease-in-out opacity-0 group-hover/contact:opacity-100 rounded-lg px-4 shadow-lg py-2 top-12 flex items-center left-0 h-16 absolute bg-white"
+                                                            >
+                                                                <i
+                                                                    class="far fa-envelope mr-2 font-extralight text-gray-500"
+                                                                ></i>
+                                                                <h1
+                                                                    class="text-gray-500"
+                                                                >
+                                                                    {{
+                                                                        console.log(
+                                                                            "email",
+                                                                            activity.user
+                                                                        )
+                                                                    }}
+                                                                    {{
+                                                                        activity
+                                                                            .user
+                                                                            .email
+                                                                    }}
+                                                                </h1>
+                                                                <h1
+                                                                    class="bg-blue-400 text-sm ml-4 rounded-md hover:bg-blue-500 p-1"
+                                                                >
+                                                                    Copy
+                                                                </h1>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div
+                                        v-if="
+                                            showUpdate == 'allUpdates' ||
+                                            showUpdate == 'mentioned'
+                                        "
                                         v-for="(
                                             update, index
                                         ) in filteredUpdates"
@@ -3302,13 +3587,7 @@ onUnmounted(() => {
                                         </div>
                                     </div>
                                 </SideDetail>
-                                {{
-                                    console.log(
-                                        "board tasks and filtered tasks",
-                                        board.tasks,
-                                        filteredTasks
-                                    )
-                                }}
+
                                 <div
                                     v-for="(task, index) in filteredTasks"
                                     :key="task.id"
@@ -3426,7 +3705,17 @@ onUnmounted(() => {
                                                     :key="user.id"
                                                 >
                                                     <div
-                                                        @click="updateTaskField(task.id, 'assigned_to', user.id)"
+                                                        v-if="
+                                                            user.role !==
+                                                            'Manager'
+                                                        "
+                                                        @click="
+                                                            updateTaskField(
+                                                                task.id,
+                                                                'assigned_to',
+                                                                user.id
+                                                            )
+                                                        "
                                                         class="flex relative items-center cursor-pointer w-44 mb-2 hover:bg-gray-100 px-3 py-2"
                                                     >
                                                         <!-- Conditional rendering: show initials if no profile picture -->
@@ -3484,19 +3773,37 @@ onUnmounted(() => {
                                                 class="absolute text-white justify-center flex flex-col items-center z-10 top-10 overflow-y-auto bg-white shadow-lg rounded-lg w-52 max-h-40"
                                             >
                                                 <div
-                                                    @click="updateTaskField(task.id, 'status', 'Completed')"
+                                                    @click="
+                                                        updateTaskField(
+                                                            task.id,
+                                                            'status',
+                                                            'Completed'
+                                                        )
+                                                    "
                                                     class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-green-500 bg-green-400 px-3 py-2"
                                                 >
                                                     <h1>Completed</h1>
                                                 </div>
                                                 <div
-                                                    @click="updateTaskField(task.id, 'status', 'In Progress')"
+                                                    @click="
+                                                        updateTaskField(
+                                                            task.id,
+                                                            'status',
+                                                            'In Progress'
+                                                        )
+                                                    "
                                                     class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-orange-500 bg-orange-400 px-3 py-2"
                                                 >
                                                     <h1>In Progress</h1>
                                                 </div>
                                                 <div
-                                                @click="updateTaskField(task.id, 'status', 'Not Started')"
+                                                    @click="
+                                                        updateTaskField(
+                                                            task.id,
+                                                            'status',
+                                                            'Not Started'
+                                                        )
+                                                    "
                                                     class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-gray-500 bg-gray-400 px-3 py-2"
                                                 >
                                                     <h1>Not Started</h1>
@@ -3510,13 +3817,16 @@ onUnmounted(() => {
                                                 showTasks
                                             "
                                             @click.stop="
-                                                        showDatePicker(task.id)
-                                                    "
+                                                showDatePicker(task.id)
+                                            "
                                             class="px-2 py-1 w-40 relative flex flex-col cursor-pointer items-start justify-center border"
                                         >
-                                            <div class="flex relative"
-                                            >
-                                                <i v-if  = "visibleDatePicker !== task.id"
+                                            <div class="flex relative">
+                                                <i
+                                                    v-if="
+                                                        visibleDatePicker !==
+                                                        task.id
+                                                    "
                                                     :class="{
                                                         'bg-red-500 fa-exclamation py-1 px-2.5':
                                                             task.status ===
@@ -3531,21 +3841,24 @@ onUnmounted(() => {
                                                     class="fa mr-4 text-sm h-fit rounded-full text-white"
                                                     aria-hidden="true"
                                                 ></i>
-                                                <div v-if  = "visibleDatePicker !== task.id"
-                                                    
+                                                <div
+                                                    v-if="
+                                                        visibleDatePicker !==
+                                                        task.id
+                                                    "
                                                 >
                                                     {{
-                                                        
-                                                        timeBeforeDue(task.due_date) 
-                                                        
+                                                        timeBeforeDue(
+                                                            task.due_date
+                                                        )
                                                     }}
                                                 </div>
                                             </div>
-                                            <DatePicker 
+                                            <DatePicker
                                                 v-if="
-                                                   visibleDatePicker == task.id
+                                                    visibleDatePicker == task.id
                                                 "
-                                                class = " absolute"
+                                                class="absolute"
                                                 :placement="'bottom'"
                                                 v-model="task.due_date"
                                                 @update:model-value="
@@ -3555,7 +3868,7 @@ onUnmounted(() => {
                                                             date
                                                         )
                                                 "
-                                                :auto-position="false"  
+                                                :auto-position="false"
                                                 :teleport="true"
                                             />
                                         </td>
@@ -3563,8 +3876,9 @@ onUnmounted(() => {
                                             @click="togglePriority(index)"
                                             @click.stop
                                             :class="{
-                                                'bg-gray-900' :
-                                                    task.priority === 'Critical',
+                                                'bg-gray-900':
+                                                    task.priority ===
+                                                    'Critical',
                                                 'bg-purple-800':
                                                     task.priority === 'High',
                                                 'bg-blue-700 ':
@@ -3585,25 +3899,49 @@ onUnmounted(() => {
                                                 class="absolute pt-10 text-white justify-center flex flex-col items-center z-10 top-10 overflow-y-auto bg-white shadow-lg rounded-lg w-52 max-h-40"
                                             >
                                                 <div
-                                                    @click="updateTaskField(task.id, 'priority', 'Critical')"
+                                                    @click="
+                                                        updateTaskField(
+                                                            task.id,
+                                                            'priority',
+                                                            'Critical'
+                                                        )
+                                                    "
                                                     class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-gray-900 bg-gray-700 px-3 py-2"
                                                 >
                                                     <h1>Critical</h1>
                                                 </div>
                                                 <div
-                                                    @click="updateTaskField(task.id, 'priority', 'High')"
+                                                    @click="
+                                                        updateTaskField(
+                                                            task.id,
+                                                            'priority',
+                                                            'High'
+                                                        )
+                                                    "
                                                     class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-purple-900 bg-purple-800 px-3 py-2"
                                                 >
                                                     <h1>High</h1>
                                                 </div>
                                                 <div
-                                                    @click="updateTaskField(task.id, 'priority', 'Medium')"
+                                                    @click="
+                                                        updateTaskField(
+                                                            task.id,
+                                                            'priority',
+                                                            'Medium'
+                                                        )
+                                                    "
                                                     class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-blue-800 bg-blue-700 px-3 py-2"
                                                 >
                                                     <h1>Medium</h1>
                                                 </div>
                                                 <div
-                                                    @click="updateTaskField(task.id, 'priority', 'Low')"
+                                                    @click="
+                                                        updateTaskField(
+                                                            task.id,
+                                                            'priority',
+                                                            'Low'
+                                                        )
+                                                    "
                                                     class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-blue-500 bg-blue-400 px-3 py-2"
                                                 >
                                                     <h1>Low</h1>
@@ -3627,12 +3965,19 @@ onUnmounted(() => {
                                                 showTasks
                                             "
                                             class="px-6 py-1 border w-24 flex items-center justify-center"
-                                        >$
-                                        <input type="text" class = "w-full p-0 border-none"
-                                        v-model = task.budget
-                                        @input="updateTaskBudget(task.id,task.budget)"
                                         >
-                                            
+                                            $
+                                            <input
+                                                type="text"
+                                                class="w-full p-0 border-none"
+                                                v-model="task.budget"
+                                                @input="
+                                                    updateTaskBudget(
+                                                        task.id,
+                                                        task.budget
+                                                    )
+                                                "
+                                            />
                                         </td>
                                         <td
                                             v-if="
@@ -3698,9 +4043,11 @@ onUnmounted(() => {
                                             "
                                             class="px-6 py-1 w-44 border flex items-center justify-center"
                                         >
-                                            <span class="text-gray-600"
-                                                >{{ timeSinceLastUpdate(task.updated_at) }}</span
-                                            >
+                                            <span class="text-gray-600">{{
+                                                timeSinceLastUpdate(
+                                                    task.updated_at
+                                                )
+                                            }}</span>
                                         </td>
                                     </tr>
 
@@ -3970,6 +4317,7 @@ onUnmounted(() => {
                                     class="px-6 group py-1 w-56 border flex items-center"
                                 >
                                     <input
+                                        v-if="userStore.user.role == 'Admin'"
                                         type="text"
                                         @focus="clearInput"
                                         v-model="newTaskName"
@@ -4066,8 +4414,9 @@ onUnmounted(() => {
                                             :key="task.id"
                                             :style="{ width: segmentWidth }"
                                             :class="{
-                                                'bg-gray-900' : 
-                                                    task.priority === 'Critical',
+                                                'bg-gray-900':
+                                                    task.priority ===
+                                                    'Critical',
                                                 'bg-purple-800':
                                                     task.priority === 'High',
                                                 'bg-blue-700 ':
@@ -4087,8 +4436,9 @@ onUnmounted(() => {
                                 <td
                                     v-if="showBudget || showAll || showTasks"
                                     class="px-6 py-1 border w-24 flex items-center justify-center"
-                                > ${{totalBudget}}
-                            </td>
+                                >
+                                    ${{ totalBudget }}
+                                </td>
 
                                 <td
                                     v-if="showFiles || showAll || showTasks"

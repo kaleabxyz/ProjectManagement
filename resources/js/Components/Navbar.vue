@@ -15,10 +15,9 @@ import Checkbox from "@/Components/Checkbox.vue";
 import axios from "axios";
 import TextInput from "@/Components/TextInput.vue";
 import { useRouter, useRoute } from "vue-router";
-import { useUserStore } from '@/Stores/userStore.js';
-import { useNotificationsStore } from '@/Stores/notificationsStore.js';
+import { useUserStore } from "@/Stores/userStore.js";
+import { useNotificationsStore } from "@/Stores/notificationsStore.js";
 import Pusher from "pusher-js";
-
 
 function handleImageError() {
     document.getElementById("screenshot-container")?.classList.add("!hidden");
@@ -26,8 +25,10 @@ function handleImageError() {
     document.getElementById("docs-card-content")?.classList.add("!flex-row");
     document.getElementById("background")?.classList.add("!hidden");
 }
+const allUsers = ref([]);
 const boards = ref([]);
 const board = ref([]);
+const showFilter = ref(false);
 const userRole = ref("");
 const showMembers = ref([]);
 const boardName = ref(null);
@@ -43,7 +44,7 @@ const replyContent = ref("");
 const currentPassword = ref("");
 const newPassword = ref("");
 const confirmPassword = ref("");
-
+const searchQuery = ref("");
 const sideDetail = ref(false);
 const inviteVisible = ref(false);
 const updateVisible = ref(false);
@@ -57,6 +58,10 @@ const router = useRouter();
 const showAdminstration = ref(false);
 const profileActive = ref(false);
 const profile = ref(true);
+const showUsers = ref(true);
+const showStats = ref(false);
+const showPending = ref(false);
+
 const trash = ref(true);
 const archive = ref(false);
 const workingStatus = ref(false);
@@ -67,15 +72,20 @@ const mobilePhone = ref("");
 const location = ref("");
 const skype = ref("");
 const birthday = ref("");
-const notifications = ref([]);
+
 const userName = ref("");
-const selectedStatus = ref("In the office");
+const selectedStatus = ref("");
 const selectedProfile = ref([]);
-const notificationRead = ref(false)
+const notificationRead = ref(false);
 const formErrors = reactive({
     currentPassword: "",
     newPassword: "",
     confirmPassword: "",
+});
+const selectedFilters = reactive({
+    userRole: null,
+    status: null,
+    project: null,
 });
 axios.defaults.baseURL = "http://127.0.0.1:8000";
 
@@ -141,9 +151,9 @@ const users = ref([
 ]);
 onMounted(() => {
     userStore.loadUserFromStorage(); // Optionally load user from storage
-  userStore.fetchUser(); 
-  fetchNotifications(); // Fetch existing notifications on load
-  initPusher();
+    userStore.fetchUser();
+    // fetchNotifications(); // Fetch existing notifications on load
+    // initPusher();
     workSpace.value = route.query.workSpace;
     boardName.value = route.params.boardName;
     console.log("board and workspace", workSpace.value);
@@ -151,7 +161,6 @@ onMounted(() => {
         fetchBoard(workSpace, boardName);
         fetchBoards();
     }
-   
 });
 const initPusher = () => {
     const pusher = new Pusher("464dddcaaa1a6c17607c", {
@@ -163,8 +172,6 @@ const initPusher = () => {
 
     // Listen for the 'new-invite' event
     invitesChannel.bind("new-invite", (data) => {
-        
-
         const updatedInvitation = {
             ...data.invitation,
             inviter: data.inviter,
@@ -174,22 +181,20 @@ const initPusher = () => {
             ...data.notification,
             invitation: updatedInvitation,
         });
-        
 
         // Optionally, trigger any additional logic, e.g., show a toast notification
     });
 };
 const userStore = useUserStore();
-
+const notifications = computed(() => userStore.notifications);
 const unreadNotificationsCount = computed(() => {
-    return notifications.value.filter(notification => !notification.read).length;
+    return notifications.value.filter((notification) => !notification.read)
+        .length;
 });
 const user = computed(() => userStore.user);
-  
 
 console.log("🚀 ~ userin navbar:", user.value);
 const fetchBoard = (workSpace, boardName) => {
-
     user.value.workspaces.forEach((workspace) => {
         if (workspace.id == workSpace.value) {
             workspace.boards.forEach((b) => {
@@ -202,9 +207,9 @@ const fetchBoard = (workSpace, boardName) => {
     });
 };
 const allUpdates = computed(() => {
-  return boards.value.flatMap((board) =>
-    board?.discussions?.length > 0 ? board.discussions : []
-  );
+    return boards.value.flatMap((board) =>
+        board?.discussions?.length > 0 ? board.discussions : []
+    );
 });
 const fetchBoards = () => {
     // Directly set the boards array by flattening all boards from all workspaces
@@ -213,10 +218,14 @@ const fetchBoards = () => {
     );
     boards.value.forEach((b) => {
         showMembers.value.push(false);
-    })
-    
+    });
+
     selectedUpdates.value = allUpdates.value;
-    console.log('selected updates after all updates',allUpdates.value,selectedUpdates.value)
+    console.log(
+        "selected updates after all updates",
+        allUpdates.value,
+        selectedUpdates.value
+    );
     selectedUpdates.value.forEach((update) => {
         if (!update.reply) {
             showReplyInput.value.push(false);
@@ -224,9 +233,64 @@ const fetchBoards = () => {
     });
 
     selectedBoard.value = null;
-
-    
 };
+function selectBoardName(boardName) {
+    if (selectedFilters.boardName == boardName) {
+        selectedFilters.boardName = null;
+    } else {
+        selectedFilters.boardName = boardName;
+    }
+}
+
+function selectedUserStatus(status) {
+    if (selectedFilters.status == status) {
+        selectedFilters.status = null;
+    } else {
+        selectedFilters.status = status;
+    }
+}
+
+function selectedUserRole(role) {
+    if (selectedFilters.role == role) {
+        selectedFilters.role = null;
+    } else {
+        selectedFilters.role = role;
+    }
+}
+function clearAllFilters() {
+    // Clear basic filters
+    selectedFilters.role = null;
+    selectedFilters.status = null;
+    selectedFilters.project = null;
+}
+const selectedUserBoard = computed(() => {
+    return boards.value.find(
+        (board) => board.board_name === selectedFilters.value.project
+    );
+});
+const filteredAllUsers = computed(() => {
+    // Start with all users
+    let users = allUsers.value;
+
+    // Filter by selected board (team members)
+    if (selectedFilters.project && selectedBoard.value) {
+        const teamMembers = selectedBoard.team.members;
+        users = users.filter((user) => teamMembers.includes(user.id));
+    }
+
+    // Filter by status (active/inactive)
+    if (selectedFilters.status !== null) {
+        const isActive = selectedFilters.status == "true";
+        users = users.filter((user) => user.status == isActive);
+    }
+
+    // Filter by role (Admin/User)
+    if (selectedFilters.role) {
+        users = users.filter((user) => user.role === selectedFilters.role);
+    }
+
+    return users;
+});
 
 const toggleShowMembers = (index) => {
     showMembers.value[index] = !showMembers.value[index];
@@ -235,37 +299,57 @@ const fetchNotifications = async () => {
     try {
         const response = await axios.get("/api/notifications");
         notifications.value = response.data;
-        
+        userStore.notifications = notifications.value;
     } catch (error) {
         console.error("Error fetching notifications", error);
     }
 };
 const markNotificationAsRead = async (notificationId) => {
-  try {
-    await axios.post(`/api/notifications/markAsRead/${notificationId}`);
-    console.log('Notification marked as read');
-  } catch (error) {
-    console.error('Error marking notification as read', error);
-  }
+    try {
+        await axios.post(`/api/notifications/markAsRead/${notificationId}`);
+        console.log("Notification marked as read");
+    } catch (error) {
+        console.error("Error marking notification as read", error);
+    }
 };
-
-
-
 
 const handleAccept = async (notification) => {
     try {
         // Accept the invitation
-        await axios.post(`/api/invitations/${notification.invitation.id}/accept`, {
-            notification_id: notification.id,
-        });
-        
+        await axios.post(
+            `/api/invitations/${notification.invitation.id}/accept`,
+            {
+                notification_id: notification.id,
+            }
+        );
+        const boardId = notification.invitation.board; 
+        const { data: newBoard } = await axios.get(`/api/boards/${boardId}?workspace_id=${userStore.user.workspaces[0].id}`);
+        const workspace = userStore.user.workspaces[0];
+        if (workspace) {
+                // Push the new board into the workspace's boards array
+                workspace.boards.push(newBoard);
+      
+                // Update the user state with the modified workspace
+                userStore.user = {
+                  ...userStore.user,
+                  workspaces: userStore.user.workspaces.map(w =>
+                    w.id === workspace.id ? workspace : w
+                  ),
+                };
+                console.log('new board from invite and user',newBoard,userStore.user)
+                // Update local storage
+                
+              }
         // Mark the notification as read locally
-        const index = notifications.value.findIndex(n => n.id === notification.id);
+        const index = notifications.value.findIndex(
+            (n) => n.id === notification.id
+        );
         if (index !== -1) {
             notifications.value[index].read = true;
-            notifications.value[index].invitation.status = 'accepted';
+            notifications.value[index].invitation.status = "accepted";
         }
-
+        userStore.notifications = notifications.value;
+        localStorage.setItem('user', JSON.stringify(userStore.user));
         console.log("Invitation accepted and notification marked as read");
     } catch (error) {
         console.error("Error handling invitation acceptance:", error);
@@ -281,36 +365,53 @@ const handleNoThanks = async (notification) => {
         });
 
         // Mark the notification as read locally
-        const index = notifications.value.findIndex(n => n.id === notification.id);
+        const index = notifications.value.findIndex(
+            (n) => n.id === notification.id
+        );
         if (index !== -1) {
             notifications.value[index].read = true;
-            notifications.value[index].invitation.status = 'declined';
+            notifications.value[index].invitation.status = "declined";
         }
+       
+        localStorage.setItem('user', JSON.stringify(userStore.user));
 
         console.log("Invitation declined and notification marked as read");
     } catch (error) {
-        console.error("Error declining invitation and marking notification as read", error);
+        console.error(
+            "Error declining invitation and marking notification as read",
+            error
+        );
+    }
+};
+const fetchAllUsers = async () => {
+    try {
+        const response = await axios.get("/api/users");
+        allUsers.value = response.data;
+        console.log("all users for adminstration", allUsers.value);
+    } catch {
+        console.error("Error fetching all users:", error);
     }
 };
 
-
-
 const fetchUsers = async () => {
-    console.log('board name for invite', board.value.board_name);
+    console.log("board name for invite", board.value.board_name);
     if (email.value.trim()) {
         try {
             const response = await axios.get("/api/search-users", {
                 params: { email: email.value },
             });
-            
-            // Fetch team members of the current board
-            const boardTeamMembers = board.value.team.members.map(member => member.email);
-            
-            // Filter out users who are already in the team members list
-            searchResults.value = response.data.filter(user => !boardTeamMembers.includes(user.email));
-            
-            console.log("search results", searchResults.value);
 
+            // Fetch team members of the current board
+            const boardTeamMembers = board.value.team.members.map(
+                (member) => member.email
+            );
+
+            // Filter out users who are already in the team members list
+            searchResults.value = response.data.filter(
+                (user) => !boardTeamMembers.includes(user.email)
+            );
+
+            console.log("search results", searchResults.value);
         } catch (error) {
             console.error("Error fetching users:", error);
         }
@@ -320,7 +421,6 @@ const fetchUsers = async () => {
 };
 
 const selectUser = (user) => {
-    
     console.log("send invite", board.value);
     selectedUser.value = user;
     console.log("selected user invite", selectedUser.value.id);
@@ -328,22 +428,20 @@ const selectUser = (user) => {
 
 const sendInvitation = async () => {
     if (selectedUser.value && selectedRole.value) {
-        
         try {
-                await axios.post("/api/invitations", {
-                    invited: selectedUser.value.id,
-                    board: board.value.id,
-                    team: board.value.team.id,
-                    role: selectedRole.value,
-                    email: selectedUser.value.email,
-                    board_name:board.value.board_name,
-                });
-            email.value = '';
+            await axios.post("/api/invitations", {
+                invited: selectedUser.value.id,
+                board: board.value.id,
+                team: board.value.team.id,
+                role: selectedRole.value,
+                email: selectedUser.value.email,
+                board_name: board.value.board_name,
+            });
+            email.value = "";
             searchResults.value = [];
-                selectedRole.value = null;
-                selectedUser.value = null
-                alert("Invitation sent!");
-                
+            selectedRole.value = null;
+            selectedUser.value = null;
+            alert("Invitation sent!");
 
             hideInvite();
         } catch (error) {
@@ -407,24 +505,33 @@ const userProfile = (user) => {
     skype.value = user.skype;
     birthday.value = user.birthday;
 };
-const updateUserField = async (fieldName, newValue) => {
+const updateUserField = async (user2,fieldName, newValue) => {
     // Exit if the input is empty or hasn't changed
+    console.log('user id and user2 id',user.value.id,user2.id)
+    if (user.id == user2.id) {
+        
     if (!newValue.trim() || newValue === user.value[fieldName]) {
         return;
     }
+}
 
+    if (user.value.id == user2.id)
+    {
+        user.value[fieldName] = newValue;
+    } 
+    
     // Update the field in the frontend state
-    user.value[fieldName] = newValue;
+    
 
     try {
         // Update the user field in the database
-        await axios.patch(`/api/users/${user.value.id}`, {
+        await axios.patch(`/api/users/${user2.id}`, {
             [fieldName]: newValue,
         });
-
-        // Save the updated user data to localStorage
-        localStorage.setItem("user", JSON.stringify(user.value));
-
+        if (user.id == user2.id) {
+            // Save the updated user data to localStorage
+            localStorage.setItem("user", JSON.stringify(user.value));
+        }
         console.log(`${fieldName} updated successfully in user data.`);
     } catch (error) {
         console.error(`Error updating ${fieldName}:`, error);
@@ -802,6 +909,7 @@ const toggleSideDetail = () => {
 const hidesideDetail = () => {
     sideDetail.value = false;
     profileActive.value = false;
+    showFilter.value = false;
 };
 
 const toggleInvite = () => {
@@ -820,7 +928,7 @@ const hideUpdate = () => {
 const handleClickOutside = (event) => {
     if (
         !event.target.closest(".invite-content") &&
-        (sideDetail.value || profileActive.value)
+        (sideDetail.value || profileActive.value || showFilter.value)
     ) {
         hidesideDetail();
     }
@@ -830,8 +938,7 @@ const logout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
 
-    console.log("🚀 ~ logout ~ state.state.user:", state.state.user);
-    state.state.user = null;
+    userStore.user = null;
 
     // Optionally, redirect to the login page
     router.push("/");
@@ -859,9 +966,22 @@ watch(
     }
 );
 
+function formatDateForDisplay(dateString) {
+    const date = new Date(dateString);
+    if (isNaN(date)) return "Invalid date"; // Handle invalid date case
+
+    const currentYear = new Date().getFullYear();
+    const taskYear = date.getFullYear();
+    const month = date.toLocaleString("default", { month: "short" });
+    const day = date.getDate();
+    const year =
+        taskYear !== currentYear ? `/${taskYear.toString().slice(-2)}` : "";
+
+    return `${month} ${day}, ${taskYear}`;
+}
 </script>
 
-<template>
+<template v-if = "userStore.user">
     <head>
         <link href="{{ asset('css/app.css') }}" rel="stylesheet" />
         <link
@@ -933,7 +1053,7 @@ watch(
                                 workingStatus = false;
                                 password = false;
 
-                                userProfile(user);
+                                
                             "
                             :class="{
                                 'bg-blue-100': profile === true,
@@ -1018,24 +1138,26 @@ watch(
                                 </template>
                                 <div class="flex flex-col">
                                     <input
+                                    :disabled="selectedProfile.id !== user.id"
                                         type="text"
                                         class="px-0 border-0 hover:border-gray-300 hover:border text-4xl font-medium py-1"
                                         v-model="userName"
                                         @input="
                                             updateUserField(
-                                                'user_name',
+                                                user,'user_name',
                                                 userName
                                             )
                                         "
                                     />
 
                                     <input
+                                    :disabled="selectedProfile.id !== user.id"
                                         type="text"
                                         class="px-0 border-0 hover:border-gray-300 hover:border text-sm py-1 text-gray-500"
                                         v-model="jobTitle"
                                         @input="
                                             updateUserField(
-                                                'job_title',
+                                               user, 'job_title',
                                                 jobTitle
                                             )
                                         "
@@ -1072,10 +1194,11 @@ watch(
                                         <h1>Phone</h1>
                                     </div>
                                     <input
+                                    :disabled="selectedProfile.id !== user.id"
                                         type="text"
                                         class="px-0 ml-4 border-0 hover:border-gray-300 hover:border text-sm py-1 text-gray-500"
                                         v-model="phone"
-                                        @input="updateUserField('phone', phone)"
+                                        @input="updateUserField(user,'phone', phone)"
                                         :placeholder="phone ? '' : 'Add phone'"
                                     />
                                 </div>
@@ -1088,12 +1211,13 @@ watch(
                                         <h1>Mobile phone</h1>
                                     </div>
                                     <input
+                                    :disabled="selectedProfile.id !== user.id"
                                         type="text"
                                         class="px-0 ml-4 border-0 hover:border-gray-300 hover:border text-sm py-1 text-gray-500"
                                         v-model="mobilePhone"
                                         @input="
                                             updateUserField(
-                                                'mobile_phone',
+                                                user,'mobile_phone',
                                                 mobilePhone
                                             )
                                         "
@@ -1113,12 +1237,13 @@ watch(
                                         <h1>Location</h1>
                                     </div>
                                     <input
+                                    :disabled="selectedProfile.id !== user.id"
                                         type="text"
                                         class="px-0 ml-4 border-0 hover:border-gray-300 hover:border text-sm py-1 text-gray-500"
                                         v-model="location"
                                         @input="
                                             updateUserField(
-                                                'location',
+                                                user, 'location',
                                                 location
                                             )
                                         "
@@ -1141,10 +1266,11 @@ watch(
                                     <h1>Skype</h1>
                                 </div>
                                 <input
+                                :disabled="selectedProfile.id !== user.id"
                                     type="text"
                                     class="px-0 ml-4 border-0 hover:border-gray-300 hover:border text-sm py-1 text-gray-500"
                                     v-model="skype"
-                                    @input="updateUserField('skype', skype)"
+                                    @input="updateUserField(user,'skype', skype)"
                                     :placeholder="skype ? '' : 'Add a skype'"
                                 />
                             </div>
@@ -1155,11 +1281,12 @@ watch(
                                     <h1>Birthday</h1>
                                 </div>
                                 <input
+                                :disabled="selectedProfile.id !== user.id"
                                     type="text"
                                     class="px-0 ml-4 border-0 hover:border-gray-300 hover:border text-sm py-1 text-gray-500"
                                     v-model="birthday"
                                     @input="
-                                        updateUserField('birthday', birthday)
+                                        updateUserField(user,'birthday', birthday)
                                     "
                                     :placeholder="
                                         birthday ? '' : 'Add birthday'
@@ -1167,18 +1294,27 @@ watch(
                                 />
                             </div>
                         </div>
-                        <div class="w-1/2 border rounded-lg p-6 overflow-y-auto">
+                        <div
+                            class="w-1/2 border rounded-lg p-6 overflow-y-auto"
+                        >
                             <h1 class="text-5xl">Teams</h1>
-                            <div v-for="(teamBoard,index) in boards"
-                            class = "overflow-y-auto">
+                            <div
+                                v-for="(teamBoard, index) in boards"
+                                class="overflow-y-auto"
+                            >
                                 <div>
-                                    {{console.log('teamBoard in boards',teamBoard)}}
+                                    {{
+                                        console.log(
+                                            "teamBoard in boards",
+                                            teamBoard
+                                        )
+                                    }}
                                     <div
                                         @click.stop="toggleShowMembers(index)"
                                         class="m-4 w-3/4 p-2 bg-gray-100 cursor-pointer"
                                     >
                                         <div
-                                            class="w-full flex text-xl font-bold overflow-y-auto  justify-between"
+                                            class="w-full flex text-xl font-bold overflow-y-auto justify-between"
                                         >
                                             {{ teamBoard.board_name }}
                                             <span>
@@ -1193,13 +1329,17 @@ watch(
                                                 ></i>
                                             </span>
                                         </div>
-                                        <div v-if="showMembers[index]" class="m-2 overflow-y-auto">
+                                        <div
+                                            v-if="showMembers[index]"
+                                            class="m-2 overflow-y-auto"
+                                        >
                                             <h1>Members</h1>
                                             <div
-                                                v-for="user in teamBoard.team?.members"
+                                                v-for="user in teamBoard.team
+                                                    ?.members"
                                                 class="bg-white p-2"
                                             >
-                                                <div
+                                                <div v-if = "user.role !== 'Manager'"
                                                     class="flex relative items-center cursor-pointer w-44 mb-2 rounded-lg hover:bg-blue-100 px-3 py-1"
                                                 >
                                                     <!-- Conditional rendering: show initials if no profile picture -->
@@ -1245,14 +1385,15 @@ watch(
                                 class="flex items-center"
                             >
                                 <input
+                                :disabled="selectedProfile.id !== user.id"
                                     type="radio"
                                     :id="status.id"
                                     name="status"
                                     :value="status.label"
-                                    v-model="selectedStatus"
+                                    v-model="user.working_status"
                                     @change="
                                         updateUserField(
-                                            'working_status',
+                                            user,'working_status',
                                             status.label
                                         )
                                     "
@@ -1269,7 +1410,7 @@ watch(
                         </div>
                     </div>
                 </div>
-                <div v-if="password" class="h-full w-1/4 p-6">
+                <div v-if="password && user.id == selectedUser.id" class="h-full w-1/4 p-6">
                     <div class="">
                         <h2 class="text-xl font-semibold mb-4">Password</h2>
                         <form @submit.prevent="updatePassword">
@@ -1382,18 +1523,20 @@ watch(
             <div class="p-8 font-medium border-b">
                 <h1 class="text-3xl">Adminstration</h1>
             </div>
-            <div class="flex h-full">
+            <div
+            class="flex h-full">
                 <div class="h-full border-r bg-gray-100 p-5">
                     <div class="text-sm font-extralight w-60">
                         <div
                             @click="
-                                profile = true;
-                                workingStatus = false;
-                                password = false;
+                            selectedUserRole('');
+                                showUsers = true;
+                                showStats = false;
+                                showPending = false;
                             "
                             :class="{
-                                'bg-blue-100': profile === true,
-                                'hover:bg-gray-200': profile !== true,
+                                'bg-blue-100': showUsers === true,
+                                'hover:bg-gray-200': showUsers !== true,
                             }"
                             class="flex items-center px-3 py-2 cursor-pointer rounded-md"
                         >
@@ -1404,13 +1547,15 @@ watch(
                         </div>
                         <div
                             @click="
-                                workingStatus = true;
-                                profile = false;
-                                password = false;
+                                selectedUserRole('Admin');
+    showStats = true;
+                                
+                                showUsers = false;
+                                showPending = false;
                             "
                             :class="{
-                                'bg-blue-100': workingStatus === true,
-                                'hover:bg-gray-200': workingStatus !== true,
+                                'bg-blue-100': showStats === true,
+                                'hover:bg-gray-200': showStats !== true,
                             }"
                             class="flex items-center px-3 py-2 cursor-pointer rounded-md"
                         >
@@ -1419,15 +1564,15 @@ watch(
                             ></i>
                             <h1 class="font-extralight text-sm">Usage stats</h1>
                         </div>
-                        <div
+                        <div v-if = "user.role== 'Admin'"
                             @click="
-                                password = true;
-                                workingStatus = false;
-                                profile = false;
+                                showPending = true;
+                                showUsers = false;
+                                showStats = false;
                             "
                             :class="{
-                                'bg-blue-100': password === true,
-                                'hover:bg-gray-200': password !== true,
+                                'bg-blue-100': showPending === true,
+                                'hover:bg-gray-200': showPending !== true,
                             }"
                             class="flex items-center px-3 py-2 cursor-pointer rounded-md"
                         >
@@ -1440,28 +1585,194 @@ watch(
                         </div>
                     </div>
                 </div>
-                <div v-if="profile" class="h-full w-full p-6">
+                <div v-if="showUsers" class="h-full w-full p-6">
                     <h1 class="text-4xl mb-8">User management</h1>
                     <h1>user/email</h1>
                     <div class="flex items-center justify-between">
-                        <div class="flex items-center">
+                        <div class="flex items-center relative">
                             <TextInput
                                 placeholder="search"
                                 class="w-72 mr-8"
+                                v-model="searchQuery"
                             ></TextInput>
                             <div
+                                :class="{
+                                    'bg-blue-200 border-solid border-r-2':
+                                        showFilter ||
+                                        selectedFilters.board_name ||
+                                        selectedFilters.role ||
+                                        selectedFilters.status,
+                                }"
+                                @click.stop="showFilter = !showFilter"
                                 class="flex items-center p-2 hover:bg-gray-100 cursor-pointer text-gray-500"
                             >
                                 <i class="fa fa-filter"> </i>
                                 <h1>Filter</h1>
                             </div>
+                            <div
+                                v-if="showFilter"
+                                class="absolute flex flex-col justify-between z-20 top-10 bg-white shadow-lg rounded-lg w-fit h-fit"
+                            >
+                                <div
+                                    class="flex justify-between items-center h-fit"
+                                >
+                                    <div class="ml-6 flex items-center">
+                                        <h1>
+                                            {{ Filters }}
+                                        </h1>
+                                        <h1
+                                            class="ml-4 font-extralight text-gray-600"
+                                        >
+                                            Showing
+                                            {{ filteredAllUsers.length }}
+                                            users
+                                        </h1>
+                                    </div>
+                                    <h1
+                                        @click.stop="clearAllFilters"
+                                        class="mr-10 font-extralight text-gray-600 cursor-pointer p-3 hover:bg-gray-100 rounded-md h-fit"
+                                    >
+                                        Clear All
+                                    </h1>
+                                </div>
+
+                                <div
+                                    @click.stop
+                                    class="m-6 flex overflow-x-auto"
+                                >
+                                    <!-- Task Name -->
+                                    <div class="ml-6">
+                                        <h1
+                                            class="text-gray-600 overflow-y-auto"
+                                        >
+                                            Project
+                                        </h1>
+                                        <div
+                                            v-for="board in boards"
+                                            class="overflow-y-auto max-h-44"
+                                            :key="board.id"
+                                        >
+                                            <h1
+                                                @click="
+                                                    selectBoardName(
+                                                        board.board_name
+                                                    )
+                                                "
+                                                :class="{
+                                                    'bg-blue-200':
+                                                        selectedFilters.project ===
+                                                        board.board_name,
+                                                    'bg-gray-100 hover:bg-gray-200':
+                                                        selectedFilters.project !==
+                                                        board.board_name,
+                                                }"
+                                                class="p-2 w-44 py-2 my-1 text-sm rounded-md"
+                                            >
+                                                {{ board.board_name }}
+                                            </h1>
+                                        </div>
+                                    </div>
+
+                                    <!-- Status -->
+                                    <div class="ml-6">
+                                        <h1
+                                            class="text-gray-600 overflow-y-auto"
+                                        >
+                                            Status
+                                        </h1>
+                                        <div
+                                            class="overflow-y-auto h-44 overflow-x-hidden"
+                                        >
+                                            <div
+                                                @click="
+                                                    selectedUserStatus('true')
+                                                "
+                                                class="p-2 w-44 py-2 flex items-center my-1 text-sm rounded-md"
+                                                :class="{
+                                                    'bg-blue-200':
+                                                        selectedFilters.status ===
+                                                        'true',
+                                                    'bg-gray-100 hover:bg-gray-200':
+                                                        selectedFilters.status !==
+                                                        'true',
+                                                }"
+                                            >
+                                                <span
+                                                    class="w-2 mr-2 h-2 rounded-full bg-green-400 ml-2"
+                                                ></span>
+                                                <h1>Active</h1>
+                                            </div>
+
+                                            <div
+                                                @click="
+                                                    selectedUserStatus('false')
+                                                "
+                                                class="p-2 pr-14 py-2 flex items-center my-1 text-sm rounded-md"
+                                                :class="{
+                                                    'bg-blue-200':
+                                                        selectedFilters.status ===
+                                                        'false',
+                                                    'bg-gray-100 hover:bg-gray-200':
+                                                        selectedFilters.status !==
+                                                        'false',
+                                                }"
+                                            >
+                                                <span
+                                                    class="w-2 mr-2 h-2 rounded-full bg-red-700 ml-2"
+                                                ></span>
+                                                <h1>Inactive</h1>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Priority -->
+                                    <div class="ml-6">
+                                        <h1
+                                            class="text-gray-600 overflow-y-auto"
+                                        >
+                                            Role
+                                        </h1>
+                                        <div
+                                            class="overflow-y-auto h-44 overflow-x-hidden"
+                                        >
+                                            <div
+                                                @click="
+                                                    selectedUserRole('Admin')
+                                                "
+                                                class="p-2 w-44 py-2 flex items-center my-1 text-sm rounded-md"
+                                                :class="{
+                                                    'bg-blue-200':
+                                                        selectedFilters.role ===
+                                                        'Admin',
+                                                    'bg-gray-100 hover:bg-gray-200':
+                                                        selectedFilters.role !==
+                                                        'Admin',
+                                                }"
+                                            >
+                                                <h1>Admin</h1>
+                                            </div>
+                                            <div
+                                                @click="
+                                                    selectedUserRole('User')
+                                                "
+                                                class="p-2 w-44 py-2 flex items-center my-1 text-sm rounded-md"
+                                                :class="{
+                                                    'bg-blue-200':
+                                                        selectedFilters.role ===
+                                                        'User',
+                                                    'bg-gray-100 hover:bg-gray-200':
+                                                        selectedFilters.role !==
+                                                        'User',
+                                                }"
+                                            >
+                                                <h1>User</h1>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <h1
-                            @click="inviteVisible = true"
-                            class="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg cursor-pointer"
-                        >
-                            + Invite
-                        </h1>
+                        
                     </div>
                     <div class="overflow-x-auto mt-8">
                         <table
@@ -1499,37 +1810,33 @@ watch(
                                     <th
                                         class="px-6 py-3 text-left text-gray-600 font-medium"
                                     >
-                                        Invited by
-                                    </th>
-                                    <th
-                                        class="px-6 py-3 text-left text-gray-600 font-medium"
-                                    >
                                         Last active
                                     </th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr
-                                    class="border-b border-gray-200"
-                                    v-for="(user, index) in board.team.members"
+                                    v-for="(user2, index) in filteredAllUsers"
                                     :key="index"
+                                    @click.stop="
+                                        showProfile = true;
+                                    showAdminstration = false; 
+                                        userProfile(user2);
+                                    "
+                                    class="border-b border-gray-200 hover:bg-gray-100 cursor-pointer"
                                 >
-                                    {{
-                                        console.log(
-                                            "board singular",
-                                            user.pivot.role
-                                        )
-                                    }}
                                     <td class="px-6 py-4">
                                         <div
                                             class="flex items-center space-x-3"
                                         >
                                             <template
-                                                v-if="user?.profile_picture_url"
+                                                v-if="
+                                                    user2?.profile_picture_url
+                                                "
                                             >
                                                 <img
                                                     :src="
-                                                        user.profile_picture_url
+                                                        user2.profile_picture_url
                                                     "
                                                     alt="Profile Picture"
                                                     class="w-full h-full object-cover rounded-full"
@@ -1542,8 +1849,8 @@ watch(
                                                     class="py-1 w-12 h-12 flex items-center justify-center text-3xl px-3.5 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
                                                 >
                                                     {{
-                                                        user?.user_name
-                                                            ? user.user_name
+                                                        user2?.user_name
+                                                            ? user2.user_name
                                                                   .charAt(0)
                                                                   .toUpperCase()
                                                             : "?"
@@ -1553,55 +1860,88 @@ watch(
 
                                             <span
                                                 class="font-medium text-gray-900"
-                                                >{{ user.name }}</span
+                                                >{{ user2.name }}</span
                                             >
                                         </div>
                                     </td>
                                     <td class="px-6 py-4 text-gray-700">
-                                        {{ user.email }}
+                                        {{ user2.email }}
                                     </td>
                                     <td class="px-6 py-4">
                                         <select
-                                            v-model="user.pivot.role"
-                                            class="border border-gray-300 w-24 rounded-md p-2 bg-gray-50"
+                                        @click.stop
+                                        v-model="user2.role"
+                                        @change="updateUserField(user2,'role', user2.role)" 
+                                            class="border border-gray-300 w-28 rounded-md p-2 bg-gray-50"
                                         >
-                                            <option value="owner" disabled>
-                                                Owner
+                                            <option value="Manager" disabled>
+                                                Manager
                                             </option>
                                             <option value="Admin">Admin</option>
-                                            <option value="Member">
-                                                Member
-                                            </option>
-                                            <option value="Viewer">
-                                                Viewer
-                                            </option>
+                                            <option value="User">User</option>
                                         </select>
                                     </td>
 
                                     <td class="px-6 py-4 text-gray-700">
-                                        {{ user.status }}
+                                        {{
+                                            user2.status ? "Active" : "Inactive"
+                                        }}
                                     </td>
 
                                     <td class="px-6 py-4 text-gray-700">
-                                        {{ user.joined }}
+                                        {{
+                                            formatDateForDisplay(
+                                                user2.created_at
+                                            )
+                                        }}
                                     </td>
+
                                     <td class="px-6 py-4 text-gray-700">
-                                        {{ user.invitedBy || "---" }}
-                                    </td>
-                                    <td class="px-6 py-4 text-gray-700">
-                                        {{ user.lastActive }}
+                                        {{
+                                            formatDateForDisplay(
+                                                user2.last_active_at
+                                            )
+                                        }}
                                     </td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
                 </div>
-                <div v-if="workingStatus" class="h-full w-full p-6">
+                <div v-if="showStats" class="h-full w-full p-6">
                     <div class=" ">
                         <h2 class="text-4xl mb-8">Usage stats</h2>
                     </div>
+                    <div class = "flex ">
+                        <div class = "w-fit p-4 bg-purple-500 text-white mr-8">
+                            <h1>Users Summary</h1>
+                            <div class = "flex items-center justify-between ">
+                                <div class = "flex flex-col items-center p-2 ">
+                                    <h1 class = "text-5xl">{{ allUsers.length }}</h1>
+                                    <h1>Number of Users</h1>
+                                </div>
+                                <div class = "flex flex-col items-center p-2">
+                                    <h1 class = "text-5xl">{{ filteredAllUsers.length }}</h1>
+                                    <h1>Number of Admins</h1>
+                                </div>
+                            </div>
+                        </div>
+                        <div class = "w-fit p-4 bg-blue-400 text-white">
+                            <h1>Projects Summary</h1>
+                            <div class = "flex items-center justify-between ">
+                                <div class = "flex flex-col items-center p-2 ">
+                                    <h1 class = "text-5xl">{{ boards.length }}</h1>
+                                    <h1>Number of Projects</h1>
+                                </div>
+                                <div class = "flex flex-col items-center p-2">
+                                    <h1 class = "text-5xl">{{ filteredAllUsers.length }}</h1>
+                                    <h1>Number of Admins</h1>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div v-if="password" class="h-full w-1/4 p-6">
+                <div v-if="showPending && user.role == 'Admin'" class="h-full w-1/4 p-6">
                     <div class="">
                         <h2 class="text-4xl mb-8">Pending invitations</h2>
                     </div>
@@ -1610,7 +1950,11 @@ watch(
         </div>
     </div>
 
-    <SideDetail v-if="sideDetail" @click.stop class="p-6 min-h-screen overflow-y-auto">
+    <SideDetail
+        v-if="sideDetail"
+        @click.stop
+        class="p-6 min-h-screen overflow-y-auto"
+    >
         <span>
             <div class="flex items-center justify-between">
                 <h1 class="text-2xl font-bold">Notifications</h1>
@@ -1628,98 +1972,95 @@ watch(
                 </div>
             </div>
             <div class="flex border-b-2 mt-6 font-extralight text-sm">
-                <div @click = "notificationRead = false"
-                :class = "{
-                    'border-b-2 border-blue-400' :!notificationRead 
-                }"
-                    class="p-4 py-1 flex  items-center hover:bg-gray-100 cursor-pointer"
+                <div
+                    @click="notificationRead = false"
+                    :class="{
+                        'border-b-2 border-blue-400': !notificationRead,
+                    }"
+                    class="p-4 py-1 flex items-center hover:bg-gray-100 cursor-pointer"
                 >
                     <h3>Unread</h3>
                 </div>
-                <div @click = "notificationRead = true"
-                :class = "{
-                    'border-b-2 border-blue-400' :notificationRead 
-                }"
+                <div
+                    @click="notificationRead = true"
+                    :class="{
+                        'border-b-2 border-blue-400': notificationRead,
+                    }"
                     class="p-4 py-1 flex items-center hover:bg-gray-100 cursor-pointer"
                 >
                     <h3>Read</h3>
                 </div>
             </div>
-            
-            <div v-for="notification in notifications" :key="notification.id" >
-    <div v-if = "notification.read == notificationRead"
-    class="flex mt-4 bg-gray-200 p-3 rounded-lg justify-between">
-      <div class="relative flex items-center">
-        <div class="flex flex-col items-center">
-          <h1
-            v-if="!notification.invitation.inviter?.profile_picture_url"
-            class="py-1 w-fit px-2.5 border-2 border-white text-white rounded-full bg-blue-300"
-          >
-            {{
-              notification.invitation.inviter?.user_name
-                ? notification.invitation.inviter.user_name.charAt(0).toUpperCase()
-                : "?"
-            }}
-          </h1>
-          <!-- Show user name -->
-          <h1 class="ml-2">{{ notification.invitation.inviter?.user_name }}</h1>
-        </div>
-        <div class="ml-4 text-base text-md">
-          {{ notification.body }} as a {{ notification.invitation.role }}
-        </div>
-      </div>
-      <div
-                                            v-if="
-                                                notification.invitation
-                                                    .status !== 'pending'
-                                            "
-                                            class="px-4 flex items-center"
-                                        >
-                                            <h1
-                                                :class="{
-                                                    'bg-red-600':
-                                                        notification.invitation
-                                                            .status ==
-                                                        'declined',
-                                                    'bg-green-600':
-                                                        notification.invitation
-                                                            .status ==
-                                                        'accepted',
-                                                }"
-                                                class="text-white px-4 py-2 text-sm rounded-lg"
-                                            >
-                                                {{
-                                                    notification.invitation
-                                                        .status
-                                                }}
-                                            </h1>
-                                        </div>
-                                        <div
-                                            v-if="
-                                                notification.invitation
-                                                    .status == 'pending'
-                                            "
-                                            class="items-center flex"
-                                        >
-                                            <button
-                                                @click="
-                                                    handleNoThanks(notification)
-                                                "
-                                                class="text-black px-4 py-2 rounded-lg hover:bg-gray-300 mr-4 text-sm"
-                                            >
-                                                No thanks
-                                            </button>
-                                            <button
-                                                @click="
-                                                    handleAccept(notification)
-                                                "
-                                                class="bg-blue-600 text-white px-4 py-2 text-sm rounded-lg hover:bg-blue-700"
-                                            >
-                                                Accept
-                                            </button>
-                                        </div>
-    </div>
-  </div>
+
+            <div v-for="notification in notifications" :key="notification.id">
+                <div
+                    v-if="notification.read == notificationRead"
+                    class="flex mt-4 bg-gray-200 p-3 rounded-lg justify-between"
+                >
+                    <div class="relative flex items-center">
+                        <div class="flex flex-col items-center">
+                            <h1
+                                v-if="
+                                    !notification.invitation.inviter
+                                        ?.profile_picture_url
+                                "
+                                class="py-1 w-fit px-2.5 border-2 border-white text-white rounded-full bg-blue-300"
+                            >
+                                {{
+                                    notification.invitation.inviter?.user_name
+                                        ? notification.invitation.inviter.user_name
+                                              .charAt(0)
+                                              .toUpperCase()
+                                        : "?"
+                                }}
+                            </h1>
+                            <!-- Show user name -->
+                            <h1 class="ml-2">
+                                {{ notification.invitation.inviter?.user_name }}
+                            </h1>
+                        </div>
+                        <div class="ml-4 text-base text-md">
+                            {{ notification.body }} as a
+                            {{ notification.invitation.role }}
+                        </div>
+                    </div>
+                    <div
+                        v-if="notification.invitation.status !== 'pending'"
+                        class="px-4 flex items-center"
+                    >
+                        <h1
+                            :class="{
+                                'bg-red-600':
+                                    notification.invitation.status ==
+                                    'declined',
+                                'bg-green-600':
+                                    notification.invitation.status ==
+                                    'accepted',
+                            }"
+                            class="text-white px-4 py-2 text-sm rounded-lg"
+                        >
+                            {{ notification.invitation.status }}
+                        </h1>
+                    </div>
+                    <div
+                        v-if="notification.invitation.status == 'pending'"
+                        class="items-center flex"
+                    >
+                        <button
+                            @click="handleNoThanks(notification)"
+                            class="text-black px-4 py-2 rounded-lg hover:bg-gray-300 mr-4 text-sm"
+                        >
+                            No thanks
+                        </button>
+                        <button
+                            @click="handleAccept(notification)"
+                            class="bg-blue-600 text-white px-4 py-2 text-sm rounded-lg hover:bg-blue-700"
+                        >
+                            Accept
+                        </button>
+                    </div>
+                </div>
+            </div>
         </span>
     </SideDetail>
     <div
@@ -1741,58 +2082,50 @@ watch(
             </div>
             <TextInput
                 v-model="email"
-               
                 @input="fetchUsers"
-
                 placeholder="Enter email address"
                 class="w-full my-4"
             ></TextInput>
-            <div
-                v-if="searchResults.length"
-                
-            >
-                <div v-for="user2 in searchResults" :key="user.email"
-                  
-                >
-                <div class="border-b py-2 h-20 overflow-y-auto bg-white"
-                 v-if="user2.id !== user.id"
-                >
-
-                
+            <div v-if="searchResults.length">
+                <div v-for="user2 in searchResults" :key="user.email">
                     <div
-                       
-                        @click.stop="selectUser(user2)"
-                        class=" px-2 rounded-md cursor-pointer"
-                        :class="{
-                            'bg-blue-200': selectedUser?.id == user2.id,
-                            'hover:bg-gray-100': selectedUser?.id !== user2.id,
-                        }"
+                        class="border-b py-2 h-20 overflow-y-auto bg-white"
+                        v-if="user2.id !== user.id"
                     >
-                        <h2 class="font-semibold">{{ user2.user_name }}</h2>
-                        <p class="text-gray-500">{{ user2.email }}</p>
+                        <div
+                            @click.stop="selectUser(user2)"
+                            class="px-2 rounded-md cursor-pointer"
+                            :class="{
+                                'bg-blue-200': selectedUser?.id == user2.id,
+                                'hover:bg-gray-100':
+                                    selectedUser?.id !== user2.id,
+                            }"
+                        >
+                            <h2 class="font-semibold">{{ user2.user_name }}</h2>
+                            <p class="text-gray-500">{{ user2.email }}</p>
+                        </div>
                     </div>
-                </div>
                 </div>
             </div>
             <div class="flex items-center">
                 <div class="flex items-center mr-10">
                     <input
-        type="radio"
-        id="member"
-        value="Member"
-        v-model="selectedRole"
-        class="mr-2"
-      />
+                        type="radio"
+                        id="member"
+                        value="Member"
+                        v-model="selectedRole"
+                        class="mr-2"
+                    />
                     <h1 class="font-extralight text-md">Member</h1>
                 </div>
                 <div class="flex items-center">
                     <input
-        type="radio"
-        id="viewer"
-        value="Viewer(Read-only)"
-        v-model="selectedRole"
-        class="mr-2"
-      />
+                        type="radio"
+                        id="viewer"
+                        value="Viewer(Read-only)"
+                        v-model="selectedRole"
+                        class="mr-2"
+                    />
                     <h1 class="font-extralight text-md">Viewer(Read-only)</h1>
                 </div>
             </div>
@@ -2748,7 +3081,7 @@ watch(
             >
                 <i class="fa fa-laptop m-2.5 text-sm"></i>
             </span>
-            <span
+            <span v-if = "userStore.user.role=='Admin' && route.path == '/project'"
                 @click="toggleInvite"
                 @click.stop
                 class="h-full hover:bg-gray-200"
@@ -2781,7 +3114,11 @@ watch(
                     class="absolute top-10 p-4 -left-44 bg-white shadow-lg w-64 rounded-lg"
                 >
                     <div class="flex">
-                        <ApplicationLogo></ApplicationLogo>
+                        <img
+                    class="ml-2 w-6"
+                    src="../../../public/images/logo-s.png"
+                    alt=""
+                />
                         <h1>Project management</h1>
                     </div>
                     <h1 class="text-gray-400">Account</h1>
@@ -2822,7 +3159,11 @@ watch(
                             <h1>Archive</h1>
                         </div>
                         <div
-                            @click="showAdminstration = true"
+                            v-if="user.role == 'Manager'"
+                            @click="
+                                showAdminstration = true;
+                                fetchAllUsers();
+                            "
                             class="py-2 px-2 text-gray-600 flex items-center cursor-pointer hover:bg-gray-100"
                         >
                             <i class="fa fa-cog mr-2" aria-hidden="true"></i>

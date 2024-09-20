@@ -18,9 +18,11 @@ return new class extends Migration
             $table->string('user_name')->index();
             $table->string('profile_picture_url')->nullable();
             $table->string('email')->unique();
-            $table->string('role')->default('user');
+            $table->string('role')->default('User');
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
+            $table->boolean('status')->default(true);
+            $table->timestamp('last_active_at')->nullable();
             $table->string('location')->nullable();
             $table->string('birthday')->nullable();
             $table->string('skype')->nullable();

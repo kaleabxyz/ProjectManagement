@@ -2,9 +2,9 @@
     <body class="bg-custom-blue min-h-screen w-full   "
     :class="bodyClass">
 
-        <Navbar v-if="!isDashboardRoute"/>
-        <Sidebar v-if="!isDashboardRoute " @nav="showSide" />
-    <router-view/> <!-- This will render the matched component -->
+        <Navbar v-if="!isDashboardRoute && userStore.user"/>
+        <Sidebar v-if="!isDashboardRoute && userStore.user " @nav="showSide" />
+    <router-view /> <!-- This will render the matched component -->
     </body>
   </template>
   
@@ -15,7 +15,7 @@ import Sidebar from '@/Components/Sidebar.vue'
   import { ref,computed, onMounted } from "vue";
   import { useRoute } from 'vue-router';
   import { useUserStore } from '@/Stores/userStore.js';
-  import state from './state'; 
+  
   const userStore = useUserStore();
 
   const side = ref("active");
@@ -34,7 +34,8 @@ const bodyClass = computed(() =>
 // Load the user from local storage and fetch from API if needed
 onMounted(() => {
   userStore.loadUserFromStorage(); // Optionally load user from storage
-  userStore.fetchUser(); 
+  userStore.fetchUser();
+
       
 });
   

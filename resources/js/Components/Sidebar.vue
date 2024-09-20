@@ -4,6 +4,9 @@ import TextInput from "@/Components/TextInput.vue";
 import { ref, watch, onMounted, computed } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import axios from "axios";
+import pusher from "pusher-js";
+import Echo from "laravel-echo";
+
 import { useUserStore } from '@/Stores/userStore';
 import state from '../state'; // Import the global state
 
@@ -49,9 +52,13 @@ const showFolderOptions = ref([]);
 
 
 onMounted(() => {
-    userStore.fetchUser(); 
     userStore.loadUserFromStorage(); // Optionally load user from storage
-
+  userStore.fetchUser();
+  userStore.initTaskListeners();// Optionally load user from storage
+    if (userStore.user.role == 'Manager') {
+        console.log('user in mounted', userStore.user.id)
+        initBoardCreatedListener(userStore.user.id);
+    }
     });
 // Access the user data from the global state
 const userStore = useUserStore();
@@ -59,35 +66,77 @@ const user = computed(() => userStore.user); // Use a unique key to trigger re-r
 const selectedWorkspace = computed(() => userStore.selectedWorkspace);// Initially select "Main workspace"
 console.log("🚀 ~ user in sidebar:", selectedWorkspace.value);
 if (user) {
-    
-user.value.workspaces?.forEach(workspace => {
-    console.log("🚀 ~ workspace:", workspace);
-    if (workspace.boards) {
-        console.log("🚀 ~ boards:", workspace.boards);
+    if (user.value && user.value.workspaces) {
+        user.value.workspaces?.forEach(workspace => {
+            console.log("🚀 ~ workspace:", workspace);
+            if (workspace.boards) {
+                console.log("🚀 ~ boards:", workspace.boards);
 
-        // Initialize 'false' for each board
-        workspace.boards.forEach(() => {
-            showBoardOptions.value.push(false);
-            showFolderOptions.value.push(false);
+                // Initialize 'false' for each board
+                workspace.boards.forEach(() => {
+                    showBoardOptions.value.push(false);
+                    showFolderOptions.value.push(false);
 
 
+                });
+            }
         });
     }
-});
 }
+
+const initEcho = () => {
+    const echoInstance = new Echo({
+        broadcaster: 'pusher',
+        key: '464dddcaaa1a6c17607c',
+        cluster: 'eu',
+        forceTLS: true,
+        encrypted: true,
+    });
+
+    return echoInstance;
+};
+const initBoardCreatedListener = (userId) => {
+    const echo = initEcho();
+    const boardChannel = echo.channel(`manager.${userId}`);
+
+    // Listen for the 'BoardCreated' event
+    
+    boardChannel.listen('BoardCreated', async (event) => { // Mark this function as async
+        console.log('New board created:', event.board);
+
+        try {
+            const { data: board } = await axios.get(`/api/boards/${event.board}?workspace_id=${userStore.user.workspaces[0].id}`);
+            
+            // Push the newly fetched board to the user's first workspace
+            userStore.user.workspaces[0].boards.push(board);
+            
+           
+            localStorage.setItem('user', JSON.stringify(userStore.user));
+            // Optionally, trigger any additional logic, e.g., show a toast notification
+        } catch (error) {
+            console.error('Error fetching the newly created board:', error);
+        }
+    });
+};
+
+
+
+
+
 
 
 const filteredBoards = computed(() => {
-  const query = searchQuery.value.toLowerCase();
-  return selectedWorkspace.value ? selectedWorkspace.value.boards.filter(board =>
-    board.board_name.toLowerCase().includes(query)
+    const query = searchQuery.value.toLowerCase();
+    
+  return userStore.selectedWorkspace ? userStore.selectedWorkspace.boards.filter(board =>
+    board.board_name.toLowerCase().startsWith(query)
   ) : [];
 });
 
 const filteredWorkspaces = computed(() => {
   const query = searchQueryW.value.toLowerCase();
   return userStore.user ? userStore.user.workspaces.filter(workspace =>
-    workspace.workspace_name.toLowerCase().includes(query)
+    workspace.workspace_name.toLowerCase().startsWith(query)
   ) : [];
 });
 const toggleBoardOption = (index) => {
@@ -953,7 +1002,8 @@ watch(
                                     class="absolute z-50 text-sm font-light shadow-xl top-0 w-72 left-64 bg-white p-1 py-4 rounded-lg"
                                 >
                                     
-                                    <div @click.stop="toggleAdd('board')"
+                                    <div v-if = "user.role == 'Admin'"
+                                    @click.stop="toggleAdd('board')"
                                         class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
                                     >
                                     <svg

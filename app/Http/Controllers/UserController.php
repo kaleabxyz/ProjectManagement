@@ -18,10 +18,21 @@ class UserController extends Controller
      * Display a listing of users.
      */
     public function index()
-    {
-        $users = User::all();
-        return response()->json($users);
-    }
+{
+    $users = User::with([
+        'workspaces.boards' => function ($query) {
+            $query->with([
+                'owner:id,user_name,email,profile_picture_url',
+                'creator:id,user_name,email,profile_picture_url',
+                'team',
+                'team.members',
+                
+            ]);
+        }
+    ])->get();
+
+    return response()->json($users);
+}
     public function fetchUser()
 {
     $user = Auth::user()->load([
@@ -35,6 +46,8 @@ class UserController extends Controller
                     $query->withCount('updates'); // Include update counts
                 },
                 'tasks.SubTasks',
+                'tasks.activities',
+                'tasks.activities.user:id,user_name,email,profile_picture_url',
                 'tasks.assignedUser:id,user_name,email,profile_picture_url',
                 'discussions' => function ($query) {
                     $query->with([
@@ -151,6 +164,7 @@ class UserController extends Controller
             'profile_picture_url' => 'nullable|string|max:255',
             'email' => 'sometimes|string|email|max:255|unique:users,email,' . $user->id,
             'password' => 'sometimes|string|min:8',
+            'role'     => 'string|in:Admin,User,Manager',
             'location' => 'nullable|string|max:255',
             'birthday' => 'nullable|string|max:255',
             'skype' => 'nullable|string|max:255',
@@ -170,6 +184,7 @@ class UserController extends Controller
             'email',
             'location',
             'birthday',
+            'role',
             'skype',
             'job_title',
             'phone',
@@ -213,6 +228,8 @@ class UserController extends Controller
                             $query->withCount('updates');
                         },
                         'tasks.SubTasks',
+                        'tasks.activities',
+                        'tasks.activities.user:id,user_name,email,profile_picture_url',
                         'tasks.assignedUser:id,user_name,email,profile_picture_url',
                         'discussions' => function ($query) {
                             $query->with([

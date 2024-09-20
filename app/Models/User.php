@@ -24,6 +24,7 @@ class User extends Authenticatable
         'password',
         'location',
         'birthday',
+        'role',
         'status',
         'skype',
         'job_title',
@@ -58,6 +59,7 @@ class User extends Authenticatable
     {
         return $this->hasMany(TeamMember::class, 'member');
     }
+   
 
     public function teams()
     {
