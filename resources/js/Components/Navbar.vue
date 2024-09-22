@@ -235,10 +235,11 @@ const fetchBoards = () => {
     selectedBoard.value = null;
 };
 function selectBoardName(boardName) {
-    if (selectedFilters.boardName == boardName) {
-        selectedFilters.boardName = null;
+    if (selectedFilters.project == boardName) {
+        selectedFilters.project = null;
     } else {
-        selectedFilters.boardName = boardName;
+        selectedFilters.project = boardName;
+        console.log('selected project',selectedFilters.project)
     }
 }
 
@@ -270,8 +271,16 @@ const selectedUserBoard = computed(() => {
 });
 const filteredAllUsers = computed(() => {
     // Start with all users
-    let users = allUsers.value;
-
+   
+    let users; 
+    if (userStore.user.role == 'Manager') {
+        users = allUsers.value;
+        
+    }else if(userStore.user.role == 'Admin') {
+        users = board.value?.team.members
+        console.log(users)
+    }
+    
     // Filter by selected board (team members)
     if (selectedFilters.project && selectedBoard.value) {
         const teamMembers = selectedBoard.team.members;
@@ -286,11 +295,41 @@ const filteredAllUsers = computed(() => {
 
     // Filter by role (Admin/User)
     if (selectedFilters.role) {
-        users = users.filter((user) => user.role === selectedFilters.role);
+        if (userStore.user.role == 'Manager') {
+            users = users.filter((user) => user.role === selectedFilters.role);
+        }else if(userStore.user.role == 'Admin') {
+            users = users.filter((user) => user.pivot.role === selectedFilters.role);
+    }
+    }
+    if (searchQuery.value) {
+        const query = searchQuery.value.toLowerCase();
+        users = users.filter((user) =>
+            user.user_name.toLowerCase().startsWith(query) || 
+            user.email.toLowerCase().startsWith(query)
+        );
     }
 
     return users;
 });
+const updateUserRole = async (user) => {
+  try {
+    // Make an API request to update the role in the database
+    const response = await axios.put(`/api/team-member/${user.id}/role`, {
+      role: user.pivot.role, // The selected role
+    });
+
+    // If the API call is successful, update the frontend store
+      if (response.status === 200) {
+        console.log('Role updated successfully',workSpace.value);
+      // Update the role in the userStore or refresh team members
+      userStore.updateUserRole(user.id, user.pivot.role,board.value.id,workSpace.value);  // Create a method to handle this in your userStore
+      
+    }
+  } catch (error) {
+    console.error('Failed to update role:', error);
+    // Optionally revert the change in the UI
+  }
+};
 
 const toggleShowMembers = (index) => {
     showMembers.value[index] = !showMembers.value[index];
@@ -1618,7 +1657,7 @@ function formatDateForDisplay(dateString) {
                                 >
                                     <div class="ml-6 flex items-center">
                                         <h1>
-                                            {{ Filters }}
+                                            Filters
                                         </h1>
                                         <h1
                                             class="ml-4 font-extralight text-gray-600"
@@ -1641,13 +1680,14 @@ function formatDateForDisplay(dateString) {
                                     class="m-6 flex overflow-x-auto"
                                 >
                                     <!-- Task Name -->
-                                    <div class="ml-6">
-                                        <h1
+                                    <div 
+                                    class="ml-6">
+                                        <h1 v-if = "userStore.user.role =='Manager'"
                                             class="text-gray-600 overflow-y-auto"
                                         >
                                             Project
                                         </h1>
-                                        <div
+                                        <div v-if = "userStore.user.role =='Manager'"
                                             v-for="board in boards"
                                             class="overflow-y-auto max-h-44"
                                             :key="board.id"
@@ -1725,8 +1765,9 @@ function formatDateForDisplay(dateString) {
                                         </div>
                                     </div>
 
-                                    <!-- Priority -->
-                                    <div class="ml-6">
+                                    <!-- Role -->
+                                    <div v-if = "userStore.user.role =='Manager'"
+                                     class="ml-6">
                                         <h1
                                             class="text-gray-600 overflow-y-auto"
                                         >
@@ -1769,12 +1810,190 @@ function formatDateForDisplay(dateString) {
                                             </div>
                                         </div>
                                     </div>
+                                    <div v-if = "userStore.user.role == 'Admin'"
+                                    class="ml-6">
+                                        <h1
+                                            class="text-gray-600 overflow-y-auto"
+                                        >
+                                            Role
+                                        </h1>
+                                        <div
+                                            class="overflow-y-auto h-44 overflow-x-hidden"
+                                        >
+                                            <div
+                                                @click="
+                                                    selectedUserRole('Viewer')
+                                                "
+                                                class="p-2 w-44 py-2 flex items-center my-1 text-sm rounded-md"
+                                                :class="{
+                                                    'bg-blue-200':
+                                                        selectedFilters.role ===
+                                                        'Viewer',
+                                                    'bg-gray-100 hover:bg-gray-200':
+                                                        selectedFilters.role !==
+                                                        'Viewwe',
+                                                }"
+                                            >
+                                                <h1>Viewer</h1>
+                                            </div>
+                                            <div
+                                                @click="
+                                                    selectedUserRole('Member')
+                                                "
+                                                class="p-2 w-44 py-2 flex items-center my-1 text-sm rounded-md"
+                                                :class="{
+                                                    'bg-blue-200':
+                                                        selectedFilters.role ===
+                                                        'Member',
+                                                    'bg-gray-100 hover:bg-gray-200':
+                                                        selectedFilters.role !==
+                                                        'Member',
+                                                }"
+                                            >
+                                                <h1>Member</h1>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                         
                     </div>
-                    <div class="overflow-x-auto mt-8">
+                    <div  v-if = "userStore.user.role == 'Admin'"
+                    class="overflow-x-auto mt-8">
+                        <table
+                            class="min-w-full bg-white border border-gray-200"
+                        >
+                            <thead>
+                                <tr class="border-b border-gray-200">
+                                    <th
+                                        class="px-6 py-3 text-left text-gray-600 font-medium"
+                                    >
+                                        Name
+                                    </th>
+                                    <th
+                                        class="px-6 py-3 text-left text-gray-600 font-medium"
+                                    >
+                                        Email
+                                    </th>
+                                    <th
+                                        class="px-6 py-3 text-left text-gray-600 font-medium"
+                                    >
+                                        User role
+                                    </th>
+
+                                    <th
+                                        class="px-6 py-3 text-left text-gray-600 font-medium"
+                                    >
+                                        Status
+                                    </th>
+
+                                    <th
+                                        class="px-6 py-3 text-left text-gray-600 font-medium"
+                                    >
+                                        Joined
+                                    </th>
+                                    <th
+                                        class="px-6 py-3 text-left text-gray-600 font-medium"
+                                    >
+                                        Last active
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr
+                                    class="border-b border-gray-200"
+                                    v-for="(user, index) in filteredAllUsers"
+                                    :key="index"
+                                >
+                                    {{
+                                        console.log(
+                                            "board singular",
+                                            user.pivot
+                                        )
+                                    }}
+                                    <td class="px-6 py-4">
+                                        <div
+                                            class="flex items-center space-x-3"
+                                        >
+                                            <template
+                                                v-if="user?.profile_picture_url"
+                                            >
+                                                <img
+                                                    :src="
+                                                        user.profile_picture_url
+                                                    "
+                                                    alt="Profile Picture"
+                                                    class="w-full h-full object-cover rounded-full"
+                                                />
+                                            </template>
+
+                                            <!-- Display h1 only if there is no profile_picture_url -->
+                                            <template v-else>
+                                                <h1
+                                                    class="py-1 w-12 h-12 flex items-center justify-center text-3xl px-3.5 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
+                                                >
+                                                    {{
+                                                        user?.user_name
+                                                            ? user.user_name
+                                                                  .charAt(0)
+                                                                  .toUpperCase()
+                                                            : "?"
+                                                    }}
+                                                </h1>
+                                            </template>
+
+                                            <span
+                                                class="font-medium text-gray-900"
+                                                >{{ user.name }}</span
+                                            >
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4 text-gray-700">
+                                        {{ user.email }}
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <select :disabled = "user.pivot.role == 'Owner'"
+                                            v-model="user.pivot.role"
+                                            @click.stop
+                                            @change="updateUserRole(user)" 
+                                            class="border border-gray-300 w-24 rounded-md p-2 bg-gray-50"
+                                        >
+                                            <option value="Owner" disabled>
+                                                Owner
+                                            </option>
+                                            <option value="Member">
+                                                Member
+                                            </option>
+                                            <option value="Viewer">
+                                                Viewer
+                                            </option>
+                                        </select>
+                                    </td>
+
+                                    <td class="px-6 py-4 text-gray-700">
+                                        {{
+                                            user.status ? "Active" : "Inactive"
+                                        }}
+                                    </td>
+
+                                    <td class="px-6 py-4 text-gray-700">
+                                        {{ formatDateForDisplay(user.pivot.created_at) }}
+                                    </td>
+                                  
+                                    <td class="px-6 py-4 text-gray-700">
+                                        {{
+                                            formatDateForDisplay(
+                                                user.last_active_at
+                                            )
+                                        }}
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div v-if = "userStore.user.role == 'Manager'"
+                     class="overflow-x-auto mt-8">
                         <table
                             class="min-w-full bg-white border border-gray-200"
                         >
@@ -1908,7 +2127,7 @@ function formatDateForDisplay(dateString) {
                         </table>
                     </div>
                 </div>
-                <div v-if="showStats" class="h-full w-full p-6">
+                <div v-if="showStats && userStore.user.role == 'Manager'" class="h-full w-full p-6">
                     <div class=" ">
                         <h2 class="text-4xl mb-8">Usage stats</h2>
                     </div>
@@ -3159,10 +3378,10 @@ function formatDateForDisplay(dateString) {
                             <h1>Archive</h1>
                         </div>
                         <div
-                            v-if="user.role == 'Manager'"
+                            v-if="userStore.user.role == 'Manager' || (userStore.user.role == 'Admin'&& route.path !== '/home')"
                             @click="
                                 showAdminstration = true;
-                                fetchAllUsers();
+                            if (userStore.user.role == 'Manager') { fetchAllUsers() };
                             "
                             class="py-2 px-2 text-gray-600 flex items-center cursor-pointer hover:bg-gray-100"
                         >

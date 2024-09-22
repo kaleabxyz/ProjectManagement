@@ -45,8 +45,10 @@ Route::post('/notifications/update', [NotificationController::class, 'update']);
 Route::apiResource('sub-tasks', SubTaskController::class);
 Route::apiResource('updates', UpdateController::class);
 Route::apiResource('team-members', TeamMemberController::class);
+Route::put('/team-member/{id}/role', [TeamMemberController::class, 'updateRole']);
 Route::post('/updates/{id}/read', [UpdateController::class, 'markAsRead']);
 Route::post('login', [UserController::class, 'login']);
 Route::apiResource('/activities',ActivityController::class);
+
 
 

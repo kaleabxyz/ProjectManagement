@@ -7,7 +7,7 @@ import SideDetail from "@/Components/SideDetail.vue";
 import TextInput from "@/Components/TextInput.vue";
 import axios from "axios";
 import { useUserStore } from "@/Stores/userStore";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import state from "../state.js";
 import DatePicker from "@vuepic/vue-datepicker";
 import "@vuepic/vue-datepicker/dist/main.css";
@@ -21,7 +21,7 @@ import {
     computed,
     onUnmounted,
 } from "vue";
-const selectedGroup = ref("to-do");
+const selectedGroup = ref(null);
 const activateSearch = ref(false);
 const addTask = ref("+ AddTask");
 const advancedFilter = ref(false);
@@ -44,15 +44,16 @@ const projectName = ref("Project managemnt");
 const ProjectDetail = ref(false);
 const replyContent = ref("");
 const route = useRoute();
+const router = useRouter();
 const selectedColumn = ref("");
 const selectedCondition = ref("");
 const selectedTask = ref(null);
 const selectedTaskId = ref(null);
 const selectedTaskName = ref("");
 const selectedValue = ref("");
-const selectOwner = ref([]);
-const selectPriority = ref([]);
-const selectStatus = ref([]);
+const selectOwner = ref({});
+const selectPriority = ref({});
+const selectStatus = ref({});
 const selectedBoardId = ref("");
 const selectedDate = ref(null);
 const selectPrioritySub = ref([]);
@@ -66,7 +67,7 @@ const showDueDateS = ref(true);
 const showFiles = ref(true);
 const showFilesS = ref(true);
 const showFullDescription = ref([]);
-const showGroup = ref(true);
+const showGroup = ref([]);
 const showHide = ref(false);
 const showLastUpdate = ref(true);
 const showLastUpdateS = ref(true);
@@ -79,13 +80,13 @@ const showPriorityS = ref(true);
 const showReplyInput = ref([]);
 const showStatus = ref(true);
 const showStatusS = ref(true);
-const showSubTasks = ref([]);
+const showSubTasks = ref({});
 const showTable = ref(true);
 const showTasks = ref(false);
 const showTimeLine = ref(true);
 const showTimeLineS = ref(true);
 const showUpdate = ref("allUpdates");
-const showUpdates = ref([]);
+const showUpdates = ref({});
 const side = ref("active");
 const subItem = ref(false);
 const taskUpdate = ref(false);
@@ -159,57 +160,9 @@ watchEffect(() => {
         userStore.resetUpdate();
     }
 });
-const fetchTasks = async () => {
-    try {
-        const response = await axios.get("/api/tasks");
-
-        tasks.value = response.data;
-
-        console.log("Fetched Tasks:", tasks.value);
-        filterTasksByBoard();
-    } catch (error) {
-        console.error("There was an error fetching tasks!", error);
-    }
+const selectGroup = (group) => {
+    selectedGroup.value = group;
 };
-const fetchUpdates = async () => {
-    try {
-        const response = await axios.get("/api/updates");
-
-        updates.value = response.data;
-        filterUpdatesByBoard();
-        console.log("Fetched Updates:", updates.value);
-    } catch (error) {
-        console.error("There was an error fetching updates!", error);
-    }
-};
-const fetchBoard = (workSpace, boardName) => {
-    console.log("hellow is this working", workSpace, boardName);
-    user.value.workspaces.forEach((workspace) => {
-        if (workspace.id == workSpace.value) {
-            workspace.boards.forEach((b) => {
-                if (b.board_name == boardName.value) {
-                    board.value = b;
-                    selectedBoardId.value = board.value.id;
-                    console.log("discusssss", board.value.discussions);
-                    b.discussions.forEach((update) => {
-                        if (!update.reply) {
-                            initializeShowReplyInput();
-                        }
-                    });
-                    b.tasks.forEach(() => {
-                        showSubTasks.value.push(false);
-                        selectOwner.value.push(false);
-                        selectPriority.value.push(false);
-                        selectStatus.value.push(false);
-                        showUpdates.value.push(false);
-                        console.log("showsub task", showSubTasks);
-                    });
-                }
-            });
-        }
-    });
-};
-
 const filteredTasks = computed(() => {
     if (!board.value || !board.value.tasks) {
         return []; // Return an empty array if tasks are not available
@@ -298,6 +251,147 @@ const filteredTasks = computed(() => {
         }
     });
 });
+const groupedTasks = computed(() => {
+    if (!board.value || !board.value.tasks) {
+        return { "To-Do": filteredTasks.value }; // Default group
+    }
+
+    const tasks = filteredTasks.value; // Use your existing filteredTasks computed property
+    const groups = {};
+
+    if (selectedGroup.value === "status") {
+        tasks.forEach((task) => {
+            const status = task.status || "Unassigned";
+            groups[status] = groups[status] || [];
+            groups[status].push(task);
+        });
+    } else if (selectedGroup.value === "priority") {
+        tasks.forEach((task) => {
+            const priority = task.priority || "Unassigned";
+            groups[priority] = groups[priority] || [];
+            groups[priority].push(task);
+        });
+    } else if (selectedGroup.value === "owner") {
+        tasks.forEach((task) => {
+            const owner = task.assigned_to
+                ? task.assigned_user.user_name
+                : "Unassigned";
+            groups[owner] = groups[owner] || [];
+            groups[owner].push(task);
+        });
+    } else if (selectedGroup.value === "due_date") {
+        tasks.forEach((task) => {
+            const dueDate = new Date(task.due_date);
+            const today = new Date();
+            const thisWeek = new Date(today);
+            thisWeek.setDate(today.getDate() + 7);
+
+            let groupKey;
+            if (dueDate <= thisWeek) {
+                groupKey = "This Week";
+            } else if (
+                dueDate.getMonth() === today.getMonth() &&
+                dueDate.getFullYear() === today.getFullYear()
+            ) {
+                groupKey = "This Month";
+            } else {
+                groupKey = "Later";
+            }
+
+            groups[groupKey] = groups[groupKey] || [];
+            groups[groupKey].push(task);
+        });
+    } else {
+        // Default to showing all tasks in one group
+        groups["To-Do"] = tasks;
+    }
+    Object.keys(groups).forEach((groupName) => {
+        showGroup.value[groupName] = true;
+    });
+
+    return groups;
+});
+watch(
+    groupedTasks,
+    (newGroups) => {
+        // Clear previous arrays
+        showSubTasks.value = {};
+        selectOwner.value = {};
+        selectPriority.value = {};
+        selectStatus.value = {};
+        showUpdates.value = {};
+
+        // Initialize arrays for grouped tasks, now based on group name
+        Object.keys(newGroups).forEach((groupName) => {
+            const group = newGroups[groupName];
+
+            // Ensure the group exists in the state arrays
+            showSubTasks.value[groupName] = showSubTasks.value[groupName] || [];
+            selectOwner.value[groupName] = selectOwner.value[groupName] || [];
+            selectPriority.value[groupName] =
+                selectPriority.value[groupName] || [];
+            selectStatus.value[groupName] = selectStatus.value[groupName] || [];
+            showUpdates.value[groupName] = showUpdates.value[groupName] || [];
+
+            // Populate the arrays for each task in the group
+            group.forEach(() => {
+                showSubTasks.value[groupName].push(false);
+                selectOwner.value[groupName].push(false);
+                selectPriority.value[groupName].push(false);
+                selectStatus.value[groupName].push(false);
+                showUpdates.value[groupName].push(false);
+            });
+        });
+    },
+    { immediate: true }
+);
+
+const fetchTasks = async () => {
+    try {
+        const response = await axios.get("/api/tasks");
+
+        tasks.value = response.data;
+
+        console.log("Fetched Tasks:", tasks.value);
+        filterTasksByBoard();
+    } catch (error) {
+        console.error("There was an error fetching tasks!", error);
+    }
+};
+const fetchUpdates = async () => {
+    try {
+        const response = await axios.get("/api/updates");
+
+        updates.value = response.data;
+        filterUpdatesByBoard();
+        console.log("Fetched Updates:", updates.value);
+    } catch (error) {
+        console.error("There was an error fetching updates!", error);
+    }
+};
+const fetchBoard = (workSpace, boardName) => {
+    console.log("hellow is this working", workSpace, boardName);
+    user.value.workspaces.forEach((workspace) => {
+        if (workspace.id == workSpace.value) {
+            workspace.boards.forEach((b) => {
+                if (b.board_name == boardName.value) {
+                    board.value = b;
+                    selectedBoardId.value = board.value.id;
+                    console.log("discusssss", board.value.discussions);
+
+                    // Initialize for discussions
+                    b.discussions.forEach((update) => {
+                        if (!update.reply) {
+                            initializeShowReplyInput();
+                        }
+                    });
+
+                    console.log("showsub task", showSubTasks.value);
+                }
+            });
+        }
+    });
+};
 
 const clearInput = () => {
     newTaskName.value = "";
@@ -559,13 +653,29 @@ const setPriority = async (priority, taskId) => {
         console.error("Error updating task priority:", error);
     }
 };
-const updateBoardName = async () => {
+const updateBoardField = async (fieldName, fieldValue) => {
     try {
-        await axios.put(`http://127.0.0.1:8000/api/boards/${board.value.id}`, {
-            board_name: board.value.board_name,
+        // Send PUT request to update the specified board field
+        const response = await axios.patch(`/api/boards/${board.value.id}`, {
+            [fieldName]: fieldValue,
         });
+
+        // Optionally, update the local userStore after successful update
+        userStore.updateBoardField(board.value.id, fieldName, fieldValue);
+        console.log(`Board ${fieldName} updated successfully:`, response.data);
+
+        // Check if the updated field is the board_name
+        if (fieldName === "board_name") {
+            // Change the route to the new board name
+            console.log("workspace id for router", workSpace.value);
+            router.push({
+                name: "project",
+                params: { boardName: fieldValue }, // Use the updated board name
+                query: { workSpace: workSpace.value }, // Keep the workspace ID
+            });
+        }
     } catch (error) {
-        console.error("Error updating board name:", error);
+        console.error(`Error updating board ${fieldName}:`, error);
     }
 };
 
@@ -782,40 +892,64 @@ const updateTaskHasReply = async (updateId) => {
     }
 };
 
-const toggleOwner = (index) => {
-    // Loop through and deactivate all other owner selectors
-    selectOwner.value = selectOwner.value.map((_, i) =>
-        i === index ? !selectOwner.value[i] : false
+const toggleOwner = (groupName, index) => {
+    // Deactivate all other owner selectors in the same group
+    selectOwner.value[groupName] = selectOwner.value[groupName].map((_, i) =>
+        i === index ? !selectOwner.value[groupName][i] : false
     );
-    selectPriority.value = selectPriority.value.map(() => false);
-    selectStatus.value = selectStatus.value.map(() => false);
-};
-const togglePriority = (index) => {
-    // Loop through and deactivate all other priority selectors
-    selectPriority.value = selectPriority.value.map((_, i) =>
-        i === index ? !selectPriority.value[i] : false
+
+    // Deactivate priority and status selectors in the same group
+    selectPriority.value[groupName] = selectPriority.value[groupName].map(
+        () => false
     );
-    selectOwner.value = selectOwner.value.map(() => false);
-    selectStatus.value = selectStatus.value.map(() => false);
+    selectStatus.value[groupName] = selectStatus.value[groupName].map(
+        () => false
+    );
 };
 
-const toggleStatus = (index) => {
-    // Loop through and deactivate all other status selectors
-    selectStatus.value = selectStatus.value.map((_, i) =>
-        i === index ? !selectStatus.value[i] : false
+const togglePriority = (groupName, index) => {
+    // Deactivate all other priority selectors in the same group
+    selectPriority.value[groupName] = selectPriority.value[groupName].map(
+        (_, i) => (i === index ? !selectPriority.value[groupName][i] : false)
     );
-    selectOwner.value = selectOwner.value.map(() => false);
-    selectPriority.value = selectPriority.value.map(() => false);
+
+    // Deactivate owner and status selectors in the same group
+    selectOwner.value[groupName] = selectOwner.value[groupName].map(
+        () => false
+    );
+    selectStatus.value[groupName] = selectStatus.value[groupName].map(
+        () => false
+    );
 };
+
+const toggleStatus = (groupName, index) => {
+    // Deactivate all other status selectors in the same group
+    selectStatus.value[groupName] = selectStatus.value[groupName].map((_, i) =>
+        i === index ? !selectStatus.value[groupName][i] : false
+    );
+
+    // Deactivate owner and priority selectors in the same group
+    selectOwner.value[groupName] = selectOwner.value[groupName].map(
+        () => false
+    );
+    selectPriority.value[groupName] = selectPriority.value[groupName].map(
+        () => false
+    );
+};
+
 const resetAllSelectors = () => {
-    // Set all owner selectors to false
-    selectOwner.value = selectOwner.value.map(() => false);
-
-    // Set all priority selectors to false
-    selectPriority.value = selectPriority.value.map(() => false);
-
-    // Set all status selectors to false
-    selectStatus.value = selectStatus.value.map(() => false);
+    // Reset all selectors for every group
+    Object.keys(selectOwner.value).forEach((groupName) => {
+        selectOwner.value[groupName] = selectOwner.value[groupName].map(
+            () => false
+        );
+        selectPriority.value[groupName] = selectPriority.value[groupName].map(
+            () => false
+        );
+        selectStatus.value[groupName] = selectStatus.value[groupName].map(
+            () => false
+        );
+    });
 };
 
 watch(
@@ -978,16 +1112,17 @@ const toggleTaskUpdate = (taskId) => {
     selectedTaskId.value = taskId; // Set the selected task ID
     // Call to filter tasks by the selected ID
 };
-const segmentWidth = computed(() => {
-    const numTasks = filteredTasks.value.length;
+const segmentWidth = (group) => {
+    const numTasks = groupedTasks.value[group]?.length || 0;
     return numTasks > 0 ? `${(100 / numTasks).toFixed(2)}%` : "0%";
-});
-const totalBudget = computed(() => {
-    return filteredTasks.value.reduce(
+};
+
+const totalBudget = (group) => {
+    return groupedTasks.value[group]?.reduce(
         (sum, task) => sum + (parseFloat(task.budget) || 0),
         0
     );
-});
+};
 
 const enableEditing = () => {
     isEditing.value = true;
@@ -1512,15 +1647,27 @@ onUnmounted(() => {
                                 class="border-0 text-lg px-0"
                                 type="text"
                                 v-model="board.board_name"
-                                @input="updateBoardName"
+                                @input="
+                                    () =>
+                                        updateBoardField(
+                                            'board_name',
+                                            board.board_name
+                                        )
+                                "
                             />
 
+                            <!-- Update board description -->
                             <textarea
                                 type="text"
                                 rows="5"
                                 v-model="board.description"
                                 ref="editableInput"
-                                @input="updateBoardDiscription"
+                                @input="
+                                    updateBoardField(
+                                        'description',
+                                        board.description
+                                    )
+                                "
                                 class="border-0 h-fit border-gray-300 text-sm rounded p-2 w-full"
                             />
 
@@ -1538,12 +1685,6 @@ onUnmounted(() => {
                                     <div
                                         class="flex items-center px-2 py-1 hover:bg-gray-100"
                                     >
-                                        {{
-                                            console.log(
-                                                "user_name ",
-                                                board.owner.user_name
-                                            )
-                                        }}
                                         <template
                                             v-if="
                                                 board.owner?.profile_picture_url
@@ -2494,7 +2635,12 @@ onUnmounted(() => {
                     </div>
                     <div
                         @click.stop="showGroupFilter = !showGroupFilter"
-                        class="ml-2 p-4 py-1 flex relative items-center hover:bg-gray-100 cursor-pointer"
+                        :class="{
+                            'bg-blue-200': showGroupFilter || selectedGroup,
+                            'hover:bg-gray-100':
+                                !showGroupFilter && !selectedGroup,
+                        }"
+                        class="ml-2 p-4 py-1 flex relative items-center cursor-pointer"
                     >
                         <i class="far fa-user-circle text-gray-500 mr-2"></i>
                         <h3>Group by</h3>
@@ -2537,13 +2683,13 @@ onUnmounted(() => {
                                 Owner
                             </h1>
                             <h1
-                                class="p-2 rounded-md w-full "
+                                class="p-2 rounded-md w-full"
                                 :class="{
-                                    'bg-blue-200': selectedGroup === 'dueDate',
+                                    'bg-blue-200': selectedGroup === 'due_date',
                                     'hover:bg-gray-100':
-                                        selectedGroup !== 'dueDate',
+                                        selectedGroup !== 'due_date',
                                 }"
-                                @click="selectGroup('dueDate')"
+                                @click="selectGroup('due_date')"
                             >
                                 Due Date
                             </h1>
@@ -2560,433 +2706,350 @@ onUnmounted(() => {
                     </div>
                 </div>
                 <div
-                    v-if="showTable"
-                    class="flex group items-center group text-blue-500 w-fit"
+                    v-for="(group, groupName) in groupedTasks"
+                    :key="groupName"
                 >
-                    <span
-                        class="absolute -left-8 items-center hidden group-hover:block"
+                    <div
+                        v-if="showTable"
+                        class="flex group items-center group text-blue-500 w-fit"
                     >
-                        <i
-                            class="fa fa-ellipsis-h text-xl p-2 text-black hover:bg-gray-100 cursor-pointer"
-                            aria-hidden="true"
-                        ></i>
-                    </span>
-                    <span @click="showGroup = !showGroup" v-if="showGroup">
-                        <i
-                            class="fa fa-chevron-down p-1 py-2 text-xs rounded-md"
-                        ></i>
-                    </span>
-                    <span @click="showGroup = !showGroup" v-if="!showGroup">
-                        <i
-                            class="fa fa-chevron-right p-2 py-1 text-xs rounded-md"
-                        ></i>
-                    </span>
+                        <span
+                            class="absolute -left-8 items-center hidden group-hover:block"
+                        >
+                            <i
+                                class="fa fa-ellipsis-h text-xl p-2 text-black hover:bg-gray-100 cursor-pointer"
+                                aria-hidden="true"
+                            ></i>
+                        </span>
+                        <span
+                            @click="
+                                showGroup[groupName] = !showGroup[groupName]
+                            "
+                            v-if="showGroup[groupName]"
+                        >
+                            <i
+                                class="fa fa-chevron-down p-1 py-2 text-xs rounded-md"
+                            ></i>
+                        </span>
+                        <span
+                            @click="
+                                showGroup[groupName] = !showGroup[groupName]
+                            "
+                            v-if="!showGroup[groupName]"
+                        >
+                            <i
+                                class="fa fa-chevron-right p-2 py-1 text-xs rounded-md"
+                            ></i>
+                        </span>
 
-                    <h2 class="text-xl ml-3">To-Do</h2>
-                </div>
+                        <h2
+                            class="text-xl ml-3"
+                            :class="{
+                                'text-gray-900': groupName == 'Critical',
+                                'text-purple-800': groupName == 'High',
+                                'text-blue-700 ': groupName == 'Medium',
+                                'text-blue-400 ': groupName == 'Low',
+                                'text-gray-400': groupName == 'Not Started',
+                                'text-orange-400': groupName == 'In Progress',
+                                'text-green-400': groupName == 'Completed',
+                            }"
+                        >
+                            {{ groupName }}
+                        </h2>
+                    </div>
 
-                <div
-                    v-if="showTable"
-                    class="overflow-x-auto overflow-y-auto h-full max-h-screen rounded-md"
-                >
-                    <table
-                        class="min-w-full text-left border border-b-0 border-l-0 border-gray-300 border-t-0 text-sm text-gray-500"
+                    <div
+                        v-if="showTable"
+                        class="overflow-x-auto mb-8 overflow-y-auto h-full max-h-screen rounded-md"
                     >
-                        <thead class="bg-white text-xs uppercase text-gray-700">
-                            <tr class="flex h-7 group">
-                                <th
-                                    class="pl-4 pr-4 w-fit flex items-center border-l-8 border-l-blue-300 border border-gray-100"
-                                >
-                                    <input
-                                        type="checkbox"
-                                        class="h-4 w-4 text-blue-600"
-                                    />
-                                </th>
-                                <th
-                                    class="px-6 py-2 border flex items-center justify-center w-56"
-                                >
-                                    {{
-                                        showGroup ? "Task" : "3 Tasks/1 subtask"
-                                    }}
-                                </th>
-                                <th
-                                    v-if="showOwner || showAll || showTasks"
-                                    class="px-6 py-1 flex items-center justify-center border"
-                                >
-                                    Owner
-                                </th>
-                                <th
-                                    v-if="showStatus || showAll || showTasks"
-                                    class="px-6 py-1 w-36 flex items-center justify-center border"
-                                >
-                                    Status
-                                </th>
-                                <th
-                                    v-if="showDueDate || showAll || showTasks"
-                                    class="px-6 py-1 flex items-center w-40 justify-center border"
-                                >
-                                    Due date
-                                </th>
-                                <th
-                                    v-if="showPriority || showAll || showTasks"
-                                    class="px-6 py-1 flex items-center w-28 justify-center border"
-                                >
-                                    Priority
-                                </th>
-                                <th
-                                    v-if="showNotes || showAll || showTasks"
-                                    class="px-6 py-1 w-36 flex items-center justify-center border"
-                                >
-                                    Notes
-                                </th>
-                                <th
-                                    v-if="showBudget || showAll || showTasks"
-                                    class="px-6 py-1 flex items-center justify-center border"
-                                >
-                                    Budget
-                                </th>
-                                <th
-                                    v-if="showFiles || showAll || showTasks"
-                                    class="px-6 py-1 w-36 flex items-center justify-center border"
-                                >
-                                    Files
-                                </th>
-                                <th
-                                    v-if="showTimeLine || showAll || showTasks"
-                                    class="px-6 py-1 w-40 flex items-center justify-center border"
-                                >
-                                    Timeline
-                                </th>
-                                <th
-                                    v-if="
-                                        showLastUpdate || showAll || showTasks
-                                    "
-                                    class="px-6 py-1 flex items-center justify-center border w-44"
-                                >
-                                    Last updated
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <!-- Task 1 -->
-                            <section v-if="showGroup">
-                                <SideDetail
-                                    v-if="taskUpdate"
-                                    @click.stop
-                                    class="border-l-8 overflow-y-auto pb-20 border-gray-300"
-                                >
-                                    <div class="p-4">
-                                        <i
-                                            @click="hidesideDetail"
-                                            class="fa fa-times fa-font-extralight text-gray-500 text-2xl p-1 hover:bg-gray-200 cursor-pointer"
-                                            aria-hidden="true"
-                                        ></i>
-
+                        <table
+                            class="min-w-full text-left border border-b-0 border-l-0 border-gray-300 border-t-0 text-sm text-gray-500"
+                        >
+                            <thead
+                                class="bg-white text-xs uppercase text-gray-700"
+                            >
+                                <tr class="flex h-7 group">
+                                    <th
+                                        class="pl-4 pr-4 w-fit flex items-center border-l-8 border-l-blue-300 border border-gray-100"
+                                    >
                                         <input
-                                            type="text"
-                                            v-model="selectedTaskName"
-                                            ref="editableInput"
-                                            class="border-0 px-0 border-gray-300 text-2xl rounded p-2 w-full"
-                                            @input="
-                                                updateTaskField(
-                                                    selectedTask.id,
-                                                    'task_name',
-                                                    selectedTaskName
-                                                )
-                                            "
+                                            type="checkbox"
+                                            class="h-4 w-4 text-blue-600"
                                         />
-                                    </div>
-                                    <div
-                                        class="flex items-center border-b-2 mt-6 text-black pl-6 font-extralight text-sm"
+                                    </th>
+                                    <th
+                                        class="px-6 py-2 border flex items-center justify-center w-56"
                                     >
-                                        <div
-                                            @click.stop="
-                                                showUpdate = 'allUpdates'
-                                            "
-                                            :class="{
-                                                'border-b-2 border-blue-400':
-                                                    showUpdate == 'allUpdates',
-                                            }"
-                                            class="p-4 py-1 flex items-center hover:bg-gray-100 cursor-pointer"
-                                        >
-                                            <h3>Updates</h3>
-                                        </div>
-                                        <span
-                                            class="w-0.5 h-4 bg-gray-400"
-                                        ></span>
-                                        <div
-                                            @click.stop="
-                                                showUpdate = 'mentioned'
-                                            "
-                                            :class="{
-                                                'border-b-2 border-blue-400':
-                                                    showUpdate == 'mentioned',
-                                            }"
-                                            class="p-4 py-1 flex items-center hover:bg-gray-100 cursor-pointer"
-                                        >
-                                            <h3>I was mentioned</h3>
-                                        </div>
-                                        <span
-                                            class="w-0.5 h-4 bg-gray-400"
-                                        ></span>
-                                        <div
-                                            class="p-4 py-1 flex items-center hover:bg-gray-100 cursor-pointer"
-                                        >
-                                            <h3>Files</h3>
-                                        </div>
-                                        <span
-                                            class="w-0.5 h-4 bg-gray-400"
-                                        ></span>
-                                        <div
-                                            @click.stop="
-                                                showUpdate = 'activities'
-                                            "
-                                            :class="{
-                                                'border-b-2 border-blue-400':
-                                                    showUpdate == 'activities',
-                                            }"
-                                            class="p-4 py-1 flex items-center hover:bg-gray-100 cursor-pointer"
-                                        >
-                                            <h3>Activity log</h3>
-                                        </div>
-                                    </div>
-                                    <div
+                                        {{
+                                            showGroup[groupName]
+                                                ? "Task"
+                                                : group.length + " Tasks"
+                                        }}
+                                    </th>
+                                    <th
+                                        v-if="showOwner || showAll || showTasks"
+                                        class="px-6 py-1 flex items-center justify-center border"
+                                    >
+                                        Owner
+                                    </th>
+                                    <th
                                         v-if="
-                                            showUpdate == 'allUpdates' ||
-                                            showUpdate == 'mentioned'
+                                            showStatus || showAll || showTasks
                                         "
-                                        class="px-6 mt-16"
+                                        class="px-6 py-1 w-36 flex items-center justify-center border"
                                     >
-                                        <TextInput
-                                            v-model="updateContent"
-                                            class="w-full border-indigo-500 hover:bg-gray-200"
-                                            placeholder="Write an update about task"
-                                            @keyup.enter="
-                                                postUpdate(selectedTaskId)
-                                            "
-                                        ></TextInput>
-                                    </div>
-                                    {{
-                                        console.log(
-                                            "task id and selected task",
-                                            filteredUpdates
-                                        )
-                                    }}
-                                    <div
-                                        v-if="showUpdate == 'activities'"
-                                        v-for="activity in filteredUpdates"
-                                        class="px-6 pt-4"
+                                        Status
+                                    </th>
+                                    <th
+                                        v-if="
+                                            showDueDate || showAll || showTasks
+                                        "
+                                        class="px-6 py-1 flex items-center w-40 justify-center border"
                                     >
-                                        <div
-                                            class="bg-white p-4 border-b-2 flex items-center"
-                                        >
+                                        Due date
+                                    </th>
+                                    <th
+                                        v-if="
+                                            showPriority || showAll || showTasks
+                                        "
+                                        class="px-6 py-1 flex items-center w-28 justify-center border"
+                                    >
+                                        Priority
+                                    </th>
+                                    <th
+                                        v-if="showNotes || showAll || showTasks"
+                                        class="px-6 py-1 w-36 flex items-center justify-center border"
+                                    >
+                                        Notes
+                                    </th>
+                                    <th
+                                        v-if="
+                                            showBudget || showAll || showTasks
+                                        "
+                                        class="px-6 py-1 flex items-center justify-center border"
+                                    >
+                                        Budget
+                                    </th>
+                                    <th
+                                        v-if="showFiles || showAll || showTasks"
+                                        class="px-6 py-1 w-36 flex items-center justify-center border"
+                                    >
+                                        Files
+                                    </th>
+                                    <th
+                                        v-if="
+                                            showTimeLine || showAll || showTasks
+                                        "
+                                        class="px-6 py-1 w-40 flex items-center justify-center border"
+                                    >
+                                        Timeline
+                                    </th>
+                                    <th
+                                        v-if="
+                                            showLastUpdate ||
+                                            showAll ||
+                                            showTasks
+                                        "
+                                        class="px-6 py-1 flex items-center justify-center border w-44"
+                                    >
+                                        Last updated
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Task 1 -->
+                                <section v-if="showGroup[groupName]">
+                                    <SideDetail
+                                        v-if="taskUpdate"
+                                        @click.stop
+                                        class="border-l-8 overflow-y-auto pb-20 border-gray-300"
+                                    >
+                                        <div class="p-4">
                                             <i
-                                                class="far fa-clock mr-2 text-3xl"
+                                                @click="hidesideDetail"
+                                                class="fa fa-times fa-font-extralight text-gray-500 text-2xl p-1 hover:bg-gray-200 cursor-pointer"
+                                                aria-hidden="true"
                                             ></i>
-                                            <h1 class="w-10 mr-4">
-                                                {{
-                                                    timeSinceLastUpdate(
-                                                        activity.created_at
+
+                                            <input
+                                                type="text"
+                                                v-model="selectedTaskName"
+                                                ref="editableInput"
+                                                class="border-0 px-0 border-gray-300 text-2xl rounded p-2 w-full"
+                                                @input="
+                                                    updateTaskField(
+                                                        selectedTask.id,
+                                                        'task_name',
+                                                        selectedTaskName
                                                     )
-                                                }}
-                                            </h1>
+                                                "
+                                            />
+                                        </div>
+                                        <div
+                                            class="flex items-center border-b-2 mt-6 text-black pl-6 font-extralight text-sm"
+                                        >
                                             <div
-                                                class="flex w-full justify-between items-center"
+                                                @click.stop="
+                                                    showUpdate = 'allUpdates'
+                                                "
+                                                :class="{
+                                                    'border-b-2 border-blue-400':
+                                                        showUpdate ==
+                                                        'allUpdates',
+                                                }"
+                                                class="p-4 py-1 flex items-center hover:bg-gray-100 cursor-pointer"
                                             >
-                                                <h1 class="mr-6">
-                                                    {{ activity.description }}
-                                                    By
-                                                </h1>
-                                                <div
-                                                    class="rounded-full w-12 h-12 flex items-center justify-center group/detail relative"
-                                                >
-                                                    <template
-                                                        v-if="
-                                                            activity.user
-                                                                ?.profile_picture_url
-                                                        "
-                                                    >
-                                                        <img
-                                                            :src="
-                                                                activity.user
-                                                                    .profile_picture_url
-                                                            "
-                                                            alt="Profile Picture"
-                                                            class="w-full h-full object-cover rounded-full"
-                                                        />
-                                                    </template>
-
-                                                    <!-- Display h1 only if there is no profile_picture_url -->
-                                                    <template v-else>
-                                                        <h1
-                                                            class="py-1 w-12 h-12 flex items-center justify-center text-3xl px-3.5 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
-                                                        >
-                                                            {{
-                                                                activity.user
-                                                                    ?.user_name
-                                                                    ? activity.user.user_name
-                                                                          .charAt(
-                                                                              0
-                                                                          )
-                                                                          .toUpperCase()
-                                                                    : "?"
-                                                            }}
-                                                        </h1>
-                                                    </template>
-                                                    <div
-                                                        class="w-64 transition-opacity hidden group-hover/detail:flex duration-1000 ease-in-out opacity-0 group-hover/detail:opacity-100 rounded-lg shadow-lg px-0 py-6 pb-0 -top-1 flex-col justify-between left-12 z-10 h-44 absolute bg-white"
-                                                    >
-                                                        <div
-                                                            class="flex px-8 w-20 h-20"
-                                                        >
-                                                            <template
-                                                                v-if="
-                                                                    activity
-                                                                        .user
-                                                                        ?.profile_picture_url
-                                                                "
-                                                            >
-                                                                <img
-                                                                    :src="
-                                                                        activity
-                                                                            .user
-                                                                            .profile_picture_url
-                                                                    "
-                                                                    alt="Profile Picture"
-                                                                    class="w-20 h-20 object-cover rounded-full"
-                                                                />
-                                                            </template>
-
-                                                            <!-- Display h1 only if there is no profile_picture_url -->
-                                                            <template v-else>
-                                                                <h1
-                                                                    class="py-3 w-20 h-20 flex items-center justify-center z-15 text-5xl px-6 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
-                                                                >
-                                                                    {{
-                                                                        activity
-                                                                            .user
-                                                                            ?.user_name
-                                                                            ? activity.user.user_name
-                                                                                  .charAt(
-                                                                                      0
-                                                                                  )
-                                                                                  .toUpperCase()
-                                                                            : "?"
-                                                                    }}
-                                                                </h1>
-                                                            </template>
-                                                            <div>
-                                                                <div
-                                                                    class="flex"
-                                                                >
-                                                                    <h1
-                                                                        class="font-extralight hover:underline cursor-pointer"
-                                                                    >
-                                                                        {{
-                                                                            activity
-                                                                                .user
-                                                                                .user_name
-                                                                        }}
-                                                                    </h1>
-                                                                    <span
-                                                                        class="w-3 h-3 rounded-full bg-green-400 ml-2"
-                                                                    ></span>
-                                                                </div>
-                                                                <h1
-                                                                    class="mt-4 p-1 bg-blue-100 flex items-center justify-center rounded-lg"
-                                                                >
-                                                                    {{
-                                                                        activity.user_role
-                                                                    }}
-                                                                </h1>
-                                                            </div>
-                                                        </div>
-                                                        <div
-                                                            class="border-t group/contact w-full relative border-gray-500 hover:bg-gray-100 cursor-pointer flex items-center justify-center border-b-0 py-4"
-                                                        >
-                                                            <h1>
-                                                                Contact Details
-                                                            </h1>
-                                                            <i
-                                                                class="fa fa-chevron-down ml-2 text-xs"
-                                                                aria-hidden="true"
-                                                            ></i>
-                                                            <div
-                                                                class="w-64 gr transition-opacity duration-1000 ease-in-out opacity-0 group-hover/contact:opacity-100 rounded-lg px-4 shadow-lg py-2 top-12 flex items-center left-0 h-16 absolute bg-white"
-                                                            >
-                                                                <i
-                                                                    class="far fa-envelope mr-2 font-extralight text-gray-500"
-                                                                ></i>
-                                                                <h1
-                                                                    class="text-gray-500"
-                                                                >
-                                                                    {{
-                                                                        console.log(
-                                                                            "email",
-                                                                            activity.user
-                                                                        )
-                                                                    }}
-                                                                    {{
-                                                                        activity
-                                                                            .user
-                                                                            .email
-                                                                    }}
-                                                                </h1>
-                                                                <h1
-                                                                    class="bg-blue-400 text-sm ml-4 rounded-md hover:bg-blue-500 p-1"
-                                                                >
-                                                                    Copy
-                                                                </h1>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
+                                                <h3>Updates</h3>
+                                            </div>
+                                            <span
+                                                class="w-0.5 h-4 bg-gray-400"
+                                            ></span>
+                                            <div
+                                                @click.stop="
+                                                    showUpdate = 'mentioned'
+                                                "
+                                                :class="{
+                                                    'border-b-2 border-blue-400':
+                                                        showUpdate ==
+                                                        'mentioned',
+                                                }"
+                                                class="p-4 py-1 flex items-center hover:bg-gray-100 cursor-pointer"
+                                            >
+                                                <h3>I was mentioned</h3>
+                                            </div>
+                                            <span
+                                                class="w-0.5 h-4 bg-gray-400"
+                                            ></span>
+                                            <div
+                                                class="p-4 py-1 flex items-center hover:bg-gray-100 cursor-pointer"
+                                            >
+                                                <h3>Files</h3>
+                                            </div>
+                                            <span
+                                                class="w-0.5 h-4 bg-gray-400"
+                                            ></span>
+                                            <div
+                                                @click.stop="
+                                                    showUpdate = 'activities'
+                                                "
+                                                :class="{
+                                                    'border-b-2 border-blue-400':
+                                                        showUpdate ==
+                                                        'activities',
+                                                }"
+                                                class="p-4 py-1 flex items-center hover:bg-gray-100 cursor-pointer"
+                                            >
+                                                <h3>Activity log</h3>
                                             </div>
                                         </div>
-                                    </div>
-                                    <div
-                                        v-if="
-                                            showUpdate == 'allUpdates' ||
-                                            showUpdate == 'mentioned'
-                                        "
-                                        v-for="(
-                                            update, index
-                                        ) in filteredUpdates"
-                                    >
                                         <div
                                             v-if="
-                                                update.task_id ==
-                                                    selectedTaskId &&
-                                                update.reply !== 1
+                                                showUpdate == 'allUpdates' ||
+                                                showUpdate == 'mentioned'
                                             "
-                                            class="flex w-full h-full mt-8 text-black overflow-y-auto"
+                                            class="px-6 mt-16"
+                                        >
+                                            <TextInput
+                                                v-model="updateContent"
+                                                class="w-full border-indigo-500 hover:bg-gray-200"
+                                                placeholder="Write an update about task"
+                                                @keyup.enter="
+                                                    postUpdate(selectedTaskId)
+                                                "
+                                            ></TextInput>
+                                        </div>
+                                        {{
+                                            console.log(
+                                                "task id and selected task",
+                                                filteredUpdates
+                                            )
+                                        }}
+                                        <div
+                                            v-if="showUpdate == 'activities'"
+                                            v-for="activity in filteredUpdates"
+                                            class="px-6 pt-4"
                                         >
                                             <div
-                                                class="w-full px-6 overflow-y-auto"
+                                                class="bg-white p-4 border-b-2 flex items-center"
                                             >
+                                                <i
+                                                    class="far fa-clock mr-2 text-3xl"
+                                                ></i>
+                                                <h1 class="w-10 mr-4">
+                                                    {{
+                                                        timeSinceLastUpdate(
+                                                            activity.created_at
+                                                        )
+                                                    }}
+                                                </h1>
                                                 <div
-                                                    class="w-full flex flex-col relative justify-between bg-white border rounded-lg p-0"
+                                                    class="flex w-full justify-between items-center"
                                                 >
-                                                    <div>
-                                                        <div class="flex p-4">
+                                                    <h1 class="mr-6">
+                                                        {{
+                                                            activity.description
+                                                        }}
+                                                        By
+                                                    </h1>
+                                                    <div
+                                                        class="rounded-full w-12 h-12 flex items-center justify-center group/detail relative"
+                                                    >
+                                                        <template
+                                                            v-if="
+                                                                activity.user
+                                                                    ?.profile_picture_url
+                                                            "
+                                                        >
+                                                            <img
+                                                                :src="
+                                                                    activity
+                                                                        .user
+                                                                        .profile_picture_url
+                                                                "
+                                                                alt="Profile Picture"
+                                                                class="w-full h-full object-cover rounded-full"
+                                                            />
+                                                        </template>
+
+                                                        <!-- Display h1 only if there is no profile_picture_url -->
+                                                        <template v-else>
+                                                            <h1
+                                                                class="py-1 w-12 h-12 flex items-center justify-center text-3xl px-3.5 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
+                                                            >
+                                                                {{
+                                                                    activity
+                                                                        .user
+                                                                        ?.user_name
+                                                                        ? activity.user.user_name
+                                                                              .charAt(
+                                                                                  0
+                                                                              )
+                                                                              .toUpperCase()
+                                                                        : "?"
+                                                                }}
+                                                            </h1>
+                                                        </template>
+                                                        <div
+                                                            class="w-64 transition-opacity hidden group-hover/detail:flex duration-1000 ease-in-out opacity-0 group-hover/detail:opacity-100 rounded-lg shadow-lg px-0 py-6 pb-0 -top-1 flex-col justify-between left-12 z-10 h-44 absolute bg-white"
+                                                        >
                                                             <div
-                                                                class="rounded-full w-12 h-12 flex items-center justify-center group/detail relative"
+                                                                class="flex px-8 w-20 h-20"
                                                             >
                                                                 <template
                                                                     v-if="
-                                                                        update
+                                                                        activity
                                                                             .user
                                                                             ?.profile_picture_url
                                                                     "
                                                                 >
                                                                     <img
                                                                         :src="
-                                                                            update
+                                                                            activity
                                                                                 .user
                                                                                 .profile_picture_url
                                                                         "
                                                                         alt="Profile Picture"
-                                                                        class="w-full h-full object-cover rounded-full"
+                                                                        class="w-20 h-20 object-cover rounded-full"
                                                                     />
                                                                 </template>
 
@@ -2995,13 +3058,13 @@ onUnmounted(() => {
                                                                     v-else
                                                                 >
                                                                     <h1
-                                                                        class="py-1 w-12 h-12 flex items-center justify-center text-3xl px-3.5 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
+                                                                        class="py-3 w-20 h-20 flex items-center justify-center z-15 text-5xl px-6 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
                                                                     >
                                                                         {{
-                                                                            update
+                                                                            activity
                                                                                 .user
                                                                                 ?.user_name
-                                                                                ? update.user.user_name
+                                                                                ? activity.user.user_name
                                                                                       .charAt(
                                                                                           0
                                                                                       )
@@ -3010,130 +3073,15 @@ onUnmounted(() => {
                                                                         }}
                                                                     </h1>
                                                                 </template>
-                                                                <div
-                                                                    class="w-64 transition-opacity hidden group-hover/detail:flex duration-1000 ease-in-out opacity-0 group-hover/detail:opacity-100 rounded-lg shadow-lg px-0 py-6 pb-0 -top-1 flex-col justify-between left-12 z-10 h-44 absolute bg-white"
-                                                                >
+                                                                <div>
                                                                     <div
-                                                                        class="flex px-8 w-20 h-20"
-                                                                    >
-                                                                        <template
-                                                                            v-if="
-                                                                                update
-                                                                                    .user
-                                                                                    ?.profile_picture_url
-                                                                            "
-                                                                        >
-                                                                            <img
-                                                                                :src="
-                                                                                    update
-                                                                                        .user
-                                                                                        .profile_picture_url
-                                                                                "
-                                                                                alt="Profile Picture"
-                                                                                class="w-20 h-20 object-cover rounded-full"
-                                                                            />
-                                                                        </template>
-
-                                                                        <!-- Display h1 only if there is no profile_picture_url -->
-                                                                        <template
-                                                                            v-else
-                                                                        >
-                                                                            <h1
-                                                                                class="py-3 w-20 h-20 flex items-center justify-center z-15 text-5xl px-6 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
-                                                                            >
-                                                                                {{
-                                                                                    update
-                                                                                        .user
-                                                                                        ?.user_name
-                                                                                        ? update.user.user_name
-                                                                                              .charAt(
-                                                                                                  0
-                                                                                              )
-                                                                                              .toUpperCase()
-                                                                                        : "?"
-                                                                                }}
-                                                                            </h1>
-                                                                        </template>
-                                                                        <div>
-                                                                            <div
-                                                                                class="flex"
-                                                                            >
-                                                                                <h1
-                                                                                    class="font-extralight hover:underline cursor-pointer"
-                                                                                >
-                                                                                    {{
-                                                                                        update
-                                                                                            .user
-                                                                                            .user_name
-                                                                                    }}
-                                                                                </h1>
-                                                                                <span
-                                                                                    class="w-3 h-3 rounded-full bg-green-400 ml-2"
-                                                                                ></span>
-                                                                            </div>
-                                                                            <h1
-                                                                                class="mt-4 p-1 bg-blue-100 flex items-center justify-center rounded-lg"
-                                                                            >
-                                                                                {{
-                                                                                    update.user_role
-                                                                                }}
-                                                                            </h1>
-                                                                        </div>
-                                                                    </div>
-                                                                    <div
-                                                                        class="border-t group/contact w-full relative border-gray-500 hover:bg-gray-100 cursor-pointer flex items-center justify-center border-b-0 py-4"
-                                                                    >
-                                                                        <h1>
-                                                                            Contact
-                                                                            Details
-                                                                        </h1>
-                                                                        <i
-                                                                            class="fa fa-chevron-down ml-2 text-xs"
-                                                                            aria-hidden="true"
-                                                                        ></i>
-                                                                        <div
-                                                                            class="w-64 gr transition-opacity duration-1000 ease-in-out opacity-0 group-hover/contact:opacity-100 rounded-lg px-4 shadow-lg py-2 top-12 flex items-center left-0 h-16 absolute bg-white"
-                                                                        >
-                                                                            <i
-                                                                                class="far fa-envelope mr-2 font-extralight text-gray-500"
-                                                                            ></i>
-                                                                            <h1
-                                                                                class="text-gray-500"
-                                                                            >
-                                                                                {{
-                                                                                    console.log(
-                                                                                        "email",
-                                                                                        update.user
-                                                                                    )
-                                                                                }}
-                                                                                {{
-                                                                                    update
-                                                                                        .user
-                                                                                        .email
-                                                                                }}
-                                                                            </h1>
-                                                                            <h1
-                                                                                class="bg-blue-400 text-sm ml-4 rounded-md hover:bg-blue-500 p-1"
-                                                                            >
-                                                                                Copy
-                                                                            </h1>
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-
-                                                            <div class="w-full">
-                                                                <div
-                                                                    class="flex items-center justify-between"
-                                                                >
-                                                                    <div
-                                                                        class="flex items-center"
+                                                                        class="flex"
                                                                     >
                                                                         <h1
                                                                             class="font-extralight hover:underline cursor-pointer"
                                                                         >
                                                                             {{
-                                                                                update
+                                                                                activity
                                                                                     .user
                                                                                     .user_name
                                                                             }}
@@ -3142,230 +3090,157 @@ onUnmounted(() => {
                                                                             class="w-3 h-3 rounded-full bg-green-400 ml-2"
                                                                         ></span>
                                                                     </div>
-                                                                    <div
-                                                                        class="flex items-center text-gray-600"
+                                                                    <h1
+                                                                        class="mt-4 p-1 bg-blue-100 flex items-center justify-center rounded-lg"
                                                                     >
-                                                                        <i
-                                                                            class="far fa-clock"
-                                                                        >
-                                                                        </i>
-                                                                        <h1
-                                                                            class="ml-1 hover:underline cursor-pointer mr-1"
-                                                                        >
-                                                                            3h
-                                                                        </h1>
-                                                                        <span
-                                                                            @click="
-                                                                                toggleSideDetail
-                                                                            "
-                                                                            @click.stop
-                                                                            class="h-full hover:bg-gray-100"
-                                                                        >
-                                                                            <i
-                                                                                class="far fa-bell m-1 text-sm"
-                                                                            ></i>
-                                                                        </span>
-                                                                        <span>
-                                                                            <i
-                                                                                class="fa fa-ellipsis-h text-lg py-1 px-1 hover:bg-gray-100 cursor-pointer"
-                                                                                aria-hidden="true"
-                                                                            ></i>
-                                                                        </span>
-                                                                    </div>
+                                                                        {{
+                                                                            activity.user_role
+                                                                        }}
+                                                                    </h1>
                                                                 </div>
+                                                            </div>
+                                                            <div
+                                                                class="border-t group/contact w-full relative border-gray-500 hover:bg-gray-100 cursor-pointer flex items-center justify-center border-b-0 py-4"
+                                                            >
+                                                                <h1>
+                                                                    Contact
+                                                                    Details
+                                                                </h1>
+                                                                <i
+                                                                    class="fa fa-chevron-down ml-2 text-xs"
+                                                                    aria-hidden="true"
+                                                                ></i>
                                                                 <div
-                                                                    class="flex items-center text-gray-500 text-sm"
+                                                                    class="w-64 gr transition-opacity duration-1000 ease-in-out opacity-0 group-hover/contact:opacity-100 rounded-lg px-4 shadow-lg py-2 top-12 flex items-center left-0 h-16 absolute bg-white"
                                                                 >
-                                                                    <a
-                                                                        href="#"
-                                                                        class="hover:text-blue-600"
+                                                                    <i
+                                                                        class="far fa-envelope mr-2 font-extralight text-gray-500"
+                                                                    ></i>
+                                                                    <h1
+                                                                        class="text-gray-500"
                                                                     >
-                                                                        <h1>
-                                                                            {{
-                                                                                board.board_name
-                                                                            }}>
-                                                                        </h1>
-                                                                    </a>
-                                                                    <a
-                                                                        href="#"
-                                                                        class="hover:text-blue-600"
+                                                                        {{
+                                                                            console.log(
+                                                                                "email",
+                                                                                activity.user
+                                                                            )
+                                                                        }}
+                                                                        {{
+                                                                            activity
+                                                                                .user
+                                                                                .email
+                                                                        }}
+                                                                    </h1>
+                                                                    <h1
+                                                                        class="bg-blue-400 text-sm ml-4 rounded-md hover:bg-blue-500 p-1"
                                                                     >
-                                                                        <h1>
-                                                                            To
-                                                                            do
-                                                                        </h1>
-                                                                    </a>
-                                                                    <a
-                                                                        href="#"
-                                                                        class="hover:text-blue-600"
-                                                                    >
-                                                                        <h1>
-                                                                            >{{
-                                                                                update
-                                                                                    .task
-                                                                                    .task_name
-                                                                            }}
-                                                                        </h1>
-                                                                    </a>
+                                                                        Copy
+                                                                    </h1>
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                        <div
-                                                            class="mt-4 p-4 flex items-center flex-col"
-                                                        >
-                                                            <p
-                                                                v-html="
-                                                                    truncatedDescription(
-                                                                        update,
-                                                                        null
-                                                                    )
-                                                                "
-                                                            ></p>
-                                                            <button
-                                                                @click="
-                                                                    toggleFullDescription(
-                                                                        index
-                                                                    )
-                                                                "
-                                                                class="text-green-500 hover:text-green-600 hover:shadow-lg w-full bg-white"
-                                                            >
-                                                                {{
-                                                                    showFullDescription[
-                                                                        index
-                                                                    ]
-                                                                        ? "Less"
-                                                                        : "More"
-                                                                }}
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                    <div
-                                                        v-if="
-                                                            update.has_reply ==
-                                                            0
-                                                        "
-                                                        class="w-full flex mt-8 border-t items-center"
-                                                    >
-                                                        <div
-                                                            class="w-1/2 flex justify-center items-center p-3 border-r hover:bg-gray-100"
-                                                        >
-                                                            <i
-                                                                class="far fa-thumbs-up text-gray-400 mr-2"
-                                                                aria-hidden="true"
-                                                            ></i>
-                                                            Like
-                                                        </div>
-                                                        <div
-                                                            @click="
-                                                                toggleReplyInput(
-                                                                    index
-                                                                )
-                                                            "
-                                                            class="w-1/2 flex justify-center items-center p-3 hover:bg-gray-100"
-                                                        >
-                                                            <i
-                                                                class="fa mr-2 text-gray-400 fa-reply"
-                                                                aria-hidden="true"
-                                                            ></i>
-                                                            Reply
-                                                        </div>
                                                     </div>
                                                 </div>
-                                                <!-- Reply Input1 -->
+                                            </div>
+                                        </div>
+                                        <div
+                                            v-if="
+                                                showUpdate == 'allUpdates' ||
+                                                showUpdate == 'mentioned'
+                                            "
+                                            v-for="(
+                                                update, index
+                                            ) in filteredUpdates"
+                                        >
+                                            <div
+                                                v-if="
+                                                    update.task_id ==
+                                                        selectedTaskId &&
+                                                    update.reply !== 1
+                                                "
+                                                class="flex w-full h-full mt-8 text-black overflow-y-auto"
+                                            >
                                                 <div
-                                                    v-if="
-                                                        showReplyInput[index] &&
-                                                        update.has_reply ==
-                                                            false
-                                                    "
-                                                    class="w-full flex flex-col justify-between relative bg-white border rounded-lg p-0"
+                                                    class="w-full px-6 overflow-y-auto"
                                                 >
-                                                    {{
-                                                        console.log(
-                                                            "update id before pass",
-                                                            update
-                                                        )
-                                                    }}
-
-                                                    <TextInput
-                                                        class="w-full"
-                                                        placeholder="Write a reply..."
-                                                        v-model="replyContent"
-                                                        @keyup.enter="
-                                                            submitReply(
-                                                                update.id
-                                                            )
-                                                        "
-                                                    ></TextInput>
-                                                </div>
-
-                                                <div>
                                                     <div
-                                                        v-for="(
-                                                            reply, index2
-                                                        ) in filteredUpdates"
+                                                        class="w-full flex flex-col relative justify-between bg-white border rounded-lg p-0"
                                                     >
-                                                        <div
-                                                            v-if="
-                                                                reply.reply &&
-                                                                reply.parent_id ===
-                                                                    update.id
-                                                            "
-                                                            class="w-full flex flex-col justify-between relative bg-white border border-b-0 rounded-lg p-0"
-                                                        >
-                                                            <div>
+                                                        <div>
+                                                            <div
+                                                                class="flex p-4"
+                                                            >
                                                                 <div
-                                                                    class="flex p-4"
+                                                                    class="rounded-full w-12 h-12 flex items-center justify-center group/detail relative"
                                                                 >
-                                                                    <div
-                                                                        class="rounded-full w-14 flex items-center justify-center h-14 group/detail relative"
+                                                                    <template
+                                                                        v-if="
+                                                                            update
+                                                                                .user
+                                                                                ?.profile_picture_url
+                                                                        "
                                                                     >
-                                                                        <template
-                                                                            v-if="
+                                                                        <img
+                                                                            :src="
                                                                                 update
                                                                                     .user
-                                                                                    ?.profile_picture_url
+                                                                                    .profile_picture_url
                                                                             "
-                                                                        >
-                                                                            <img
-                                                                                :src="
-                                                                                    update
-                                                                                        .user
-                                                                                        .profile_picture_url
-                                                                                "
-                                                                                alt="Profile Picture"
-                                                                                class="w-full h-full object-cover rounded-full"
-                                                                            />
-                                                                        </template>
+                                                                            alt="Profile Picture"
+                                                                            class="w-full h-full object-cover rounded-full"
+                                                                        />
+                                                                    </template>
 
-                                                                        <!-- Display h1 only if there is no profile_picture_url -->
-                                                                        <template
-                                                                            v-else
+                                                                    <!-- Display h1 only if there is no profile_picture_url -->
+                                                                    <template
+                                                                        v-else
+                                                                    >
+                                                                        <h1
+                                                                            class="py-1 w-12 h-12 flex items-center justify-center text-3xl px-3.5 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
                                                                         >
-                                                                            <h1
-                                                                                class="py-1 w-12 flex items-center justify-center h-12 text-3xl px-3.5 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
-                                                                            >
-                                                                                {{
+                                                                            {{
+                                                                                update
+                                                                                    .user
+                                                                                    ?.user_name
+                                                                                    ? update.user.user_name
+                                                                                          .charAt(
+                                                                                              0
+                                                                                          )
+                                                                                          .toUpperCase()
+                                                                                    : "?"
+                                                                            }}
+                                                                        </h1>
+                                                                    </template>
+                                                                    <div
+                                                                        class="w-64 transition-opacity hidden group-hover/detail:flex duration-1000 ease-in-out opacity-0 group-hover/detail:opacity-100 rounded-lg shadow-lg px-0 py-6 pb-0 -top-1 flex-col justify-between left-12 z-10 h-44 absolute bg-white"
+                                                                    >
+                                                                        <div
+                                                                            class="flex px-8 w-20 h-20"
+                                                                        >
+                                                                            <template
+                                                                                v-if="
                                                                                     update
                                                                                         .user
-                                                                                        ?.user_name
-                                                                                        ? update.user.user_name
-                                                                                              .charAt(
-                                                                                                  0
-                                                                                              )
-                                                                                              .toUpperCase()
-                                                                                        : "?"
-                                                                                }}
-                                                                            </h1>
-                                                                        </template>
-                                                                        <div
-                                                                            class="w-64 transition-opacity hidden group-hover/detail:flex duration-1000 ease-in-out opacity-0 group-hover/detail:opacity-100 rounded-lg shadow-lg px-0 py-6 pb-0 -top-20 flex-col justify-between left-14 h-44 absolute bg-white"
-                                                                        >
-                                                                            <div
-                                                                                class="flex px-8"
+                                                                                        ?.profile_picture_url
+                                                                                "
+                                                                            >
+                                                                                <img
+                                                                                    :src="
+                                                                                        update
+                                                                                            .user
+                                                                                            .profile_picture_url
+                                                                                    "
+                                                                                    alt="Profile Picture"
+                                                                                    class="w-20 h-20 object-cover rounded-full"
+                                                                                />
+                                                                            </template>
+
+                                                                            <!-- Display h1 only if there is no profile_picture_url -->
+                                                                            <template
+                                                                                v-else
                                                                             >
                                                                                 <h1
-                                                                                    class="py-3 w-20 h-20 flex items-center justify-center text-5xl px-6 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
+                                                                                    class="py-3 w-20 h-20 flex items-center justify-center z-15 text-5xl px-6 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
                                                                                 >
                                                                                     {{
                                                                                         update
@@ -3379,195 +3254,244 @@ onUnmounted(() => {
                                                                                             : "?"
                                                                                     }}
                                                                                 </h1>
-                                                                                <div>
-                                                                                    <div
-                                                                                        class="flex"
-                                                                                    >
-                                                                                        <h1
-                                                                                            class="font-extralight hover:underline cursor-pointer"
-                                                                                        >
-                                                                                            {{
-                                                                                                update
-                                                                                                    .user
-                                                                                                    .user_name
-                                                                                            }}
-                                                                                        </h1>
-                                                                                        <span
-                                                                                            class="w-3 h-3 rounded-full bg-green-400 ml-2"
-                                                                                        ></span>
-                                                                                    </div>
-                                                                                    <h1
-                                                                                        class="mt-4 p-1 bg-blue-100 flex items-center justify-center rounded-lg"
-                                                                                    >
-                                                                                        {{
-                                                                                            update.user_role
-                                                                                        }}
-                                                                                    </h1>
-                                                                                </div>
-                                                                            </div>
-                                                                            <div
-                                                                                class="border-t group/contact w-full relative border-gray-500 hover:bg-gray-100 cursor-pointer flex items-center justify-center border-b-0 py-4"
-                                                                            >
-                                                                                <h1>
-                                                                                    Contact
-                                                                                    Details
-                                                                                </h1>
-                                                                                <i
-                                                                                    class="fa fa-chevron-down ml-2 text-xs"
-                                                                                    aria-hidden="true"
-                                                                                ></i>
+                                                                            </template>
+                                                                            <div>
                                                                                 <div
-                                                                                    class="w-64 gr transition-opacity duration-1000 ease-in-out opacity-0 group-hover/contact:opacity-100 rounded-lg px-4 shadow-lg py-2 top-12 flex items-center left-0 h-16 absolute bg-white"
+                                                                                    class="flex"
                                                                                 >
-                                                                                    <i
-                                                                                        class="far fa-envelope mr-2 font-extralight text-gray-500"
-                                                                                    ></i>
                                                                                     <h1
-                                                                                        class="text-gray-500"
+                                                                                        class="font-extralight hover:underline cursor-pointer"
                                                                                     >
                                                                                         {{
                                                                                             update
                                                                                                 .user
-                                                                                                .email
+                                                                                                .user_name
                                                                                         }}
                                                                                     </h1>
-                                                                                    <h1
-                                                                                        class="bg-blue-400 text-sm ml-4 rounded-md hover:bg-blue-500 p-1"
-                                                                                    >
-                                                                                        Copy
-                                                                                    </h1>
+                                                                                    <span
+                                                                                        class="w-3 h-3 rounded-full bg-green-400 ml-2"
+                                                                                    ></span>
                                                                                 </div>
+                                                                                <h1
+                                                                                    class="mt-4 p-1 bg-blue-100 flex items-center justify-center rounded-lg"
+                                                                                >
+                                                                                    {{
+                                                                                        update.user_role
+                                                                                    }}
+                                                                                </h1>
                                                                             </div>
                                                                         </div>
-                                                                    </div>
-
-                                                                    <div
-                                                                        class="w-full"
-                                                                    >
                                                                         <div
-                                                                            class=""
+                                                                            class="border-t group/contact w-full relative border-gray-500 hover:bg-gray-100 cursor-pointer flex items-center justify-center border-b-0 py-4"
                                                                         >
+                                                                            <h1>
+                                                                                Contact
+                                                                                Details
+                                                                            </h1>
+                                                                            <i
+                                                                                class="fa fa-chevron-down ml-2 text-xs"
+                                                                                aria-hidden="true"
+                                                                            ></i>
                                                                             <div
-                                                                                class="bg-gray-100 rounded-lg"
+                                                                                class="w-64 gr transition-opacity duration-1000 ease-in-out opacity-0 group-hover/contact:opacity-100 rounded-lg px-4 shadow-lg py-2 top-12 flex items-center left-0 h-16 absolute bg-white"
                                                                             >
+                                                                                <i
+                                                                                    class="far fa-envelope mr-2 font-extralight text-gray-500"
+                                                                                ></i>
                                                                                 <h1
-                                                                                    class="font-extralight text-blue-500 px-4 py-2 hover:underline cursor-pointer"
+                                                                                    class="text-gray-500"
                                                                                 >
+                                                                                    {{
+                                                                                        console.log(
+                                                                                            "email",
+                                                                                            update.user
+                                                                                        )
+                                                                                    }}
                                                                                     {{
                                                                                         update
                                                                                             .user
-                                                                                            .user_name
+                                                                                            .email
                                                                                     }}
                                                                                 </h1>
-                                                                                <div
-                                                                                    class="mt-1 p-4 flex items-center flex-col"
-                                                                                >
-                                                                                    <p
-                                                                                        v-html="
-                                                                                            truncatedDescription(
-                                                                                                reply,
-                                                                                                update
-                                                                                            )
-                                                                                        "
-                                                                                    ></p>
-                                                                                    <button
-                                                                                        @click="
-                                                                                            toggleFullDescription(
-                                                                                                index2
-                                                                                            )
-                                                                                        "
-                                                                                        class="text-green-500 hover:text-green-600 hover:shadow-lg w-full bg-white"
-                                                                                    >
-                                                                                        {{
-                                                                                            console.log(
-                                                                                                "show full description",
-                                                                                                showFullDescription[
-                                                                                                    index
-                                                                                                ]
-                                                                                            )
-                                                                                        }}
-                                                                                        {{
-                                                                                            showFullDescription[
-                                                                                                index2
-                                                                                            ]
-                                                                                                ? "Less"
-                                                                                                : "More"
-                                                                                        }}
-                                                                                    </button>
-                                                                                </div>
-                                                                            </div>
-                                                                            <div
-                                                                                class="flex items-center text-gray-600"
-                                                                            >
-                                                                                <i
-                                                                                    class="far fa-clock"
-                                                                                >
-                                                                                </i>
                                                                                 <h1
-                                                                                    class="ml-1 mt-2 hover:underline cursor-pointer mr-1"
+                                                                                    class="bg-blue-400 text-sm ml-4 rounded-md hover:bg-blue-500 p-1"
                                                                                 >
-                                                                                    3h
+                                                                                    Copy
                                                                                 </h1>
                                                                             </div>
                                                                         </div>
                                                                     </div>
                                                                 </div>
+
+                                                                <div
+                                                                    class="w-full"
+                                                                >
+                                                                    <div
+                                                                        class="flex items-center justify-between"
+                                                                    >
+                                                                        <div
+                                                                            class="flex items-center"
+                                                                        >
+                                                                            <h1
+                                                                                class="font-extralight hover:underline cursor-pointer"
+                                                                            >
+                                                                                {{
+                                                                                    update
+                                                                                        .user
+                                                                                        .user_name
+                                                                                }}
+                                                                            </h1>
+                                                                            <span
+                                                                                class="w-3 h-3 rounded-full bg-green-400 ml-2"
+                                                                            ></span>
+                                                                        </div>
+                                                                        <div
+                                                                            class="flex items-center text-gray-600"
+                                                                        >
+                                                                            <i
+                                                                                class="far fa-clock"
+                                                                            >
+                                                                            </i>
+                                                                            <h1
+                                                                                class="ml-1 hover:underline cursor-pointer mr-1"
+                                                                            >
+                                                                                3h
+                                                                            </h1>
+                                                                            <span
+                                                                                @click="
+                                                                                    toggleSideDetail
+                                                                                "
+                                                                                @click.stop
+                                                                                class="h-full hover:bg-gray-100"
+                                                                            >
+                                                                                <i
+                                                                                    class="far fa-bell m-1 text-sm"
+                                                                                ></i>
+                                                                            </span>
+                                                                            <span>
+                                                                                <i
+                                                                                    class="fa fa-ellipsis-h text-lg py-1 px-1 hover:bg-gray-100 cursor-pointer"
+                                                                                    aria-hidden="true"
+                                                                                ></i>
+                                                                            </span>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div
+                                                                        class="flex items-center text-gray-500 text-sm"
+                                                                    >
+                                                                        <a
+                                                                            href="#"
+                                                                            class="hover:text-blue-600"
+                                                                        >
+                                                                            <h1>
+                                                                                {{
+                                                                                    board.board_name
+                                                                                }}>
+                                                                            </h1>
+                                                                        </a>
+                                                                        <a
+                                                                            href="#"
+                                                                            class="hover:text-blue-600"
+                                                                        >
+                                                                            <h1>
+                                                                                To
+                                                                                do
+                                                                            </h1>
+                                                                        </a>
+                                                                        <a
+                                                                            href="#"
+                                                                            class="hover:text-blue-600"
+                                                                        >
+                                                                            <h1>
+                                                                                >{{
+                                                                                    update
+                                                                                        .task
+                                                                                        .task_name
+                                                                                }}
+                                                                            </h1>
+                                                                        </a>
+                                                                    </div>
+                                                                </div>
                                                             </div>
                                                             <div
-                                                                class="w-full flex mt-2 px-4 py-2 items-center"
-                                                            ></div>
-                                                            <!-- reply input 2 -->
-                                                        </div>
-                                                    </div>
-                                                    {{
-                                                        console.log(
-                                                            "update has reply",
-                                                            update.has_reply
-                                                        )
-                                                    }}
-                                                    <div
-                                                        v-if="
-                                                            update.has_reply ==
-                                                            1
-                                                        "
-                                                        class="flex flex-row"
-                                                    >
-                                                        <div>
-                                                            <div class>
-                                                                <template
-                                                                    v-if="
-                                                                        user?.profile_picture_url
+                                                                class="mt-4 p-4 flex items-center flex-col"
+                                                            >
+                                                                <p
+                                                                    v-html="
+                                                                        truncatedDescription(
+                                                                            update,
+                                                                            null
+                                                                        )
                                                                     "
+                                                                ></p>
+                                                                <button
+                                                                    @click="
+                                                                        toggleFullDescription(
+                                                                            index
+                                                                        )
+                                                                    "
+                                                                    class="text-green-500 hover:text-green-600 hover:shadow-lg w-full bg-white"
                                                                 >
-                                                                    <img
-                                                                        :src="
-                                                                            user.profile_picture_url
-                                                                        "
-                                                                        alt="Profile Picture"
-                                                                        class="w-full h-full object-cover rounded-full"
-                                                                    />
-                                                                </template>
-
-                                                                <!-- Display h1 only if there is no profile_picture_url -->
-                                                                <template
-                                                                    v-else
-                                                                >
-                                                                    <h1
-                                                                        class="py-1 w-12 h-12 flex items-center justify-center text-3xl px-3.5 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
-                                                                    >
-                                                                        {{
-                                                                            user?.user_name
-                                                                                ? update.user.user_name
-                                                                                      .charAt(
-                                                                                          0
-                                                                                      )
-                                                                                      .toUpperCase()
-                                                                                : "?"
-                                                                        }}
-                                                                    </h1>
-                                                                </template>
+                                                                    {{
+                                                                        showFullDescription[
+                                                                            index
+                                                                        ]
+                                                                            ? "Less"
+                                                                            : "More"
+                                                                    }}
+                                                                </button>
                                                             </div>
                                                         </div>
+                                                        <div
+                                                            v-if="
+                                                                update.has_reply ==
+                                                                0
+                                                            "
+                                                            class="w-full flex mt-8 border-t items-center"
+                                                        >
+                                                            <div
+                                                                class="w-1/2 flex justify-center items-center p-3 border-r hover:bg-gray-100"
+                                                            >
+                                                                <i
+                                                                    class="far fa-thumbs-up text-gray-400 mr-2"
+                                                                    aria-hidden="true"
+                                                                ></i>
+                                                                Like
+                                                            </div>
+                                                            <div
+                                                                @click="
+                                                                    toggleReplyInput(
+                                                                        index
+                                                                    )
+                                                                "
+                                                                class="w-1/2 flex justify-center items-center p-3 hover:bg-gray-100"
+                                                            >
+                                                                <i
+                                                                    class="fa mr-2 text-gray-400 fa-reply"
+                                                                    aria-hidden="true"
+                                                                ></i>
+                                                                Reply
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <!-- Reply Input1 -->
+                                                    <div
+                                                        v-if="
+                                                            showReplyInput[
+                                                                index
+                                                            ] &&
+                                                            update.has_reply ==
+                                                                false
+                                                        "
+                                                        class="w-full flex flex-col justify-between relative bg-white border rounded-lg p-0"
+                                                    >
+                                                        {{
+                                                            console.log(
+                                                                "update id before pass",
+                                                                update
+                                                            )
+                                                        }}
+
                                                         <TextInput
                                                             class="w-full"
                                                             placeholder="Write a reply..."
@@ -3576,933 +3500,1288 @@ onUnmounted(() => {
                                                             "
                                                             @keyup.enter="
                                                                 submitReply(
-                                                                    update.id,
-                                                                    index
+                                                                    update.id
                                                                 )
                                                             "
                                                         ></TextInput>
                                                     </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </SideDetail>
 
-                                <div
-                                    v-for="(task, index) in filteredTasks"
-                                    :key="task.id"
-                                >
-                                    <tr
-                                        class="border w-fit group flex bg-white hover:bg-gray-100"
-                                    >
-                                        <span
-                                            class="absolute z-10 -left-72 items-center hidden group-hover:block"
-                                        >
-                                            <i
-                                                class="fa fa-ellipsis-h text-xl p-2 text-black hover:bg-gray-100 cursor-pointer"
-                                            ></i>
-                                        </span>
-                                        <td
-                                            class="p-4 py-2 w-fit flex items-center justify-center border-l-8 border-l-blue-300 border border-gray-100"
-                                        >
-                                            <input
-                                                type="checkbox"
-                                                class="h-4 w-4 text-blue-600"
-                                            />
-                                        </td>
-                                        <td
-                                            class="px-6 py-1 group w-56 border flex items-center"
-                                        >
-                                            <span
-                                                @click.stop="
-                                                    toggleSubItem(index)
-                                                "
-                                                class="hidden group-hover:block"
-                                            >
-                                                <i
-                                                    :class="{
-                                                        'fa fa-chevron-right mr-4':
-                                                            !showSubTasks[
-                                                                index
-                                                            ],
-                                                        'fa fa-chevron-down mr-4':
-                                                            showSubTasks[index],
-                                                    }"
-                                                    aria-hidden="true"
-                                                ></i>
-                                            </span>
-
-                                            <span
-                                                @click="
-                                                    toggleTaskUpdate(task.id)
-                                                "
-                                                @click.stop
-                                                class="w-full cursor-pointer justify-between h-full flex items-center"
-                                            >
-                                                {{ task.task_name }}
-                                                <span
-                                                    class="relative flex items-center"
-                                                >
-                                                    <i
-                                                        class="far fa-comment text-xl text-blue-700"
-                                                    ></i>
-                                                    <span
-                                                        class="absolute top-0 left-4 -translate-x-1/2 translate-y-1/2 text-xs text-white px-1 rounded-full bg-blue-700"
-                                                    >
-                                                        {{ task.updates_count }}
-                                                    </span>
-                                                </span>
-                                            </span>
-                                        </td>
-                                        <td
-                                            @click.stop
-                                            @click="toggleOwner(index)"
-                                            v-if="
-                                                showOwner ||
-                                                showAll ||
-                                                showTasks
-                                            "
-                                            class="px-6 py-1 relative flex w-24 justify-center border items-center"
-                                        >
-                                            <template
-                                                v-if="
-                                                    task.assigned_user
-                                                        ?.profile_picture_url
-                                                "
-                                            >
-                                                <img
-                                                    :src="
-                                                        task.assigned_user
-                                                            .profile_picture_url
-                                                    "
-                                                    alt="Profile Picture"
-                                                    class="w-full h-full object-cover rounded-full"
-                                                />
-                                            </template>
-
-                                            <!-- Display h1 only if there is no profile_picture_url -->
-                                            <template v-else>
-                                                <h1
-                                                    class="py-1 px-2.5 border-2 border-white text-white rounded-full bg-blue-300"
-                                                >
-                                                    {{
-                                                        task.assigned_user
-                                                            ?.user_name
-                                                            ? task.assigned_user.user_name
-                                                                  .charAt(0)
-                                                                  .toUpperCase()
-                                                            : "?"
-                                                    }}
-                                                </h1>
-                                            </template>
-                                            <div
-                                                v-if="selectOwner[index]"
-                                                class="absolute justify-center flex flex-col z-20 top-10 overflow-y-auto pt-2 items-center bg-white shadow-lg rounded-lg w-52 h-fit"
-                                            >
-                                                <div
-                                                    v-for="user in board.team
-                                                        .members"
-                                                    :key="user.id"
-                                                >
-                                                    <div
-                                                        v-if="
-                                                            user.role !==
-                                                            'Manager'
-                                                        "
-                                                        @click="
-                                                            updateTaskField(
-                                                                task.id,
-                                                                'assigned_to',
-                                                                user.id
-                                                            )
-                                                        "
-                                                        class="flex relative items-center cursor-pointer w-44 mb-2 hover:bg-gray-100 px-3 py-2"
-                                                    >
-                                                        <!-- Conditional rendering: show initials if no profile picture -->
-                                                        <h1
-                                                            v-if="
-                                                                !user?.profile_picture_url
-                                                            "
-                                                            class="py-1 px-2.5 border-2 border-white text-white rounded-full bg-blue-300"
+                                                    <div>
+                                                        <div
+                                                            v-for="(
+                                                                reply, index2
+                                                            ) in filteredUpdates"
                                                         >
-                                                            {{
-                                                                user?.user_name
-                                                                    ? user.user_name
-                                                                          .charAt(
-                                                                              0
-                                                                          )
-                                                                          .toUpperCase()
-                                                                    : "?"
-                                                            }}
-                                                        </h1>
-                                                        <!-- Show user name -->
-                                                        <h1 class="ml-2">
-                                                            {{
-                                                                user?.user_name
-                                                            }}
-                                                        </h1>
+                                                            <div
+                                                                v-if="
+                                                                    reply.reply &&
+                                                                    reply.parent_id ===
+                                                                        update.id
+                                                                "
+                                                                class="w-full flex flex-col justify-between relative bg-white border border-b-0 rounded-lg p-0"
+                                                            >
+                                                                <div>
+                                                                    <div
+                                                                        class="flex p-4"
+                                                                    >
+                                                                        <div
+                                                                            class="rounded-full w-14 flex items-center justify-center h-14 group/detail relative"
+                                                                        >
+                                                                            <template
+                                                                                v-if="
+                                                                                    update
+                                                                                        .user
+                                                                                        ?.profile_picture_url
+                                                                                "
+                                                                            >
+                                                                                <img
+                                                                                    :src="
+                                                                                        update
+                                                                                            .user
+                                                                                            .profile_picture_url
+                                                                                    "
+                                                                                    alt="Profile Picture"
+                                                                                    class="w-full h-full object-cover rounded-full"
+                                                                                />
+                                                                            </template>
+
+                                                                            <!-- Display h1 only if there is no profile_picture_url -->
+                                                                            <template
+                                                                                v-else
+                                                                            >
+                                                                                <h1
+                                                                                    class="py-1 w-12 flex items-center justify-center h-12 text-3xl px-3.5 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
+                                                                                >
+                                                                                    {{
+                                                                                        update
+                                                                                            .user
+                                                                                            ?.user_name
+                                                                                            ? update.user.user_name
+                                                                                                  .charAt(
+                                                                                                      0
+                                                                                                  )
+                                                                                                  .toUpperCase()
+                                                                                            : "?"
+                                                                                    }}
+                                                                                </h1>
+                                                                            </template>
+                                                                            <div
+                                                                                class="w-64 transition-opacity hidden group-hover/detail:flex duration-1000 ease-in-out opacity-0 group-hover/detail:opacity-100 rounded-lg shadow-lg px-0 py-6 pb-0 -top-20 flex-col justify-between left-14 h-44 absolute bg-white"
+                                                                            >
+                                                                                <div
+                                                                                    class="flex px-8"
+                                                                                >
+                                                                                    <h1
+                                                                                        class="py-3 w-20 h-20 flex items-center justify-center text-5xl px-6 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
+                                                                                    >
+                                                                                        {{
+                                                                                            update
+                                                                                                .user
+                                                                                                ?.user_name
+                                                                                                ? update.user.user_name
+                                                                                                      .charAt(
+                                                                                                          0
+                                                                                                      )
+                                                                                                      .toUpperCase()
+                                                                                                : "?"
+                                                                                        }}
+                                                                                    </h1>
+                                                                                    <div>
+                                                                                        <div
+                                                                                            class="flex"
+                                                                                        >
+                                                                                            <h1
+                                                                                                class="font-extralight hover:underline cursor-pointer"
+                                                                                            >
+                                                                                                {{
+                                                                                                    update
+                                                                                                        .user
+                                                                                                        .user_name
+                                                                                                }}
+                                                                                            </h1>
+                                                                                            <span
+                                                                                                class="w-3 h-3 rounded-full bg-green-400 ml-2"
+                                                                                            ></span>
+                                                                                        </div>
+                                                                                        <h1
+                                                                                            class="mt-4 p-1 bg-blue-100 flex items-center justify-center rounded-lg"
+                                                                                        >
+                                                                                            {{
+                                                                                                update.user_role
+                                                                                            }}
+                                                                                        </h1>
+                                                                                    </div>
+                                                                                </div>
+                                                                                <div
+                                                                                    class="border-t group/contact w-full relative border-gray-500 hover:bg-gray-100 cursor-pointer flex items-center justify-center border-b-0 py-4"
+                                                                                >
+                                                                                    <h1>
+                                                                                        Contact
+                                                                                        Details
+                                                                                    </h1>
+                                                                                    <i
+                                                                                        class="fa fa-chevron-down ml-2 text-xs"
+                                                                                        aria-hidden="true"
+                                                                                    ></i>
+                                                                                    <div
+                                                                                        class="w-64 gr transition-opacity duration-1000 ease-in-out opacity-0 group-hover/contact:opacity-100 rounded-lg px-4 shadow-lg py-2 top-12 flex items-center left-0 h-16 absolute bg-white"
+                                                                                    >
+                                                                                        <i
+                                                                                            class="far fa-envelope mr-2 font-extralight text-gray-500"
+                                                                                        ></i>
+                                                                                        <h1
+                                                                                            class="text-gray-500"
+                                                                                        >
+                                                                                            {{
+                                                                                                update
+                                                                                                    .user
+                                                                                                    .email
+                                                                                            }}
+                                                                                        </h1>
+                                                                                        <h1
+                                                                                            class="bg-blue-400 text-sm ml-4 rounded-md hover:bg-blue-500 p-1"
+                                                                                        >
+                                                                                            Copy
+                                                                                        </h1>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        <div
+                                                                            class="w-full"
+                                                                        >
+                                                                            <div
+                                                                                class=""
+                                                                            >
+                                                                                <div
+                                                                                    class="bg-gray-100 rounded-lg"
+                                                                                >
+                                                                                    <h1
+                                                                                        class="font-extralight text-blue-500 px-4 py-2 hover:underline cursor-pointer"
+                                                                                    >
+                                                                                        {{
+                                                                                            update
+                                                                                                .user
+                                                                                                .user_name
+                                                                                        }}
+                                                                                    </h1>
+                                                                                    <div
+                                                                                        class="mt-1 p-4 flex items-center flex-col"
+                                                                                    >
+                                                                                        <p
+                                                                                            v-html="
+                                                                                                truncatedDescription(
+                                                                                                    reply,
+                                                                                                    update
+                                                                                                )
+                                                                                            "
+                                                                                        ></p>
+                                                                                        <button
+                                                                                            @click="
+                                                                                                toggleFullDescription(
+                                                                                                    index2
+                                                                                                )
+                                                                                            "
+                                                                                            class="text-green-500 hover:text-green-600 hover:shadow-lg w-full bg-white"
+                                                                                        >
+                                                                                            {{
+                                                                                                console.log(
+                                                                                                    "show full description",
+                                                                                                    showFullDescription[
+                                                                                                        index
+                                                                                                    ]
+                                                                                                )
+                                                                                            }}
+                                                                                            {{
+                                                                                                showFullDescription[
+                                                                                                    index2
+                                                                                                ]
+                                                                                                    ? "Less"
+                                                                                                    : "More"
+                                                                                            }}
+                                                                                        </button>
+                                                                                    </div>
+                                                                                </div>
+                                                                                <div
+                                                                                    class="flex items-center text-gray-600"
+                                                                                >
+                                                                                    <i
+                                                                                        class="far fa-clock"
+                                                                                    >
+                                                                                    </i>
+                                                                                    <h1
+                                                                                        class="ml-1 mt-2 hover:underline cursor-pointer mr-1"
+                                                                                    >
+                                                                                        3h
+                                                                                    </h1>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                                <div
+                                                                    class="w-full flex mt-2 px-4 py-2 items-center"
+                                                                ></div>
+                                                                <!-- reply input 2 -->
+                                                            </div>
+                                                        </div>
+                                                        {{
+                                                            console.log(
+                                                                "update has reply",
+                                                                update.has_reply
+                                                            )
+                                                        }}
+                                                        <div
+                                                            v-if="
+                                                                update.has_reply ==
+                                                                1
+                                                            "
+                                                            class="flex flex-row"
+                                                        >
+                                                            <div>
+                                                                <div class>
+                                                                    <template
+                                                                        v-if="
+                                                                            user?.profile_picture_url
+                                                                        "
+                                                                    >
+                                                                        <img
+                                                                            :src="
+                                                                                user.profile_picture_url
+                                                                            "
+                                                                            alt="Profile Picture"
+                                                                            class="w-full h-full object-cover rounded-full"
+                                                                        />
+                                                                    </template>
+
+                                                                    <!-- Display h1 only if there is no profile_picture_url -->
+                                                                    <template
+                                                                        v-else
+                                                                    >
+                                                                        <h1
+                                                                            class="py-1 w-12 h-12 flex items-center justify-center text-3xl px-3.5 border-2 mr-2 border-white text-white rounded-full bg-blue-300"
+                                                                        >
+                                                                            {{
+                                                                                user?.user_name
+                                                                                    ? update.user.user_name
+                                                                                          .charAt(
+                                                                                              0
+                                                                                          )
+                                                                                          .toUpperCase()
+                                                                                    : "?"
+                                                                            }}
+                                                                        </h1>
+                                                                    </template>
+                                                                </div>
+                                                            </div>
+                                                            <TextInput
+                                                                class="w-full"
+                                                                placeholder="Write a reply..."
+                                                                v-model="
+                                                                    replyContent
+                                                                "
+                                                                @keyup.enter="
+                                                                    submitReply(
+                                                                        update.id,
+                                                                        index
+                                                                    )
+                                                                "
+                                                            ></TextInput>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
-                                        </td>
-                                        <td
-                                            @click.stop
-                                            @click="toggleStatus(index)"
-                                            :class="{
-                                                'bg-gray-400':
-                                                    task.status ===
-                                                    'Not Started',
-                                                'bg-orange-400':
-                                                    task.status ===
-                                                    'In Progress',
-                                                'bg-green-400':
-                                                    task.status === 'Completed',
-                                            }"
-                                            v-if="
-                                                showStatus ||
-                                                showAll ||
-                                                showTasks
-                                            "
-                                            class="w-36 relative flex justify-center items-center"
+                                        </div>
+                                    </SideDetail>
+
+                                    <div
+                                        v-for="(task, index) in group"
+                                        :key="task.id"
+                                    >
+                                        <tr
+                                            class="border w-fit group flex bg-white hover:bg-gray-100"
                                         >
-                                            <h1 class="px-2 text-white">
-                                                {{ task.status }}
-                                            </h1>
-                                            <div
-                                                v-if="selectStatus[index]"
-                                                class="absolute text-white justify-center flex flex-col items-center z-10 top-10 overflow-y-auto bg-white shadow-lg rounded-lg w-52 max-h-40"
+                                            <span
+                                                class="absolute z-10 -left-72 items-center hidden group-hover:block"
                                             >
-                                                <div
-                                                    @click="
-                                                        updateTaskField(
-                                                            task.id,
-                                                            'status',
-                                                            'Completed'
-                                                        )
-                                                    "
-                                                    class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-green-500 bg-green-400 px-3 py-2"
-                                                >
-                                                    <h1>Completed</h1>
-                                                </div>
-                                                <div
-                                                    @click="
-                                                        updateTaskField(
-                                                            task.id,
-                                                            'status',
-                                                            'In Progress'
-                                                        )
-                                                    "
-                                                    class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-orange-500 bg-orange-400 px-3 py-2"
-                                                >
-                                                    <h1>In Progress</h1>
-                                                </div>
-                                                <div
-                                                    @click="
-                                                        updateTaskField(
-                                                            task.id,
-                                                            'status',
-                                                            'Not Started'
-                                                        )
-                                                    "
-                                                    class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-gray-500 bg-gray-400 px-3 py-2"
-                                                >
-                                                    <h1>Not Started</h1>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td
-                                            v-if="
-                                                showDueDate ||
-                                                showAll ||
-                                                showTasks
-                                            "
-                                            @click.stop="
-                                                showDatePicker(task.id)
-                                            "
-                                            class="px-2 py-1 w-40 relative flex flex-col cursor-pointer items-start justify-center border"
-                                        >
-                                            <div class="flex relative">
                                                 <i
-                                                    v-if="
-                                                        visibleDatePicker !==
-                                                        task.id
-                                                    "
-                                                    :class="{
-                                                        'bg-red-500 fa-exclamation py-1 px-2.5':
-                                                            task.status ===
-                                                            'Not Started',
-                                                        'bg-gray-400 fa-spinner p-1':
-                                                            task.status ===
-                                                            'In Progress',
-                                                        'bg-green-400 fa-check p-1':
-                                                            task.status ===
-                                                            'Completed',
-                                                    }"
-                                                    class="fa mr-4 text-sm h-fit rounded-full text-white"
-                                                    aria-hidden="true"
+                                                    class="fa fa-ellipsis-h text-xl p-2 text-black hover:bg-gray-100 cursor-pointer"
                                                 ></i>
-                                                <div
-                                                    v-if="
-                                                        visibleDatePicker !==
-                                                        task.id
-                                                    "
-                                                >
-                                                    {{
-                                                        timeBeforeDue(
-                                                            task.due_date
-                                                        )
-                                                    }}
-                                                </div>
-                                            </div>
-                                            <DatePicker
-                                                v-if="
-                                                    visibleDatePicker == task.id
-                                                "
-                                                class="absolute"
-                                                :placement="'bottom'"
-                                                v-model="task.due_date"
-                                                @update:model-value="
-                                                    (date) =>
-                                                        updateDueDate(
-                                                            task.id,
-                                                            date
-                                                        )
-                                                "
-                                                :auto-position="false"
-                                                :teleport="true"
-                                            />
-                                        </td>
-                                        <td
-                                            @click="togglePriority(index)"
-                                            @click.stop
-                                            :class="{
-                                                'bg-gray-900':
-                                                    task.priority ===
-                                                    'Critical',
-                                                'bg-purple-800':
-                                                    task.priority === 'High',
-                                                'bg-blue-700 ':
-                                                    task.priority === 'Medium',
-                                                'bg-blue-400 ':
-                                                    task.priority === 'Low',
-                                            }"
-                                            v-if="
-                                                showPriority ||
-                                                showAll ||
-                                                showTasks
-                                            "
-                                            class="px-6 py-1 relative border w-28 flex items-center justify-center text-white"
-                                        >
-                                            {{ task.priority }}
-                                            <div
-                                                v-if="selectPriority[index]"
-                                                class="absolute pt-10 text-white justify-center flex flex-col items-center z-10 top-10 overflow-y-auto bg-white shadow-lg rounded-lg w-52 max-h-40"
+                                            </span>
+                                            <td
+                                                class="p-4 py-2 w-fit flex items-center justify-center border-l-8 border-l-blue-300 border border-gray-100"
                                             >
-                                                <div
-                                                    @click="
-                                                        updateTaskField(
-                                                            task.id,
-                                                            'priority',
-                                                            'Critical'
-                                                        )
+                                                <input
+                                                    type="checkbox"
+                                                    class="h-4 w-4 text-blue-600"
+                                                />
+                                            </td>
+                                            <td
+                                                class="px-6 py-1 group w-56 border flex items-center"
+                                            >
+                                                <span
+                                                    @click.stop="
+                                                        showSubTasks[groupName][
+                                                            index
+                                                        ] =
+                                                            !showSubTasks[
+                                                                groupName
+                                                            ][index]
                                                     "
-                                                    class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-gray-900 bg-gray-700 px-3 py-2"
+                                                    class="hidden group-hover:block"
                                                 >
-                                                    <h1>Critical</h1>
-                                                </div>
-                                                <div
+                                                    <i
+                                                        :class="{
+                                                            'fa fa-chevron-right mr-4':
+                                                                !showSubTasks[
+                                                                    groupName
+                                                                ][index],
+                                                            'fa fa-chevron-down mr-4':
+                                                                showSubTasks[
+                                                                    groupName
+                                                                ][index],
+                                                        }"
+                                                        aria-hidden="true"
+                                                    ></i>
+                                                </span>
+
+                                                <span
                                                     @click="
-                                                        updateTaskField(
-                                                            task.id,
-                                                            'priority',
-                                                            'High'
-                                                        )
+                                                        selectedTask = task;
+                                                        selectedTaskName =
+                                                            task.task_name;
+                                                        selectedTaskId =
+                                                            task.id;
+                                                        taskUpdate =
+                                                            !taskUpdate;
                                                     "
-                                                    class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-purple-900 bg-purple-800 px-3 py-2"
+                                                    @click.stop
+                                                    class="w-full cursor-pointer justify-between h-full flex items-center"
                                                 >
-                                                    <h1>High</h1>
-                                                </div>
-                                                <div
-                                                    @click="
-                                                        updateTaskField(
-                                                            task.id,
-                                                            'priority',
-                                                            'Medium'
-                                                        )
-                                                    "
-                                                    class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-blue-800 bg-blue-700 px-3 py-2"
-                                                >
-                                                    <h1>Medium</h1>
-                                                </div>
-                                                <div
-                                                    @click="
-                                                        updateTaskField(
-                                                            task.id,
-                                                            'priority',
-                                                            'Low'
-                                                        )
-                                                    "
-                                                    class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-blue-500 bg-blue-400 px-3 py-2"
-                                                >
-                                                    <h1>Low</h1>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td
-                                            v-if="
-                                                showNotes ||
-                                                showAll ||
-                                                showTasks
-                                            "
-                                            class="px-6 py-1 border w-36"
-                                        >
-                                            {{ task.notes }}
-                                        </td>
-                                        <td
-                                            v-if="
-                                                showBudget ||
-                                                showAll ||
-                                                showTasks
-                                            "
-                                            class="px-6 py-1 border w-24 flex items-center justify-center"
-                                        >
-                                            $
-                                            <input
-                                                type="text"
-                                                class="w-full p-0 border-none"
-                                                v-model="task.budget"
-                                                @input="
-                                                    updateTaskBudget(
-                                                        task.id,
-                                                        task.budget
+                                                    {{ task.task_name }}
+                                                    <span
+                                                        class="relative flex items-center"
+                                                    >
+                                                        <i
+                                                            class="far fa-comment text-xl text-blue-700"
+                                                        ></i>
+                                                        <span
+                                                            class="absolute top-0 left-4 -translate-x-1/2 translate-y-1/2 text-xs text-white px-1 rounded-full bg-blue-700"
+                                                        >
+                                                            {{
+                                                                task.updates_count
+                                                            }}
+                                                        </span>
+                                                    </span>
+                                                </span>
+                                            </td>
+                                            <td
+                                                @click.stop
+                                                @click="
+                                                    toggleOwner(
+                                                        groupName,
+                                                        index
                                                     )
                                                 "
-                                            />
-                                        </td>
-                                        <td
-                                            v-if="
-                                                showFiles ||
-                                                showAll ||
-                                                showTasks
-                                            "
-                                            class="px-6 py-1 flex items-center justify-center border w-36"
-                                        >
-                                            <i
-                                                class="fa fa-file text-blue-700"
-                                                aria-hidden="true"
-                                            ></i>
-                                        </td>
-                                        <td
-                                            v-if="
-                                                showTimeLine ||
-                                                showAll ||
-                                                showTasks
-                                            "
-                                            class="px-2 py-1 flex items-center justify-center border w-40"
-                                        >
-                                            <div
-                                                class="relative w-full h-6 rounded-xl overflow-hidden bg-black"
+                                                v-if="
+                                                    showOwner ||
+                                                    showAll ||
+                                                    showTasks
+                                                "
+                                                class="px-6 py-1 relative flex w-24 justify-center border items-center"
                                             >
-                                                <!-- Blue Portion -->
-                                                <div
-                                                    class="absolute top-0 left-0 h-full bg-blue-400"
-                                                    :style="{
-                                                        width: `${elapsedPercentage2(
-                                                            task.created_at,
-                                                            task.due_date
-                                                        )}%`,
-                                                    }"
-                                                ></div>
-
-                                                <!-- Date Overlay -->
-                                                <div
-                                                    class="absolute inset-0 flex items-center justify-center text-white font-bold"
+                                                <template
+                                                    v-if="
+                                                        task.assigned_user
+                                                            ?.profile_picture_url
+                                                    "
                                                 >
-                                                    <span>
+                                                    <img
+                                                        :src="
+                                                            task.assigned_user
+                                                                .profile_picture_url
+                                                        "
+                                                        alt="Profile Picture"
+                                                        class="w-full h-full object-cover rounded-full"
+                                                    />
+                                                </template>
+
+                                                <!-- Display h1 only if there is no profile_picture_url -->
+                                                <template v-else>
+                                                    <h1
+                                                        class="py-1 px-2.5 border-2 border-white text-white rounded-full bg-blue-300"
+                                                    >
                                                         {{
-                                                            formatDateForDisplay(
-                                                                task.created_at
-                                                            )
+                                                            task.assigned_user
+                                                                ?.user_name
+                                                                ? task.assigned_user.user_name
+                                                                      .charAt(0)
+                                                                      .toUpperCase()
+                                                                : "?"
                                                         }}
-                                                        -
+                                                    </h1>
+                                                </template>
+                                                <div
+                                                    v-if="
+                                                        selectOwner[groupName][
+                                                            index
+                                                        ]
+                                                    "
+                                                    class="absolute justify-center flex flex-col z-20 top-10 overflow-y-auto pt-2 items-center bg-white shadow-lg rounded-lg w-52 h-fit"
+                                                >
+                                                    <div
+                                                        v-for="user in board
+                                                            .team.members"
+                                                        :key="user.id"
+                                                    >
+                                                        <div
+                                                            v-if="
+                                                                user.role !==
+                                                                'Manager'
+                                                            "
+                                                            @click="
+                                                                updateTaskField(
+                                                                    task.id,
+                                                                    'assigned_to',
+                                                                    user.id
+                                                                )
+                                                            "
+                                                            class="flex relative items-center cursor-pointer w-44 mb-2 hover:bg-gray-100 px-3 py-2"
+                                                        >
+                                                            <!-- Conditional rendering: show initials if no profile picture -->
+                                                            <h1
+                                                                v-if="
+                                                                    !user?.profile_picture_url
+                                                                "
+                                                                class="py-1 px-2.5 border-2 border-white text-white rounded-full bg-blue-300"
+                                                            >
+                                                                {{
+                                                                    user?.user_name
+                                                                        ? user.user_name
+                                                                              .charAt(
+                                                                                  0
+                                                                              )
+                                                                              .toUpperCase()
+                                                                        : "?"
+                                                                }}
+                                                            </h1>
+                                                            <!-- Show user name -->
+                                                            <h1 class="ml-2">
+                                                                {{
+                                                                    user?.user_name
+                                                                }}
+                                                            </h1>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td
+                                                @click.stop
+                                                @click="
+                                                    toggleStatus(
+                                                        groupName,
+                                                        index
+                                                    )
+                                                "
+                                                :class="{
+                                                    'bg-gray-400':
+                                                        task.status ===
+                                                        'Not Started',
+                                                    'bg-orange-400':
+                                                        task.status ===
+                                                        'In Progress',
+                                                    'bg-green-400':
+                                                        task.status ===
+                                                        'Completed',
+                                                }"
+                                                v-if="
+                                                    showStatus ||
+                                                    showAll ||
+                                                    showTasks
+                                                "
+                                                class="w-36 relative flex justify-center items-center"
+                                            >
+                                                <h1 class="px-2 text-white">
+                                                    {{ task.status }}
+                                                </h1>
+                                                <div
+                                                    v-if="
+                                                        selectStatus[groupName][
+                                                            index
+                                                        ]
+                                                    "
+                                                    class="absolute text-white justify-center flex flex-col items-center z-10 top-10 overflow-y-auto bg-white shadow-lg rounded-lg w-52 max-h-40"
+                                                >
+                                                    <div
+                                                        @click="
+                                                            updateTaskField(
+                                                                task.id,
+                                                                'status',
+                                                                'Completed'
+                                                            )
+                                                        "
+                                                        class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-green-500 bg-green-400 px-3 py-2"
+                                                    >
+                                                        <h1>Completed</h1>
+                                                    </div>
+                                                    <div
+                                                        @click="
+                                                            updateTaskField(
+                                                                task.id,
+                                                                'status',
+                                                                'In Progress'
+                                                            )
+                                                        "
+                                                        class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-orange-500 bg-orange-400 px-3 py-2"
+                                                    >
+                                                        <h1>In Progress</h1>
+                                                    </div>
+                                                    <div
+                                                        @click="
+                                                            updateTaskField(
+                                                                task.id,
+                                                                'status',
+                                                                'Not Started'
+                                                            )
+                                                        "
+                                                        class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-gray-500 bg-gray-400 px-3 py-2"
+                                                    >
+                                                        <h1>Not Started</h1>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td
+                                                v-if="
+                                                    showDueDate ||
+                                                    showAll ||
+                                                    showTasks
+                                                "
+                                                @click.stop="
+                                                    showDatePicker(task.id)
+                                                "
+                                                class="px-2 py-1 w-40 relative flex flex-col cursor-pointer items-start justify-center border"
+                                            >
+                                                <div class="flex relative">
+                                                    <i
+                                                        v-if="
+                                                            visibleDatePicker !==
+                                                            task.id
+                                                        "
+                                                        :class="{
+                                                            'bg-red-500 fa-exclamation py-1 px-2.5':
+                                                                task.status ===
+                                                                'Not Started',
+                                                            'bg-gray-400 fa-spinner p-1':
+                                                                task.status ===
+                                                                'In Progress',
+                                                            'bg-green-400 fa-check p-1':
+                                                                task.status ===
+                                                                'Completed',
+                                                        }"
+                                                        class="fa mr-4 text-sm h-fit rounded-full text-white"
+                                                        aria-hidden="true"
+                                                    ></i>
+                                                    <div
+                                                        v-if="
+                                                            visibleDatePicker !==
+                                                            task.id
+                                                        "
+                                                    >
                                                         {{
-                                                            formatDateForDisplay(
+                                                            timeBeforeDue(
                                                                 task.due_date
                                                             )
                                                         }}
-                                                    </span>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        </td>
-
-                                        <td
-                                            v-if="
-                                                showLastUpdate ||
-                                                showAll ||
-                                                showTasks
-                                            "
-                                            class="px-6 py-1 w-44 border flex items-center justify-center"
-                                        >
-                                            <span class="text-gray-600">{{
-                                                timeSinceLastUpdate(
-                                                    task.updated_at
-                                                )
-                                            }}</span>
-                                        </td>
-                                    </tr>
-
-                                    <!-- Subitem -->
-
-                                    <tr
-                                        v-if="showSubTasks[index]"
-                                        class="bg-white border m-4 mb-0 rounded-md flex border-l-8 border-l-blue-300 z-5"
-                                    >
-                                        <th
-                                            colspan="12"
-                                            class="pl-4 pr-4 w-fit flex items-center border border-gray-100"
-                                        >
-                                            <input
-                                                type="checkbox"
-                                                class="h-4 w-4 text-blue-600"
-                                            />
-                                        </th>
-                                        <th
-                                            class="px-6 py-2 border flex items-center justify-center w-52"
-                                        >
-                                            Sub task
-                                        </th>
-                                        <th
-                                            v-if="
-                                                showOwnerS ||
-                                                showAll ||
-                                                showSubTasks
-                                            "
-                                            class="px-6 py-1 flex items-center justify-center border"
-                                        >
-                                            Owner
-                                        </th>
-                                        <th
-                                            v-if="
-                                                showStatusS ||
-                                                showAll ||
-                                                showSubTasks
-                                            "
-                                            class="px-6 py-1 w-36 flex items-center justify-center border"
-                                        >
-                                            Status
-                                        </th>
-                                        <th
-                                            v-if="
-                                                showDueDateS ||
-                                                showAll ||
-                                                showSubTasks
-                                            "
-                                            class="px-6 py-1 flex items-center w-40 justify-center border"
-                                        >
-                                            Due date
-                                        </th>
-                                        <th
-                                            v-if="
-                                                showPriorityS ||
-                                                showAll ||
-                                                showSubTasks
-                                            "
-                                            class="px-6 py-1 flex items-center w-28 justify-center border"
-                                        >
-                                            Priority
-                                        </th>
-                                        <th
-                                            v-if="
-                                                showNotesS ||
-                                                showAll ||
-                                                showSubTasks
-                                            "
-                                            class="px-6 py-1 w-36 flex items-center justify-center border"
-                                        >
-                                            Notes
-                                        </th>
-                                        <th
-                                            v-if="
-                                                showBudgetS ||
-                                                showAll ||
-                                                showSubTasks
-                                            "
-                                            class="px-6 py-1 flex items-center justify-center border"
-                                        >
-                                            Budget
-                                        </th>
-                                        <th
-                                            v-if="
-                                                showFilesS ||
-                                                showAll ||
-                                                showSubTasks
-                                            "
-                                            class="px-6 py-1 w-36 flex items-center justify-center border"
-                                        >
-                                            Files
-                                        </th>
-                                        <th
-                                            v-if="
-                                                showTimeLineS ||
-                                                showAll ||
-                                                showSubTasks
-                                            "
-                                            class="px-6 py-1 flex items-center justify-center border"
-                                        >
-                                            Timeline
-                                        </th>
-                                        <th
-                                            v-if="
-                                                showLastUpdateS ||
-                                                showAll ||
-                                                showSubTasks
-                                            "
-                                            class="px-6 py-1 flex items-center justify-center border w-44"
-                                        >
-                                            Last updated
-                                        </th>
-                                        <th
-                                            class="flex items-center justify-center p-3"
-                                        >
-                                            <i
-                                                class="fa fa-plus p-1 hover:bg-gray-100"
-                                            ></i>
-                                        </th>
-                                    </tr>
-                                    <tr
-                                        v-if="task.subItemVisible"
-                                        class="bg-white border w-fit hover:bg-gray-100 m-4 mt-0 rounded-md flex border-l-8 border-l-blue-300 z-5"
-                                    >
-                                        <td
-                                            class="p-4 py-2 w-fit flex items-center justify-center border border-gray-100"
-                                        >
-                                            <input
-                                                type="checkbox"
-                                                class="h-4 w-4 text-blue-600"
-                                            />
-                                        </td>
-                                        <td
-                                            class="group px-6 py-1 w-52 border flex items-center"
-                                        >
-                                            Task 3
-                                        </td>
-                                        <td
-                                            v-if="
-                                                showOwnerS ||
-                                                showAll ||
-                                                showSubTasks
-                                            "
-                                            class="px-6 py-1 flex w-24 justify-center border items-center"
-                                        >
-                                            <h1
-                                                class="py-1 px-2.5 border-2 border-white text-white rounded-full bg-blue-300"
+                                                <DatePicker
+                                                    v-if="
+                                                        visibleDatePicker ==
+                                                        task.id
+                                                    "
+                                                    class="absolute"
+                                                    :placement="'bottom'"
+                                                    v-model="task.due_date"
+                                                    @update:model-value="
+                                                        (date) =>
+                                                            updateDueDate(
+                                                                task.id,
+                                                                date
+                                                            )
+                                                    "
+                                                    :auto-position="false"
+                                                    :teleport="true"
+                                                />
+                                            </td>
+                                            <td
+                                                @click="
+                                                    togglePriority(
+                                                        groupName,
+                                                        index
+                                                    )
+                                                "
+                                                @click.stop
+                                                :class="{
+                                                    'bg-gray-900':
+                                                        task.priority ===
+                                                        'Critical',
+                                                    'bg-purple-800':
+                                                        task.priority ===
+                                                        'High',
+                                                    'bg-blue-700 ':
+                                                        task.priority ===
+                                                        'Medium',
+                                                    'bg-blue-400 ':
+                                                        task.priority === 'Low',
+                                                }"
+                                                v-if="
+                                                    showPriority ||
+                                                    showAll ||
+                                                    showTasks
+                                                "
+                                                class="px-6 py-1 relative border w-28 flex items-center justify-center text-white"
                                             >
-                                                K
-                                            </h1>
-                                        </td>
-                                        <td
-                                            v-if="
-                                                showStatusS ||
-                                                showAll ||
-                                                showSubTasks
-                                            "
-                                            class="w-36 bg-green-400 flex justify-center items-center"
-                                        >
-                                            <h1 class="px-2 text-white">
-                                                Done
-                                            </h1>
-                                        </td>
-                                        <td
-                                            v-if="
-                                                showDueDateS ||
-                                                showAll ||
-                                                showSubTasks
-                                            "
-                                            class="px-2 py-1 w-40 flex items-center justify-start border"
-                                        >
-                                            <div>
+                                                {{ task.priority }}
+                                                <div
+                                                    v-if="
+                                                        selectPriority[
+                                                            groupName
+                                                        ][index]
+                                                    "
+                                                    class="absolute pt-10 text-white justify-center flex flex-col items-center z-10 top-10 overflow-y-auto bg-white shadow-lg rounded-lg w-52 max-h-40"
+                                                >
+                                                    <div
+                                                        @click="
+                                                            updateTaskField(
+                                                                task.id,
+                                                                'priority',
+                                                                'Critical'
+                                                            )
+                                                        "
+                                                        class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-gray-900 bg-gray-700 px-3 py-2"
+                                                    >
+                                                        <h1>Critical</h1>
+                                                    </div>
+                                                    <div
+                                                        @click="
+                                                            updateTaskField(
+                                                                task.id,
+                                                                'priority',
+                                                                'High'
+                                                            )
+                                                        "
+                                                        class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-purple-900 bg-purple-800 px-3 py-2"
+                                                    >
+                                                        <h1>High</h1>
+                                                    </div>
+                                                    <div
+                                                        @click="
+                                                            updateTaskField(
+                                                                task.id,
+                                                                'priority',
+                                                                'Medium'
+                                                            )
+                                                        "
+                                                        class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-blue-800 bg-blue-700 px-3 py-2"
+                                                    >
+                                                        <h1>Medium</h1>
+                                                    </div>
+                                                    <div
+                                                        @click="
+                                                            updateTaskField(
+                                                                task.id,
+                                                                'priority',
+                                                                'Low'
+                                                            )
+                                                        "
+                                                        class="flex justify-center items-center cursor-pointer w-44 my-2 hover:bg-blue-500 bg-blue-400 px-3 py-2"
+                                                    >
+                                                        <h1>Low</h1>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td
+                                                v-if="
+                                                    showNotes ||
+                                                    showAll ||
+                                                    showTasks
+                                                "
+                                                class="px-6 py-1 border w-36"
+                                            >
+                                                {{ task.notes }}
+                                            </td>
+                                            <td
+                                                v-if="
+                                                    showBudget ||
+                                                    showAll ||
+                                                    showTasks
+                                                "
+                                                class="px-6 py-1 border w-24 flex items-center justify-center"
+                                            >
+                                                $
+                                                <input
+                                                    type="text"
+                                                    class="w-full p-0 border-none"
+                                                    v-model="task.budget"
+                                                    @input="
+                                                        updateTaskBudget(
+                                                            task.id,
+                                                            task.budget
+                                                        )
+                                                    "
+                                                />
+                                            </td>
+                                            <td
+                                                v-if="
+                                                    showFiles ||
+                                                    showAll ||
+                                                    showTasks
+                                                "
+                                                class="px-6 py-1 flex items-center justify-center border w-36"
+                                            >
                                                 <i
-                                                    class="fa fa-check mr-4 text-sm bg-green-500 py-1 px-1 rounded-full text-white"
+                                                    class="fa fa-file text-blue-700"
                                                     aria-hidden="true"
                                                 ></i>
-                                                18 Aug
-                                            </div>
-                                        </td>
-                                        <td
+                                            </td>
+                                            <td
+                                                v-if="
+                                                    showTimeLine ||
+                                                    showAll ||
+                                                    showTasks
+                                                "
+                                                class="px-2 py-1 flex items-center justify-center border w-40"
+                                            >
+                                                <div
+                                                    class="relative w-full h-6 rounded-xl overflow-hidden bg-black"
+                                                >
+                                                    <!-- Blue Portion -->
+                                                    <div
+                                                        class="absolute top-0 left-0 h-full bg-blue-400"
+                                                        :style="{
+                                                            width: `${elapsedPercentage2(
+                                                                task.created_at,
+                                                                task.due_date
+                                                            )}%`,
+                                                        }"
+                                                    ></div>
+
+                                                    <!-- Date Overlay -->
+                                                    <div
+                                                        class="absolute inset-0 flex items-center justify-center text-white font-bold"
+                                                    >
+                                                        <span>
+                                                            {{
+                                                                formatDateForDisplay(
+                                                                    task.created_at
+                                                                )
+                                                            }}
+                                                            -
+                                                            {{
+                                                                formatDateForDisplay(
+                                                                    task.due_date
+                                                                )
+                                                            }}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </td>
+
+                                            <td
+                                                v-if="
+                                                    showLastUpdate ||
+                                                    showAll ||
+                                                    showTasks
+                                                "
+                                                class="px-6 py-1 w-44 border flex items-center justify-center"
+                                            >
+                                                <span class="text-gray-600">{{
+                                                    timeSinceLastUpdate(
+                                                        task.updated_at
+                                                    )
+                                                }}</span>
+                                            </td>
+                                        </tr>
+
+                                        <!-- Subitem -->
+
+                                        <tr
                                             v-if="
-                                                showPriorityS ||
-                                                showAll ||
-                                                showSubTasks
+                                                showSubTasks[groupName][index]
                                             "
-                                            class="px-6 py-1 border w-28 flex items-center justify-center bg-purple-800 text-white"
+                                            class="bg-white border m-4 mb-0 rounded-md flex border-l-8 border-l-blue-300 z-5"
                                         >
-                                            High
-                                        </td>
-                                        <td
+                                            <th
+                                                colspan="12"
+                                                class="pl-4 pr-4 w-fit flex items-center border border-gray-100"
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    class="h-4 w-4 text-blue-600"
+                                                />
+                                            </th>
+                                            <th
+                                                class="px-6 py-2 border flex items-center justify-center w-52"
+                                            >
+                                                Sub task
+                                            </th>
+                                            <th
+                                                v-if="
+                                                    showOwnerS ||
+                                                    showAll ||
+                                                    showSubTasks
+                                                "
+                                                class="px-6 py-1 flex items-center justify-center border"
+                                            >
+                                                Owner
+                                            </th>
+                                            <th
+                                                v-if="
+                                                    showStatusS ||
+                                                    showAll ||
+                                                    showSubTasks
+                                                "
+                                                class="px-6 py-1 w-36 flex items-center justify-center border"
+                                            >
+                                                Status
+                                            </th>
+                                            <th
+                                                v-if="
+                                                    showDueDateS ||
+                                                    showAll ||
+                                                    showSubTasks
+                                                "
+                                                class="px-6 py-1 flex items-center w-40 justify-center border"
+                                            >
+                                                Due date
+                                            </th>
+                                            <th
+                                                v-if="
+                                                    showPriorityS ||
+                                                    showAll ||
+                                                    showSubTasks
+                                                "
+                                                class="px-6 py-1 flex items-center w-28 justify-center border"
+                                            >
+                                                Priority
+                                            </th>
+                                            <th
+                                                v-if="
+                                                    showNotesS ||
+                                                    showAll ||
+                                                    showSubTasks
+                                                "
+                                                class="px-6 py-1 w-36 flex items-center justify-center border"
+                                            >
+                                                Notes
+                                            </th>
+                                            <th
+                                                v-if="
+                                                    showBudgetS ||
+                                                    showAll ||
+                                                    showSubTasks
+                                                "
+                                                class="px-6 py-1 flex items-center justify-center border"
+                                            >
+                                                Budget
+                                            </th>
+                                            <th
+                                                v-if="
+                                                    showFilesS ||
+                                                    showAll ||
+                                                    showSubTasks
+                                                "
+                                                class="px-6 py-1 w-36 flex items-center justify-center border"
+                                            >
+                                                Files
+                                            </th>
+                                            <th
+                                                v-if="
+                                                    showTimeLineS ||
+                                                    showAll ||
+                                                    showSubTasks
+                                                "
+                                                class="px-6 py-1 flex items-center justify-center border"
+                                            >
+                                                Timeline
+                                            </th>
+                                            <th
+                                                v-if="
+                                                    showLastUpdateS ||
+                                                    showAll ||
+                                                    showSubTasks
+                                                "
+                                                class="px-6 py-1 flex items-center justify-center border w-44"
+                                            >
+                                                Last updated
+                                            </th>
+                                            <th
+                                                class="flex items-center justify-center p-3"
+                                            >
+                                                <i
+                                                    class="fa fa-plus p-1 hover:bg-gray-100"
+                                                ></i>
+                                            </th>
+                                        </tr>
+                                        <tr
+                                            v-if="task.subItemVisible"
+                                            class="bg-white border w-fit hover:bg-gray-100 m-4 mt-0 rounded-md flex border-l-8 border-l-blue-300 z-5"
+                                        >
+                                            <td
+                                                class="p-4 py-2 w-fit flex items-center justify-center border border-gray-100"
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    class="h-4 w-4 text-blue-600"
+                                                />
+                                            </td>
+                                            <td
+                                                class="group px-6 py-1 w-52 border flex items-center"
+                                            >
+                                                Task 3
+                                            </td>
+                                            <td
+                                                v-if="
+                                                    showOwnerS ||
+                                                    showAll ||
+                                                    showSubTasks
+                                                "
+                                                class="px-6 py-1 flex w-24 justify-center border items-center"
+                                            >
+                                                <h1
+                                                    class="py-1 px-2.5 border-2 border-white text-white rounded-full bg-blue-300"
+                                                >
+                                                    K
+                                                </h1>
+                                            </td>
+                                            <td
+                                                v-if="
+                                                    showStatusS ||
+                                                    showAll ||
+                                                    showSubTasks
+                                                "
+                                                class="w-36 bg-green-400 flex justify-center items-center"
+                                            >
+                                                <h1 class="px-2 text-white">
+                                                    Done
+                                                </h1>
+                                            </td>
+                                            <td
+                                                v-if="
+                                                    showDueDateS ||
+                                                    showAll ||
+                                                    showSubTasks
+                                                "
+                                                class="px-2 py-1 w-40 flex items-center justify-start border"
+                                            >
+                                                <div>
+                                                    <i
+                                                        class="fa fa-check mr-4 text-sm bg-green-500 py-1 px-1 rounded-full text-white"
+                                                        aria-hidden="true"
+                                                    ></i>
+                                                    18 Aug
+                                                </div>
+                                            </td>
+                                            <td
+                                                v-if="
+                                                    showPriorityS ||
+                                                    showAll ||
+                                                    showSubTasks
+                                                "
+                                                class="px-6 py-1 border w-28 flex items-center justify-center bg-purple-800 text-white"
+                                            >
+                                                High
+                                            </td>
+                                            <td
+                                                v-if="
+                                                    showNotesS ||
+                                                    showAll ||
+                                                    showSubTasks
+                                                "
+                                                class="px-6 py-1 border w-36"
+                                            >
+                                                Action items
+                                            </td>
+                                            <td
+                                                v-if="
+                                                    showBudgetS ||
+                                                    showAll ||
+                                                    showSubTasks
+                                                "
+                                                class="px-6 py-1 border w-24 flex items-center justify-center"
+                                            >
+                                                $100
+                                            </td>
+                                            <td
+                                                v-if="
+                                                    showFilesS ||
+                                                    showAll ||
+                                                    showSubTasks
+                                                "
+                                                class="px-6 py-1 flex items-center justify-center border w-36"
+                                            >
+                                                <i
+                                                    class="fa fa-file text-blue-700"
+                                                    aria-hidden="true"
+                                                ></i>
+                                            </td>
+                                            <td
+                                                v-if="
+                                                    showTimeLineS ||
+                                                    showAll ||
+                                                    showSubTasks
+                                                "
+                                                class="px-2 py-1 flex items-center justify-center border"
+                                            >
+                                                <span
+                                                    class="inline-block rounded-xl bg-blue-400 px-2 text-white"
+                                                >
+                                                    18 - 19 Aug
+                                                </span>
+                                            </td>
+                                            <td
+                                                v-if="
+                                                    showLastUpdateS ||
+                                                    showAll ||
+                                                    showSubTasks
+                                                "
+                                                class="px-6 py-1 w-44 border flex items-center justify-center"
+                                            >
+                                                <span class="text-gray-600"
+                                                    >7 minutes ago</span
+                                                >
+                                            </td>
+                                        </tr>
+                                    </div>
+                                </section>
+
+                                <tr
+                                    v-if="showGroup[groupName]"
+                                    class="border- flex bg-white hover:bg-gray-100"
+                                >
+                                    <td
+                                        class="p-4 py-2 w-fit flex items-center justify-center border-l-8 border-l-blue-300 border border-gray-100"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            class="h-4 w-4 text-blue-600"
+                                        />
+                                    </td>
+                                    <td
+                                        class="px-6 group py-1 w-56 border flex items-center"
+                                    >
+                                        <input
                                             v-if="
-                                                showNotesS ||
-                                                showAll ||
-                                                showSubTasks
+                                                userStore.user.role == 'Admin'
                                             "
-                                            class="px-6 py-1 border w-36"
-                                        >
-                                            Action items
-                                        </td>
-                                        <td
-                                            v-if="
-                                                showBudgetS ||
-                                                showAll ||
-                                                showSubTasks
-                                            "
-                                            class="px-6 py-1 border w-24 flex items-center justify-center"
-                                        >
-                                            $100
-                                        </td>
-                                        <td
-                                            v-if="
-                                                showFilesS ||
-                                                showAll ||
-                                                showSubTasks
-                                            "
-                                            class="px-6 py-1 flex items-center justify-center border w-36"
-                                        >
-                                            <i
-                                                class="fa fa-file text-blue-700"
-                                                aria-hidden="true"
-                                            ></i>
-                                        </td>
-                                        <td
-                                            v-if="
-                                                showTimeLineS ||
-                                                showAll ||
-                                                showSubTasks
-                                            "
-                                            class="px-2 py-1 flex items-center justify-center border"
-                                        >
+                                            type="text"
+                                            @focus="clearInput"
+                                            v-model="newTaskName"
+                                            @keyup.enter="checkAndCreateTask"
+                                            placeholder="+ Add task"
+                                            ref="editableInput"
+                                            class="border-0 px-0 focus:h-fit border-gray-300 text-sm rounded p-2 py-1 w-full"
+                                        />
+                                    </td>
+                                </tr>
+                                <tr
+                                    class="border- flex pl-[280px] bg-white hover:bg-gray-100"
+                                >
+                                    <td
+                                        v-if="showOwner || showAll || showTasks"
+                                        class="px-6 py-1 flex w-24 justify-center border rounded-b-xl rounded-r-none items-center"
+                                    ></td>
+                                    <td
+                                        v-if="
+                                            showStatus || showAll || showTasks
+                                        "
+                                        class="w-36 flex justify-center items-center"
+                                    >
+                                        <div class="flex w-full h-full">
                                             <span
-                                                class="inline-block rounded-xl bg-blue-400 px-2 text-white"
+                                                v-for="(task, index) in group"
+                                                :key="task.id"
+                                                :style="{
+                                                    width: segmentWidth(
+                                                        groupName
+                                                    ),
+                                                }"
+                                                :class="{
+                                                    'bg-gray-400':
+                                                        task.status ===
+                                                        'Not Started',
+                                                    'bg-orange-400':
+                                                        task.status ===
+                                                        'In Progress',
+                                                    'bg-green-400':
+                                                        task.status ===
+                                                        'Completed',
+                                                }"
+                                                class="h-full"
                                             >
-                                                18 - 19 Aug
-                                            </span>
-                                        </td>
-                                        <td
-                                            v-if="
-                                                showLastUpdateS ||
-                                                showAll ||
-                                                showSubTasks
-                                            "
-                                            class="px-6 py-1 w-44 border flex items-center justify-center"
-                                        >
-                                            <span class="text-gray-600"
-                                                >7 minutes ago</span
-                                            >
-                                        </td>
-                                    </tr>
-                                </div>
-                            </section>
-
-                            <tr
-                                v-if="showGroup"
-                                class="border- flex bg-white hover:bg-gray-100"
-                            >
-                                <td
-                                    class="p-4 py-2 w-fit flex items-center justify-center border-l-8 border-l-blue-300 border border-gray-100"
-                                >
-                                    <input
-                                        type="checkbox"
-                                        class="h-4 w-4 text-blue-600"
-                                    />
-                                </td>
-                                <td
-                                    class="px-6 group py-1 w-56 border flex items-center"
-                                >
-                                    <input
-                                        v-if="userStore.user.role == 'Admin'"
-                                        type="text"
-                                        @focus="clearInput"
-                                        v-model="newTaskName"
-                                        @keyup.enter="checkAndCreateTask"
-                                        placeholder="+ Add task"
-                                        ref="editableInput"
-                                        class="border-0 px-0 focus:h-fit border-gray-300 text-sm rounded p-2 py-1 w-full"
-                                    />
-                                </td>
-                            </tr>
-                            <tr
-                                class="border- flex pl-[280px] bg-white hover:bg-gray-100"
-                            >
-                                <td
-                                    v-if="showOwner || showAll || showTasks"
-                                    class="px-6 py-1 flex w-24 justify-center border rounded-b-xl rounded-r-none items-center"
-                                ></td>
-                                <td
-                                    v-if="showStatus || showAll || showTasks"
-                                    class="w-36 flex justify-center items-center"
-                                >
-                                    <div class="flex w-full h-full">
-                                        <span
-                                            v-for="(task, index) in board.tasks"
-                                            :key="task.id"
-                                            :style="{ width: segmentWidth }"
-                                            :class="{
-                                                'bg-gray-400':
-                                                    task.status ===
-                                                    'Not Started',
-                                                'bg-orange-400':
-                                                    task.status ===
-                                                    'In Progress',
-                                                'bg-green-400':
-                                                    task.status === 'Completed',
-                                            }"
-                                            class="h-full"
-                                        >
-                                        </span>
-                                    </div>
-                                </td>
-
-                                <td
-                                    v-if="showDueDate || showAll || showTasks"
-                                    class="px-1 py-1 flex items-center justify-center border w-40"
-                                >
-                                    <div
-                                        class="relative w-full h-6 rounded-xl overflow-hidden bg-black"
-                                    >
-                                        <div
-                                            class="absolute top-0 left-0 h-full bg-blue-400"
-                                            :style="{
-                                                width: `${elapsedPercentage2(
-                                                    getEarliestAndLatestDates(
-                                                        board.tasks
-                                                    ).earliest,
-                                                    getEarliestAndLatestDates(
-                                                        board.tasks
-                                                    ).latest
-                                                )}%`,
-                                            }"
-                                        ></div>
-
-                                        <div
-                                            class="absolute inset-0 flex items-center justify-center text-white font-bold"
-                                        >
-                                            <span>
-                                                {{
-                                                    formatDateForDisplay(
-                                                        getEarliestAndLatestDates(
-                                                            board.tasks
-                                                        ).earliest
-                                                    )
-                                                }}
-                                                -
-                                                {{
-                                                    formatDateForDisplay(
-                                                        getEarliestAndLatestDates(
-                                                            board.tasks
-                                                        ).latest
-                                                    )
-                                                }}
                                             </span>
                                         </div>
-                                    </div>
-                                </td>
-                                <td
-                                    v-if="showPriority || showAll || showTasks"
-                                    class="border w-28 flex items-center justify-start text-white"
-                                >
-                                    <div class="flex w-full h-full">
-                                        <span
-                                            v-for="(task, index) in board.tasks"
-                                            :key="task.id"
-                                            :style="{ width: segmentWidth }"
-                                            :class="{
-                                                'bg-gray-900':
-                                                    task.priority ===
-                                                    'Critical',
-                                                'bg-purple-800':
-                                                    task.priority === 'High',
-                                                'bg-blue-700 ':
-                                                    task.priority === 'Medium',
-                                                'bg-blue-400 ':
-                                                    task.priority === 'Low',
-                                            }"
-                                            class="h-full"
-                                        >
-                                        </span>
-                                    </div>
-                                </td>
-                                <td
-                                    v-if="showNotes || showAll || showTasks"
-                                    class="px-6 py-1 border w-36"
-                                ></td>
-                                <td
-                                    v-if="showBudget || showAll || showTasks"
-                                    class="px-6 py-1 border w-24 flex items-center justify-center"
-                                >
-                                    ${{ totalBudget }}
-                                </td>
+                                    </td>
 
-                                <td
-                                    v-if="showFiles || showAll || showTasks"
-                                    class="px-6 py-1 flex items-center justify-center border w-36"
-                                >
-                                    3 files
-                                </td>
-
-                                <td
-                                    v-if="showTimeLine || showAll || showTasks"
-                                    class="px-1 py-1 flex items-center justify-center border w-40"
-                                >
-                                    <div
-                                        class="relative w-full h-6 rounded-xl overflow-hidden bg-black"
+                                    <td
+                                        v-if="
+                                            showDueDate || showAll || showTasks
+                                        "
+                                        class="px-1 py-1 flex items-center justify-center border w-40"
                                     >
-                                        <!-- Blue Portion -->
                                         <div
-                                            class="absolute top-0 left-0 h-full bg-blue-400"
-                                            :style="{
-                                                width: `${elapsedPercentage2(
-                                                    getEarliestAndLatestDates(
-                                                        board.tasks
-                                                    ).earliest2,
-                                                    getEarliestAndLatestDates(
-                                                        board.tasks
-                                                    ).latest
-                                                )}%`,
-                                            }"
-                                        ></div>
-
-                                        <!-- Date Overlay -->
-                                        <div
-                                            class="absolute inset-0 flex items-center justify-center text-white font-bold"
+                                            class="relative w-full h-6 rounded-xl overflow-hidden bg-black"
                                         >
-                                            <span>
-                                                {{
-                                                    formatDateForDisplay(
+                                            <div
+                                                class="absolute top-0 left-0 h-full bg-blue-400"
+                                                :style="{
+                                                    width: `${elapsedPercentage2(
                                                         getEarliestAndLatestDates(
-                                                            board.tasks
-                                                        ).earliest2
-                                                    )
-                                                }}
-                                                -
-                                                {{
-                                                    formatDateForDisplay(
+                                                            group
+                                                        ).earliest,
                                                         getEarliestAndLatestDates(
-                                                            board.tasks
+                                                            group
                                                         ).latest
-                                                    )
-                                                }}
+                                                    )}%`,
+                                                }"
+                                            ></div>
+
+                                            <div
+                                                class="absolute inset-0 flex items-center justify-center text-white font-bold"
+                                            >
+                                                <span>
+                                                    {{
+                                                        formatDateForDisplay(
+                                                            getEarliestAndLatestDates(
+                                                                group
+                                                            ).earliest
+                                                        )
+                                                    }}
+                                                    -
+                                                    {{
+                                                        formatDateForDisplay(
+                                                            getEarliestAndLatestDates(
+                                                                group
+                                                            ).latest
+                                                        )
+                                                    }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td
+                                        v-if="
+                                            showPriority || showAll || showTasks
+                                        "
+                                        class="border w-28 flex items-center justify-start text-white"
+                                    >
+                                        <div class="flex w-full h-full">
+                                            <span
+                                                v-for="(
+                                                    task, index
+                                                ) in board.tasks"
+                                                :key="task.id"
+                                                :style="{ width: segmentWidth }"
+                                                :class="{
+                                                    'bg-gray-900':
+                                                        task.priority ===
+                                                        'Critical',
+                                                    'bg-purple-800':
+                                                        task.priority ===
+                                                        'High',
+                                                    'bg-blue-700 ':
+                                                        task.priority ===
+                                                        'Medium',
+                                                    'bg-blue-400 ':
+                                                        task.priority === 'Low',
+                                                }"
+                                                class="h-full"
+                                            >
                                             </span>
                                         </div>
-                                    </div>
-                                </td>
+                                    </td>
+                                    <td
+                                        v-if="showNotes || showAll || showTasks"
+                                        class="px-6 py-1 border w-36"
+                                    ></td>
+                                    <td
+                                        v-if="
+                                            showBudget || showAll || showTasks
+                                        "
+                                        class="px-6 py-1 border w-24 flex items-center justify-center"
+                                    >
+                                        ${{ totalBudget(groupName) }}
+                                    </td>
 
-                                <td
-                                    v-if="
-                                        showLastUpdate || showAll || showTasks
-                                    "
-                                    class="px-6 py-1 w-44 border flex items-center justify-center"
-                                ></td>
-                            </tr>
-                        </tbody>
-                    </table>
+                                    <td
+                                        v-if="showFiles || showAll || showTasks"
+                                        class="px-6 py-1 flex items-center justify-center border w-36"
+                                    >
+                                        3 files
+                                    </td>
+
+                                    <td
+                                        v-if="
+                                            showTimeLine || showAll || showTasks
+                                        "
+                                        class="px-1 py-1 flex items-center justify-center border w-40"
+                                    >
+                                        <div
+                                            class="relative w-full h-6 rounded-xl overflow-hidden bg-black"
+                                        >
+                                            <!-- Blue Portion -->
+                                            <div
+                                                class="absolute top-0 left-0 h-full bg-blue-400"
+                                                :style="{
+                                                    width: `${elapsedPercentage2(
+                                                        getEarliestAndLatestDates(
+                                                            group
+                                                        ).earliest2,
+                                                        getEarliestAndLatestDates(
+                                                            group
+                                                        ).latest
+                                                    )}%`,
+                                                }"
+                                            ></div>
+
+                                            <!-- Date Overlay -->
+                                            <div
+                                                class="absolute inset-0 flex items-center justify-center text-white font-bold"
+                                            >
+                                                <span>
+                                                    {{
+                                                        formatDateForDisplay(
+                                                            getEarliestAndLatestDates(
+                                                                group
+                                                            ).earliest2
+                                                        )
+                                                    }}
+                                                    -
+                                                    {{
+                                                        formatDateForDisplay(
+                                                            getEarliestAndLatestDates(
+                                                                group
+                                                            ).latest
+                                                        )
+                                                    }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    <td
+                                        v-if="
+                                            showLastUpdate ||
+                                            showAll ||
+                                            showTasks
+                                        "
+                                        class="px-6 py-1 w-44 border flex items-center justify-center"
+                                    ></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
                 <div v-if="showCard" class="rounded-md">
                     <div class="grid grid-cols-1 md:grid-cols-4 gap-4 p-4">

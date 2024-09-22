@@ -201,6 +201,7 @@ export const useUserStore = defineStore("user", {
                         "new board added to user workspace",
                         this.selectedWorkspace
                     );
+                    localStorage.setItem("user", JSON.stringify(this.user));
                 } else {
                     console.error("Workspace not found");
                 }
@@ -208,6 +209,98 @@ export const useUserStore = defineStore("user", {
                 console.error("Error creating board:", error);
             }
         },
+        async createFolder(folder_name) {
+            try {
+                // Send POST request to create the folder
+                const response = await axios.post("/api/folders", {
+                    folder_name:folder_name,
+                    workspace_id: this.selectedWorkspace.id,
+                    is_trashed: false,
+                    is_archived: false,
+                    trashed_by: null,
+                    trashed_at: null,
+                    is_favorite: false,
+                });
+        
+                // Get the new folder data from the response
+                const newFolder = response.data;
+        
+                // Find the workspace to which the folder belongs and push the new folder
+                const workspace = this.user.workspaces.find(
+                    (ws) => ws.id === this.selectedWorkspace.id
+                );
+                if (workspace) {
+                    workspace.folders.push(newFolder);
+                } else {
+                    console.error("Workspace not found for the newly created folder.");
+                }
+        
+                // Optionally update local storage if you are persisting the user data
+                localStorage.setItem("user", JSON.stringify(this.user));
+                
+            } catch (error) {
+                console.error("Error creating folder:", error);
+                alert("Failed to create folder.");
+            }
+        },
+        
+        updateBoardField(boardId, fieldName, fieldValue) {
+            // Find the workspace that contains the board
+            const workspace = this.user.workspaces.find(workspace => 
+                workspace.boards.some(board => board.id === boardId)
+            );
+            
+            if (workspace) {
+                // Find the board and update the specified field
+                const board = workspace.boards.find(board => board.id === boardId);
+                
+                if (board) {
+                    board[fieldName] = fieldValue;
+                    console.log(`Local store updated: ${fieldName} set to ${fieldValue} for board ${boardId}`);
+                }
+            }
+            localStorage.setItem("user", JSON.stringify(this.user));
+        }
+,        
+        updateUserRole(userId, newRole, boardId, workSpaceId) {
+            if (!this.user || !this.user.workspaces) {
+                console.error('User or workspaces data is not available');
+                return;
+            }
+            
+            console.log('workspaces user role', this.user.workspaces);
+        
+            // Find the workspace by ID
+            const workspace = this.user.workspaces.find(workspace => workspace.id == workSpaceId);
+        
+            if (!workspace) {
+                console.error(`Workspace with ID ${workSpaceId} not found`);
+                return;
+            }
+        
+            // Find the board within the workspace by ID
+            const board = workspace.boards.find(board => board.id === boardId);
+        
+            if (!board) {
+                console.error(`Board with ID ${boardId} not found in workspace ${workSpaceId}`);
+                return;
+            }
+        
+            // Find the user within the team members of the board and update their role
+            const user = board.team.members.find(member => member.id === userId);
+        
+            if (!user) {
+                console.error(`User with ID ${userId} not found in board ${boardId}`);
+                return;
+            }
+        
+            // Update the user's role in the frontend store
+            user.pivot.role = newRole;
+            console.log(`User role updated to: ${newRole} for user ${userId} in board ${boardId}`);
+            localStorage.setItem("user", JSON.stringify(this.user));
+        },
+        
+        
         async updateTaskField(taskId, field, value) {
             try {
                 // Make the API request to update the specific task field

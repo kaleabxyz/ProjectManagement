@@ -57,6 +57,25 @@ class TeamMemberController extends Controller
 
         return response()->json($teamMember);
     }
+    public function updateRole(Request $request, $id)
+    {
+        // Validate the request data
+        $request->validate([
+            'role' => 'required|string|in:Admin,Member,Viewer',
+        ]);
+
+        // Find the team member by ID
+        $teamMember = TeamMember::findOrFail($id);
+
+        // Update the role
+        $teamMember->role = $request->input('role');
+        $teamMember->save();
+
+        return response()->json([
+            'message' => 'Role updated successfully',
+            'teamMember' => $teamMember,
+        ], 200);
+    }
 
     /**
      * Remove the specified resource from storage.

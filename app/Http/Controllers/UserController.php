@@ -57,7 +57,8 @@ class UserController extends Controller
                 }
             ]);
         },
-        'teamMembers'
+        'teamMembers',
+        'workspaces.folders'
     ]);
 
     return response()->json(['user' => $user], 200);
@@ -240,9 +241,11 @@ class UserController extends Controller
                         }
                     ]);
                 }
+                
             ]);
         },
-        'teamMembers'
+        'teamMembers',
+        
     ]);
 
     // Log queries
