@@ -56,7 +56,7 @@ class TaskController extends Controller
         ]);
     
         // Trigger an event to notify board members
-        event(new TaskCreatedEvent($task->board->id, $task->id));
+        event(new TaskUpdatedEvent($task->board_id, $task->id));
         return response()->json(['message' => 'Task created successfully', 'task' => $task], 201);
     }
 

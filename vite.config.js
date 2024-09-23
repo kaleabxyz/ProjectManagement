@@ -17,5 +17,12 @@ export default defineConfig({
             },
         }),
     ],
-   
+    server: {
+        host: '0.0.0.0',  // Bind to all available network interfaces
+        port: 5173,
+        hmr: {
+            host: 'localhost', // Default for local
+            clientPort: 5173,  // Ensures the port matches for HMR
+        }
+    },
 });

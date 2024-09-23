@@ -1469,7 +1469,7 @@ const navigateToBoard = (boardName, workspaceId) => {
                                         </div>
                                     </div>
                                     <span
-                                        class="group-hover/project:block hidden items-center absolute top-3.5 right-8"
+                                        class="group-hover/project:block hidden items-center "
                                     >
                                         <i
                                             @click.stop="

@@ -146,7 +146,26 @@ function formatDateForDisplay(dateString) {
         taskYear !== currentYear ? `/${taskYear.toString().slice(-2)}` : "";
 
     return `${month} ${day}${year}`;
-}
+};
+const getRecentlyUpdatedBoards = () => {
+  // Flatten all boards from workspaces
+  const allBoards = userStore.user.workspaces.flatMap((workspace) => workspace.boards);
+
+  // Sort boards by updated_at in descending order
+  const sortedBoards = allBoards.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+
+  // Get the top 5 most recently updated boards
+  return sortedBoards.slice(0, 5);
+};
+
+// Computed property to automatically get the 5 most recently updated boards
+const recentlyUpdatedBoards = computed(() => getRecentlyUpdatedBoards());
+
+const findWorkspaceByBoardId = (boardId) => {
+  return userStore.user.workspaces.find(workspace => 
+    workspace.boards.some(board => board.id === boardId)
+  );
+};
 </script>
 
 <template>
@@ -186,8 +205,15 @@ function formatDateForDisplay(dateString) {
                         ></i>
                         <h2 class="font-bold text-lg">Recently visited</h2>
                     </div>
-                    <div v-if="showRecentVisited" class="flex flex-wrap">
-                        <router-link to="/project">
+                    <div v-if="showRecentVisited" class="flex flex-wrap"
+                        v-for = "board in recentlyUpdatedBoards"
+                        :key = "board.id"
+                    >
+                        <router-link :to="{
+                                name: 'project',
+    params: { boardName: board.board_name },
+   query: {workSpace: board.pivot.workspace_id} // Pass boardName
+                             }">
                             <div
                                 class="m-2 border-blue-200 border border-solid rounded-lg p-2 hover:shadow-xl transition-shadow duration-300"
                             >
@@ -224,7 +250,7 @@ function formatDateForDisplay(dateString) {
                                             </g>
                                         </svg>
                                         <h2 class="font-bold ml-2 text-md">
-                                            New Board
+                                            {{board.board_name}}
                                         </h2>
                                     </div>
 
@@ -244,67 +270,12 @@ function formatDateForDisplay(dateString) {
                                     <h3
                                         class="font-light text-sm text-gray-500"
                                     >
-                                        work management > Main workspace
+                                        work management > {{findWorkspaceByBoardId(board.id).workspace_name}}
                                     </h3>
                                 </div>
                             </div>
                         </router-link>
-                        <div
-                            class="m-2 border-blue-200 border border-solid rounded-lg p-2 hover:shadow-xl transition-shadow duration-300"
-                        >
-                            <img
-                                class="rounded-lg w-80"
-                                src="/images/doc.svg"
-                                alt="loading"
-                            />
-
-                            <div class="flex justify-between items-center my-1">
-                                <div class="flex my-1 items-center">
-                                    <svg
-                                        fill="#bfbbbb"
-                                        width="24px"
-                                        height="24px"
-                                        viewBox="0 0 56 56"
-                                        xmlns="http://www.w3.org/2000/svg"
-                                    >
-                                        <g
-                                            id="SVGRepo_bgCarrier"
-                                            stroke-width="0"
-                                        ></g>
-                                        <g
-                                            id="SVGRepo_tracerCarrier"
-                                            stroke-linecap="round"
-                                            stroke-linejoin="round"
-                                        ></g>
-                                        <g id="SVGRepo_iconCarrier">
-                                            <path
-                                                d="M 13.7851 49.5742 L 42.2382 49.5742 C 47.1366 49.5742 49.5743 47.1367 49.5743 42.3086 L 49.5743 13.6914 C 49.5743 8.8633 47.1366 6.4258 42.2382 6.4258 L 13.7851 6.4258 C 8.9101 6.4258 6.4257 8.8398 6.4257 13.6914 L 6.4257 42.3086 C 6.4257 47.1602 8.9101 49.5742 13.7851 49.5742 Z M 13.8554 45.8008 C 11.5117 45.8008 10.1992 44.5586 10.1992 42.1211 L 10.1992 13.8789 C 10.1992 11.4414 11.5117 10.1992 13.8554 10.1992 L 26.0429 10.1992 L 26.0429 45.8008 Z M 42.1679 10.1992 C 44.4882 10.1992 45.8007 11.4414 45.8007 13.8789 L 45.8007 42.1211 C 45.8007 44.5586 44.4882 45.8008 42.1679 45.8008 L 29.9804 45.8008 L 29.9804 10.1992 Z"
-                                            ></path>
-                                        </g>
-                                    </svg>
-                                    <h2 class="font-bold ml-2 text-md">
-                                        New Board
-                                    </h2>
-                                </div>
-
-                                <div>
-                                    <i
-                                        class="far fa-star mr-2"
-                                        aria-hidden="true"
-                                    ></i>
-                                </div>
-                            </div>
-                            <div class="flex row items-center">
-                                <img
-                                    class="w-7 mr-2"
-                                    src="images/logoC.png"
-                                    alt=""
-                                />
-                                <h3 class="font-light text-sm text-gray-500">
-                                    work management > Main workspace
-                                </h3>
-                            </div>
-                        </div>
+                        
                     </div>
                     <div class="flex items-center mt-6">
                         <i

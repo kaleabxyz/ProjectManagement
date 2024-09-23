@@ -1308,9 +1308,7 @@ onUnmounted(() => {
             {{console.log('board discussions',board.discussions)}}
             <div
                                             
-                                            v-for="(
-                                                update, index
-                                            ) in board.discussions"
+                                            v-for="(update, index) in [...board.discussions].reverse()" :key="index"
                                         >
                                             <div v-if = "update.task_id == null && update.reply !== 1"
                                                 

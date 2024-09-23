@@ -27,7 +27,8 @@ export const useUserStore = defineStore("user", {
                 cluster: "eu",
                 encrypted: true,
             });
-        },
+        }
+        ,
         initTaskListeners() {
             const echo = this.initEcho();
         
@@ -76,36 +77,53 @@ export const useUserStore = defineStore("user", {
                 });
             });
         },
-        
 
         // Method to replace the existing task with the updated one in the store
         async updateTaskInBoard(boardId, updatedTask) {
-            this.user.workspaces.forEach(async (workspace) => {
+            let taskExists = false; // Flag to check if the task exists
+        
+            this.user.workspaces.forEach((workspace) => {
                 const board = workspace.boards.find(
                     (board) => board.id === boardId
                 );
+        
                 if (board) {
                     const taskIndex = board.tasks.findIndex(
                         (task) => task.id === updatedTask.id
                     );
+        
                     if (taskIndex !== -1) {
-                        const task = board.tasks[taskIndex];
-
-                        // Check if the task is assigned to the current user
-                        
-
-                        // Update the task in the board
+                        // Task exists; update it
                         board.tasks[taskIndex] = {
                             ...updatedTask,
                             updated_at: new Date().toISOString(), // Update the timestamp here
                         };
+                        taskExists = true; // Mark that the task exists
+                    }
+                }
+            });
+        
+            // If the task does not exist, push the new task to the board
+            if (!taskExists) {
+                this.user.workspaces.forEach((workspace) => {
+                    const board = workspace.boards.find(
+                        (board) => board.id === boardId
+                    );
+        
+                    if (board) {
+                        // Add the new task to the board
+                        board.tasks.push({
+                            ...updatedTask,
+                            updated_at: new Date().toISOString(), // Set the updated timestamp
+                        });
                         
                         this.update = true;
                         localStorage.setItem("user", JSON.stringify(this.user)); // Persist user state
                     }
-                }
-            });
+                });
+            }
         },
+        
     
 
         // Method to add a new task to the appropriate board in the store
