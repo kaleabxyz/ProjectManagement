@@ -17,7 +17,7 @@ import Sidebar from '@/Components/Sidebar.vue'
   import { useUserStore } from '@/Stores/userStore.js';
   
   const userStore = useUserStore();
-
+ 
   const side = ref("active");
 const sideDetail = ref(false);
 const route = useRoute();

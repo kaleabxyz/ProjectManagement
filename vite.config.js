@@ -18,11 +18,11 @@ export default defineConfig({
         }),
     ],
     server: {
-        host: '0.0.0.0',  // Bind to all available network interfaces
-        port: 5173,
+        host: '0.0.0.0',  // This makes the Vite server accessible externally.
+        port: 5173,       // Optional: Set a custom port if needed.
         hmr: {
-            host: 'localhost', // Default for local
-            clientPort: 5173,  // Ensures the port matches for HMR
+            host: '192.168.1.14', // Replace with your local network IP
         }
-    },
+    }
+   
 });

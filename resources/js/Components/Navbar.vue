@@ -151,7 +151,8 @@ const users = ref([
 ]);
 onMounted(() => {
     userStore.loadUserFromStorage(); // Optionally load user from storage
-    userStore.fetchUser();
+    
+    
     // fetchNotifications(); // Fetch existing notifications on load
     // initPusher();
     userStore.fetchNotifications();

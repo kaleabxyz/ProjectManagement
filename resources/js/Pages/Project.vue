@@ -1229,6 +1229,7 @@ const hidesideDetail = () => {
     showFilter.value = false;
     visibleDatePicker.value = null;
     showGroupFilter.value = false;
+    filterOwner.value = false;
 };
 const handleClickOutside = (event) => {
     if (
@@ -1241,7 +1242,7 @@ const handleClickOutside = (event) => {
             activateSearch.value ||
             filterField.value == "task_name" ||
             showFilter ||
-            visibleDatePicker !== null || showGroupFilter.value)
+            visibleDatePicker !== null || showGroupFilter.value || filterOwner.value)
     ) {
         hidesideDetail();
     }
@@ -2304,16 +2305,16 @@ onUnmounted(() => {
                                 v-for="user in board.team.members"
                                 :key="user.id"
                             >
-                                <div
+                                <div v-if = "user.role !== 'Manager'"
                                     @click="filterContent = user.id"
                                     class="flex relative items-center cursor-pointer w-44 mb-2 hover:bg-gray-100 px-3 py-2"
                                 >
                                     <template
-                                        v-if="update.user?.profile_picture_url"
+                                        v-if="user?.profile_picture_url"
                                     >
                                         <img
                                             :src="
-                                                update.user.profile_picture_url
+                                                user.profile_picture_url
                                             "
                                             alt="Profile Picture"
                                             class="w-full h-full object-cover rounded-full"
@@ -4257,7 +4258,7 @@ onUnmounted(() => {
                                                     v-if="
                                                         selectOwner[groupName][
                                                             index
-                                                        ]
+                                                        ] && userStore.user.role == 'Admin'
                                                     "
                                                     class="absolute justify-center flex flex-col z-20 top-10 overflow-y-auto pt-2 items-center bg-white shadow-lg rounded-lg w-52 h-fit"
                                                 >

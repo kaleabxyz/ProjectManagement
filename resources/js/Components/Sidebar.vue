@@ -53,7 +53,7 @@ const showWorkspace = ref(false);
 
 onMounted(() => {
     userStore.loadUserFromStorage(); // Optionally load user from storage
-    userStore.fetchUser();
+    
     userStore.initTaskListeners(); // Optionally load user from storage
     if (userStore.user.role == "Manager") {
         console.log("user in mounted", userStore.user.id);
@@ -571,7 +571,7 @@ const navigateToBoard = (boardName, workspaceId) => {
                     <h2 class="ml-2 font-thin text-sm">Home</h2>
                 </div>
             </router-link>
-            <div
+            <div v-if = "false"
                 class="flex items-center py-1 rounded-md hover:bg-gray-200 cursor-pointer mb-2"
             >
                 <i

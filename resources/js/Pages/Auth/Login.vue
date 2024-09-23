@@ -49,6 +49,7 @@ const validateAndLogin = async () => {
         if (token) {
             localStorage.setItem("token", token);
             axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+            console.log("Token set:", token);
             localStorage.setItem("user", JSON.stringify(user));
             state.state.user = user;
             router.push("/home");

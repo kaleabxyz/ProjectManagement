@@ -27,8 +27,6 @@ const initPusher = () => {
 
     // Listen for the 'new-invite' event
     invitesChannel.bind("new-invite", (data) => {
-        
-
         const updatedInvitation = {
             ...data.invitation,
             inviter: data.inviter,
@@ -38,7 +36,6 @@ const initPusher = () => {
             ...data.notification,
             invitation: updatedInvitation,
         });
-        
 
         // Optionally, trigger any additional logic, e.g., show a toast notification
     });
@@ -53,7 +50,8 @@ onMounted(() => {
 const userStore = useUserStore();
 const user = computed(() => userStore.user);
 const unreadNotificationsCount = computed(() => {
-    return notifications.value?.filter(notification => !notification.read).length;
+    return notifications.value?.filter((notification) => !notification.read)
+        .length;
 });
 const selectWorkspace = (workspace) => {
     userStore.selectWorkspace(workspace); // Use the Pinia store action
@@ -76,35 +74,45 @@ const fetchNotifications = async () => {
 const handleAccept = async (notification) => {
     try {
         // Accept the invitation
-        await axios.post(`/api/invitations/${notification.invitation.id}/accept`, {
-            notification_id: notification.id,
-        });
-        const boardId = notification.invitation.board; 
-        const { data: newBoard } = await axios.get(`/api/boards/${boardId}?workspace_id=${userStore.user.workspaces[0].id}`);
+        await axios.post(
+            `/api/invitations/${notification.invitation.id}/accept`,
+            {
+                notification_id: notification.id,
+            }
+        );
+        const boardId = notification.invitation.board;
+        const { data: newBoard } = await axios.get(
+            `/api/boards/${boardId}?workspace_id=${userStore.user.workspaces[0].id}`
+        );
         const workspace = userStore.user.workspaces[0];
         if (workspace) {
-                // Push the new board into the workspace's boards array
-                workspace.boards.push(newBoard);
-      
-                // Update the user state with the modified workspace
-                userStore.user = {
-                  ...userStore.user,
-                  workspaces: userStore.user.workspaces.map(w =>
+            // Push the new board into the workspace's boards array
+            workspace.boards.push(newBoard);
+
+            // Update the user state with the modified workspace
+            userStore.user = {
+                ...userStore.user,
+                workspaces: userStore.user.workspaces.map((w) =>
                     w.id === workspace.id ? workspace : w
-                  ),
-                };
-                console.log('new board from invite and user',newBoard,userStore.user)
-                // Update local storage
-                
-              }
+                ),
+            };
+            console.log(
+                "new board from invite and user",
+                newBoard,
+                userStore.user
+            );
+            // Update local storage
+        }
         // Mark the notification as read locally
-        const index = notifications.value.findIndex(n => n.id === notification.id);
+        const index = notifications.value.findIndex(
+            (n) => n.id === notification.id
+        );
         if (index !== -1) {
             notifications.value[index].read = true;
-            notifications.value[index].invitation.status = 'accepted';
+            notifications.value[index].invitation.status = "accepted";
         }
         userStore.notifications = notifications.value;
-        localStorage.setItem('user', JSON.stringify(userStore.user));
+        localStorage.setItem("user", JSON.stringify(userStore.user));
         console.log("Invitation accepted and notification marked as read");
     } catch (error) {
         console.error("Error handling invitation acceptance:", error);
@@ -120,17 +128,22 @@ const handleNoThanks = async (notification) => {
         });
 
         // Mark the notification as read locally
-        const index = notifications.value.findIndex(n => n.id === notification.id);
+        const index = notifications.value.findIndex(
+            (n) => n.id === notification.id
+        );
         if (index !== -1) {
             notifications.value[index].read = true;
-            notifications.value[index].invitation.status = 'declined';
+            notifications.value[index].invitation.status = "declined";
         }
-       
-        console.log('userstore notifications', userStore.notifications);
-        localStorage.setItem('user', JSON.stringify(userStore.user));
+
+        console.log("userstore notifications", userStore.notifications);
+        localStorage.setItem("user", JSON.stringify(userStore.user));
         console.log("Invitation declined and notification marked as read");
     } catch (error) {
-        console.error("Error declining invitation and marking notification as read", error);
+        console.error(
+            "Error declining invitation and marking notification as read",
+            error
+        );
     }
 };
 
@@ -146,31 +159,54 @@ function formatDateForDisplay(dateString) {
         taskYear !== currentYear ? `/${taskYear.toString().slice(-2)}` : "";
 
     return `${month} ${day}${year}`;
-};
+}
 const getRecentlyUpdatedBoards = () => {
-  // Flatten all boards from workspaces
-  const allBoards = userStore.user.workspaces.flatMap((workspace) => workspace.boards);
+    // Flatten all boards from workspaces
+    const allBoards = userStore.user.workspaces.flatMap(
+        (workspace) => workspace.boards
+    );
 
-  // Sort boards by updated_at in descending order
-  const sortedBoards = allBoards.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+    // Sort boards by updated_at in descending order
+    const sortedBoards = allBoards.sort(
+        (a, b) => new Date(b.updated_at) - new Date(a.updated_at)
+    );
 
-  // Get the top 5 most recently updated boards
-  return sortedBoards.slice(0, 5);
+    // Get the top 5 most recently updated boards
+    return sortedBoards.slice(0, 5);
 };
 
 // Computed property to automatically get the 5 most recently updated boards
 const recentlyUpdatedBoards = computed(() => getRecentlyUpdatedBoards());
 
 const findWorkspaceByBoardId = (boardId) => {
-  return userStore.user.workspaces.find(workspace => 
-    workspace.boards.some(board => board.id === boardId)
-  );
+    return userStore.user.workspaces.find((workspace) =>
+        workspace.boards.some((board) => board.id === boardId)
+    );
+};
+const markNotificationAsRead = async (notificationId) => {
+    try {
+        // Send a request to the backend to mark the notification as read
+        const response = await axios.post(
+            `/api/notifications/markAsRead/${notificationId}`
+        );
+        console.log(response.data.message);
+
+        // Find the notification in userStore and mark it as read
+        const notificationIndex = userStore.notifications.findIndex(
+            (notification) => notification.id === notificationId
+        );
+
+        if (notificationIndex !== -1) {
+            userStore.notifications[notificationIndex].read = true;
+        }
+    } catch (error) {
+        console.error("Failed to mark notification as read:", error);
+    }
 };
 </script>
 
 <template>
-    <body v-if="user"
-    class="bg-custom-blue min-h-screen w-full flex flex-col">
+    <body v-if="user" class="bg-custom-blue min-h-screen w-full flex flex-col">
         <Navbar></Navbar>
         <div class="flex h-full">
             <Sidebar @nav="showSide" />
@@ -204,16 +240,21 @@ const findWorkspaceByBoardId = (boardId) => {
                             aria-hidden="true"
                         ></i>
                         <h2 class="font-bold text-lg">Recently visited</h2>
-                    </div>
-                    <div v-if="showRecentVisited" class="flex flex-wrap"
-                        v-for = "board in recentlyUpdatedBoards"
-                        :key = "board.id"
+                    </div>{{ console.log('recentlyUpdated',recentlyUpdatedBoards) }}
+                    <div
+                        v-if="showRecentVisited "
+                        class="flex flex-wrap"
+                       
                     >
-                        <router-link :to="{
+                        <router-link
+                         v-for="board in recentlyUpdatedBoards"
+                        :key="board.id"
+                            :to="{
                                 name: 'project',
-    params: { boardName: board.board_name },
-   query: {workSpace: board.pivot.workspace_id} // Pass boardName
-                             }">
+                                params: { boardName: board.board_name },
+                                query: { workSpace: board.pivot.workspace_id }, // Pass boardName
+                            }"
+                        >
                             <div
                                 class="m-2 border-blue-200 border border-solid rounded-lg p-2 hover:shadow-xl transition-shadow duration-300"
                             >
@@ -250,7 +291,7 @@ const findWorkspaceByBoardId = (boardId) => {
                                             </g>
                                         </svg>
                                         <h2 class="font-bold ml-2 text-md">
-                                            {{board.board_name}}
+                                            {{ board.board_name }}
                                         </h2>
                                     </div>
 
@@ -270,12 +311,15 @@ const findWorkspaceByBoardId = (boardId) => {
                                     <h3
                                         class="font-light text-sm text-gray-500"
                                     >
-                                        work management > {{findWorkspaceByBoardId(board.id).workspace_name}}
+                                        work management >
+                                        {{
+                                            findWorkspaceByBoardId(board.id)
+                                                .workspace_name
+                                        }}
                                     </h3>
                                 </div>
                             </div>
                         </router-link>
-                        
                     </div>
                     <div class="flex items-center mt-6">
                         <i
@@ -291,20 +335,30 @@ const findWorkspaceByBoardId = (boardId) => {
                     <div
                         v-if="showUpdateFeed"
                         class="flex w-full flex-col p-8 border rounded-lg border-gray-300 mt-4"
-                    >{{console.log('notifications ',userStore.notifications)}} 
+                    >
+                        {{
+                            console.log(
+                                "notifications ",
+                                userStore.notifications
+                            )
+                        }}
                         <div
                             v-for="notification in notifications"
                             :key="notification.id"
-                            
                         >
-                            <div  v-if = "notification && notification.read == false && notification.invitation"
-                            class="flex items-center w-full justify-between border-b border-gray-300 pb-4" >
+                            <div
+                                v-if="
+                                    notification &&
+                                    notification.read == false &&
+                                    notification.invitation
+                                "
+                                class="flex items-center w-full justify-between border-b border-gray-300 pb-4"
+                            >
                                 <div
                                     class="flex mt-4 bg-gray-200 p-3 rounded-lg justify-between"
                                 >
                                     <div class="flex justify-between">
                                         <div class="relative flex items-center">
-                                            
                                             <div
                                                 class="flex flex-col items-center"
                                             >
@@ -406,35 +460,35 @@ const findWorkspaceByBoardId = (boardId) => {
                                     </h3>
                                 </div>
                             </div>
-                            <div  v-if = "notification && notification.read == false && !notification.invitation"
-                            class="flex items-center w-full justify-between border-b border-gray-300 pb-4" >
-                               
                             <div
+                                v-if="
+                                    notification &&
+                                    notification.read == false &&
+                                    !notification.invitation
+                                "
+                                class="flex items-center w-full justify-between border-b border-gray-300 pb-4"
+                            >
+                                <div
                                     class="flex mt-4 bg-gray-200 p-3 rounded-lg justify-between"
                                 >
                                     <div class="flex justify-between">
                                         <div class="relative flex items-center">
-                                            
-                                           
                                             <div class="ml-4 text-base text-md">
-                                                {{ notification.body }} 
-                                                
+                                                {{ notification.body }}
                                             </div>
                                         </div>
-                                       
-                                        <div
-                                            
-                                            class="items-center flex"
-                                        >
+
+                                        <div class="items-center flex">
                                             <button
                                                 @click="
-                                                    
+                                                    markNotificationAsRead(
+                                                        notification.id
+                                                    )
                                                 "
                                                 class="text-black px-4 py-2 rounded-lg hover:bg-gray-300 mr-4 text-sm"
                                             >
                                                 Read
                                             </button>
-                                           
                                         </div>
                                     </div>
                                 </div>
@@ -463,12 +517,14 @@ const findWorkspaceByBoardId = (boardId) => {
                         <h2 class="font-bold text-lg">My workspaces</h2>
                     </div>
                     <div
-                        v-for="workspace in user.workspaces"
+                        
                         v-if="showMyWorkspaces"
                         class="flex w-full gap-8 items-center flex-wrap"
                     >
-                        <div
-                            div
+                        <div v-for="workspace in user.workspaces"
+                            :key = "workspace.id"
+                        >
+                            <div
                             v-if="
                                 workspace.is_archived == false &&
                                 workspace.is_trashed == false
@@ -523,6 +579,7 @@ const findWorkspaceByBoardId = (boardId) => {
                                 </div>
                             </div>
                         </div>
+                    </div>
                     </div>
                 </div>
             </div>
