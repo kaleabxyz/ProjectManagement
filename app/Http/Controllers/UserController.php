@@ -51,7 +51,7 @@ class UserController extends Controller
                 'tasks.assignedUser:id,user_name,email,profile_picture_url',
                 'discussions' => function ($query) {
                     $query->with([
-                        'user:id,user_name,email,profile_picture_url',
+                        'user:id,user_name,email,profile_picture_url,role',
                         'task:id,task_name'
                     ]);
                 }

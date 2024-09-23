@@ -10,6 +10,7 @@ export const useUserStore = defineStore("user", {
         notifications: [],
         unreadCount: 0,
         update: false,
+        initializedBoards: new Set(),
     }),
     actions: {
         resetUpdate() {
@@ -29,60 +30,57 @@ export const useUserStore = defineStore("user", {
         },
         initTaskListeners() {
             const echo = this.initEcho();
-
-            // Flatmap to get all boards from all workspaces
+        
             const boards = this.user.workspaces.flatMap(
                 (workspace) => workspace.boards
             );
-
-            // Iterate through each board and listen for task updates and creations
+        
             boards.forEach((board) => {
                 const boardChannel = echo.channel(`board.${board.id}`);
-
+        
                 boardChannel.listen("TaskUpdatedEvent", async (event) => {
-                    console.log("Task updated:", event.task_id);
-
-                    try {
-                        // Fetch the updated task from the database
-                        const { data: updatedTask } = await axios.get(
-                            `/api/tasks/${event.task_id}`
-                        );
-                        console.log(
-                            "updated task from database",
-                            updatedTask,
-                            board.id
-                        );
-                        // Replace the task in userStore
-                        this.updateTaskInBoard(board.id, updatedTask);
-                    } catch (error) {
-                        console.error(
-                            "Error fetching the updated task:",
-                            error
-                        );
-                    }
-                });
-
-                boardChannel.listen("TaskCreatedEvent", async (event) => {
-                    console.log("Task created:", event.task_id);
-
-                    try {
-                        // Fetch the newly created task from the database
-                        const { data: newTask } = await axios.get(
-                            `/api/tasks/${event.task_id}`
-                        );
-
-                        // Add the task to the correct board in userStore
-                        this.addTaskToBoard(board.id, newTask);
-                    } catch (error) {
-                        console.error("Error fetching the new task:", error);
+                    console.log("Event received:", event);
+        
+                    if (event.event_type === "task_updated") {
+                        console.log("Task updated:", event.task_id);
+        
+                        try {
+                            // Fetch the updated task from the database
+                            const { data: updatedTask } = await axios.get(
+                                `/api/tasks/${event.task_id}`
+                            );
+                            console.log("Updated task from database:", updatedTask);
+        
+                            // Update the task in the board
+                            this.updateTaskInBoard(board.id, updatedTask);
+                        } catch (error) {
+                            console.error("Error fetching the updated task:", error);
+                        }
+                    } else if (event.event_type === "new_update") {
+                        console.log("New update posted:", event.update_id);
+        
+                        try {
+                            // Fetch the newly created update
+                            const { data: newUpdate } = await axios.get(
+                                `/api/updates/${event.update_id}`
+                            );
+        
+                            console.log("New update from database:", newUpdate);
+        
+                            // Add the new update to board discussions
+                            this.addUpdateToBoard(board.id, newUpdate);
+                        } catch (error) {
+                            console.error("Error fetching the new update:", error);
+                        }
                     }
                 });
             });
         },
+        
 
         // Method to replace the existing task with the updated one in the store
-        updateTaskInBoard(boardId, updatedTask) {
-            this.user.workspaces.forEach((workspace) => {
+        async updateTaskInBoard(boardId, updatedTask) {
+            this.user.workspaces.forEach(async (workspace) => {
                 const board = workspace.boards.find(
                     (board) => board.id === boardId
                 );
@@ -91,16 +89,24 @@ export const useUserStore = defineStore("user", {
                         (task) => task.id === updatedTask.id
                     );
                     if (taskIndex !== -1) {
+                        const task = board.tasks[taskIndex];
+
+                        // Check if the task is assigned to the current user
+                        
+
+                        // Update the task in the board
                         board.tasks[taskIndex] = {
                             ...updatedTask,
                             updated_at: new Date().toISOString(), // Update the timestamp here
                         };
+                        
                         this.update = true;
                         localStorage.setItem("user", JSON.stringify(this.user)); // Persist user state
                     }
                 }
             });
         },
+    
 
         // Method to add a new task to the appropriate board in the store
         addTaskToBoard(boardId, newTask) {
@@ -113,12 +119,52 @@ export const useUserStore = defineStore("user", {
                     localStorage.setItem("user", JSON.stringify(this.user)); // Persist user state
                 }
             });
+        },// Method to add a new update to the appropriate board discussions
+        addUpdateToBoard(boardId, newUpdate) {
+            this.user.workspaces.forEach((workspace) => {
+                const board = workspace.boards.find(
+                    (board) => board.id === boardId
+                );
+                if (board) {
+                    // Check if the update already exists in the discussions
+                    const discussionExists = board.discussions.find(
+                        (discussion) => discussion.id === newUpdate.id
+                    );
+        
+                    // If the update is new, add it to the discussions
+                    if (!discussionExists) {
+                        board.discussions.push(newUpdate);
+        
+                        // Check if the update is related to a task
+                        if (newUpdate.task_id) {
+                            // Find the task in the board's tasks array
+                            const task = board.tasks.find(
+                                (task) => task.id === newUpdate.task_id
+                            );
+        
+                            // If the task is found, increment its updates_count
+                            if (task) {
+                                if (!task.updates_count) {
+                                    task.updates_count = 0; // Initialize if it doesn't exist
+                                }
+                                task.updates_count += 1;
+                            }
+                        }
+        
+                        this.update = true;
+                        localStorage.setItem("user", JSON.stringify(this.user)); // Persist user state
+                    }
+                }
+            });
         },
+        
+        
         async fetchUser() {
             try {
                 const response = await axios.get("/api/user");
                 this.user = response.data.user;
                 this.setUser(this.user);
+                
                 if (this.user?.workspaces?.length) {
                     this.selectedWorkspace = this.user.workspaces[0]; // Set default workspace
                 }
@@ -130,6 +176,7 @@ export const useUserStore = defineStore("user", {
         selectWorkspace(workspace) {
             this.selectedWorkspace = workspace;
             console.log("🚀 ~ Workspace selected:", workspace);
+            localStorage.setItem("user", JSON.stringify(this.user));
         },
         async setUser(user) {
             this.user = user;
@@ -244,24 +291,107 @@ export const useUserStore = defineStore("user", {
             }
         },
         
-        updateBoardField(boardId, fieldName, fieldValue) {
-            // Find the workspace that contains the board
-            const workspace = this.user.workspaces.find(workspace => 
-                workspace.boards.some(board => board.id === boardId)
-            );
-            
-            if (workspace) {
-                // Find the board and update the specified field
-                const board = workspace.boards.find(board => board.id === boardId);
+       updateBoardField(boardId, fieldName, fieldValue) {
+    // Find the workspace that contains the board
+    const currentWorkspace = this.user.workspaces.find(workspace => 
+        workspace.boards.some(board => board.id === boardId)
+    );
+
+    if (currentWorkspace) {
+        // Find the board and update the specified field
+        const board = currentWorkspace.boards.find(board => board.id === boardId);
+        
+        if (board) {
+            // Check if we're changing the workspace_id
+            if (fieldName === 'workspace_id') {
+                // Remove the board from the current workspace
+                currentWorkspace.boards = currentWorkspace.boards.filter(b => b.id !== boardId);
+
+                // Find the new workspace by ID
+                const newWorkspace = this.user.workspaces.find(workspace => workspace.id === fieldValue);
                 
-                if (board) {
-                    board[fieldName] = fieldValue;
-                    console.log(`Local store updated: ${fieldName} set to ${fieldValue} for board ${boardId}`);
+                if (newWorkspace) {
+                    // Add the board to the new workspace
+                    
+                    newWorkspace.boards.push({
+                        ...board,
+                        workspace_id: fieldValue // Update the workspace_id
+                    });
+                    
+                    
+                    console.log(`Board moved to new workspace: ${fieldValue}`);
+                } else {
+                    console.error('New workspace not found');
                 }
+            } else {
+                // Update the specified field for the board
+                board[fieldName] = fieldValue;
+                console.log(`Local store updated: ${fieldName} set to ${fieldValue} for board ${boardId}`);
             }
-            localStorage.setItem("user", JSON.stringify(this.user));
         }
-,        
+    }
+    
+    localStorage.setItem("user", JSON.stringify(this.user));
+        },
+        async  updateFolderField(folderId, fieldName, fieldValue) {
+            // Find the current workspace that contains the folder
+            const currentWorkspace = this.user.workspaces.find(workspace => 
+                workspace.folders.some(folder => folder.id === folderId)
+            );
+        
+            if (currentWorkspace) {
+                // Find the folder and update the specified field
+                const folder = currentWorkspace.folders.find(folder => folder.id === folderId);
+                
+                if (folder) {
+                    // Check if we're changing the workspace_id
+                    if (fieldName === 'workspace_id') {
+                        // Remove the folder from the current workspace
+                        currentWorkspace.folders = currentWorkspace.folders.filter(f => f.id !== folderId);
+        
+                        // Find the new workspace by ID
+                        const newWorkspace = this.user.workspaces.find(workspace => workspace.id === fieldValue);
+                        
+                        if (newWorkspace) {
+                            // Add the folder to the new workspace
+                            newWorkspace.folders.push({
+                                ...folder,
+                                workspace_id: fieldValue // Update the workspace_id
+                            });
+        
+                            console.log(`Folder moved to new workspace: ${fieldValue}`);
+                        } else {
+                            console.error('New workspace not found');
+                        }
+                    } else {
+                        // Update the specified field for the folder
+                        folder[fieldName] = fieldValue;
+                        console.log(`Local store updated: ${fieldName} set to ${fieldValue} for folder ${folderId}`);
+                    }
+        
+                    try {
+                        // Send update request to backend
+                        const response = await axios.patch(
+                            `/api/folders/${folderId}`,
+                            {
+                                [fieldName]: fieldValue,
+                            }
+                        );
+                        console.log("Database updated:", response.data);
+                    } catch (error) {
+                        console.error("Failed to update the database:", error);
+                    }
+                } else {
+                    console.error("Folder not found");
+                }
+            } else {
+                console.error("Current workspace not found");
+            }
+        
+            // Save the updated user state to localStorage
+            localStorage.setItem("user", JSON.stringify(this.user));
+        },
+               
         updateUserRole(userId, newRole, boardId, workSpaceId) {
             if (!this.user || !this.user.workspaces) {
                 console.error('User or workspaces data is not available');
@@ -397,7 +527,8 @@ export const useUserStore = defineStore("user", {
         async fetchNotifications() {
             try {
                 const response = await axios.get("/api/notifications");
-                this.notifications = response.data.notifications;
+                this.notifications = response.data;
+                console.log('notifications in userStore',this.notifications)
             } catch (error) {
                 console.error("Error fetching notifications:", error);
             }

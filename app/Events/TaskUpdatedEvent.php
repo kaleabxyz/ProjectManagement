@@ -13,11 +13,15 @@ class TaskUpdatedEvent implements ShouldBroadcast
 
     public $boardId;
     public $taskId;
+    public $updateId;
+    public $eventType; // Will differentiate between task and update
 
-    public function __construct($boardId, $taskId)
+    public function __construct($boardId, $taskId = null, $updateId = null)
     {
         $this->boardId = $boardId;
         $this->taskId = $taskId;
+        $this->updateId = $updateId;
+        $this->eventType = $taskId ? 'task_updated' : 'new_update';
     }
 
     public function broadcastOn()
@@ -28,8 +32,9 @@ class TaskUpdatedEvent implements ShouldBroadcast
     public function broadcastWith()
     {
         return [
+            'event_type' => $this->eventType,
             'task_id' => $this->taskId,
+            'update_id' => $this->updateId,
         ];
     }
 }
-

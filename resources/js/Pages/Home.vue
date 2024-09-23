@@ -53,7 +53,7 @@ onMounted(() => {
 const userStore = useUserStore();
 const user = computed(() => userStore.user);
 const unreadNotificationsCount = computed(() => {
-    return notifications.value.filter(notification => !notification.read).length;
+    return notifications.value?.filter(notification => !notification.read).length;
 });
 const selectWorkspace = (workspace) => {
     userStore.selectWorkspace(workspace); // Use the Pinia store action
@@ -320,13 +320,13 @@ function formatDateForDisplay(dateString) {
                     <div
                         v-if="showUpdateFeed"
                         class="flex w-full flex-col p-8 border rounded-lg border-gray-300 mt-4"
-                    >
+                    >{{console.log('notifications ',userStore.notifications)}} 
                         <div
                             v-for="notification in notifications"
                             :key="notification.id"
                             
                         >
-                            <div  v-if = "notification && notification.read == false"
+                            <div  v-if = "notification && notification.read == false && notification.invitation"
                             class="flex items-center w-full justify-between border-b border-gray-300 pb-4" >
                                 <div
                                     class="flex mt-4 bg-gray-200 p-3 rounded-lg justify-between"
@@ -418,6 +418,52 @@ function formatDateForDisplay(dateString) {
                                             >
                                                 Accept
                                             </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flex items-center">
+                                    <i
+                                        class="far fa-clock text-xs"
+                                        aria-hidden="true"
+                                    ></i>
+                                    <h3 class="text-sm ml-1">
+                                        {{
+                                            formatDateForDisplay(
+                                                notification.created_at
+                                            )
+                                        }}
+                                    </h3>
+                                </div>
+                            </div>
+                            <div  v-if = "notification && notification.read == false && !notification.invitation"
+                            class="flex items-center w-full justify-between border-b border-gray-300 pb-4" >
+                               
+                            <div
+                                    class="flex mt-4 bg-gray-200 p-3 rounded-lg justify-between"
+                                >
+                                    <div class="flex justify-between">
+                                        <div class="relative flex items-center">
+                                            
+                                           
+                                            <div class="ml-4 text-base text-md">
+                                                {{ notification.body }} 
+                                                
+                                            </div>
+                                        </div>
+                                       
+                                        <div
+                                            
+                                            class="items-center flex"
+                                        >
+                                            <button
+                                                @click="
+                                                    
+                                                "
+                                                class="text-black px-4 py-2 rounded-lg hover:bg-gray-300 mr-4 text-sm"
+                                            >
+                                                Read
+                                            </button>
+                                           
                                         </div>
                                     </div>
                                 </div>

@@ -14,6 +14,7 @@ class Board extends Model
         'folder_id',
         'team',
         'owner',
+        'discription',
         'created_by',
         'is_favorite',
         'is_archived',
@@ -42,7 +43,7 @@ public function trashedBy()
      */
     public function workspaces()
     {
-        return $this->belongsToMany(Workspace::class, 'workspace_board', 'board_id', 'workspace_id')->withPivot('created_at', 'workspace_id', 'board_id');;
+        return $this->belongsToMany(Workspace::class, 'workspace_board', 'board_id', 'workspace_id')->withPivot('id', 'workspace_id', 'board_id');;
     }
     
 

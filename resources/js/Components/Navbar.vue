@@ -154,6 +154,7 @@ onMounted(() => {
     userStore.fetchUser();
     // fetchNotifications(); // Fetch existing notifications on load
     // initPusher();
+    userStore.fetchNotifications();
     workSpace.value = route.query.workSpace;
     boardName.value = route.params.boardName;
     console.log("board and workspace", workSpace.value);
@@ -187,6 +188,7 @@ const initPusher = () => {
 };
 const userStore = useUserStore();
 const notifications = computed(() => userStore.notifications);
+
 const unreadNotificationsCount = computed(() => {
     return notifications.value.filter((notification) => !notification.read)
         .length;
@@ -221,11 +223,7 @@ const fetchBoards = () => {
     });
 
     selectedUpdates.value = allUpdates.value;
-    console.log(
-        "selected updates after all updates",
-        allUpdates.value,
-        selectedUpdates.value
-    );
+    
     selectedUpdates.value.forEach((update) => {
         if (!update.reply) {
             showReplyInput.value.push(false);
@@ -2210,12 +2208,15 @@ function formatDateForDisplay(dateString) {
                     <h3>Read</h3>
                 </div>
             </div>
-
+            {{console.log('notifications in nav',notifications)}}
             <div v-for="notification in notifications" :key="notification.id">
                 <div
                     v-if="notification.read == notificationRead"
                     class="flex mt-4 bg-gray-200 p-3 rounded-lg justify-between"
                 >
+                <div v-if = "notification.invitation" class = "flex flex-col">
+                    <div >
+
                     <div class="relative flex items-center">
                         <div class="flex flex-col items-center">
                             <h1
@@ -2243,7 +2244,10 @@ function formatDateForDisplay(dateString) {
                             {{ notification.invitation.role }}
                         </div>
                     </div>
-                    <div
+                    
+                </div>
+                    <div class = "flex flex-col items-end justify-center">
+                        <div
                         v-if="notification.invitation.status !== 'pending'"
                         class="px-4 flex items-center"
                     >
@@ -2278,6 +2282,70 @@ function formatDateForDisplay(dateString) {
                             Accept
                         </button>
                     </div>
+                    <div class="flex items-center">
+                                    <i
+                                        class="far fa-clock text-xs"
+                                        aria-hidden="true"
+                                    ></i>
+                                    <h3 class="text-sm ml-1">
+                                        {{
+                                            formatDateForDisplay(
+                                                notification.created_at
+                                            )
+                                        }}
+                                    </h3>
+                                </div>
+                    </div>
+
+                </div>
+                <div  v-if = "notification && notification.read == false && !notification.invitation"
+                            class="flex flex-col w-full  border-b border-gray-300 pb-4" >
+                               
+                            <div
+                                    class="flex mt-4 bg-gray-200 p-3 rounded-lg justify-between"
+                                >
+                                    <div class="flex justify-between">
+                                        <div class="relative flex items-center">
+                                            
+                                           
+                                            <div class="ml-4 text-base text-md">
+                                                {{ notification.body }} 
+                                                
+                                            </div>
+                                        </div>
+                                       
+                                        <div
+                                            
+                                            class="items-center flex"
+                                        >
+                                            <button
+                                                @click="
+                                                    
+                                                "
+                                                class="text-black px-4 py-2 rounded-lg hover:bg-gray-300 mr-4 text-sm"
+                                            >
+                                                Read
+                                            </button>
+                                           
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flex items-center">
+                                    <i
+                                        class="far fa-clock text-xs"
+                                        aria-hidden="true"
+                                    ></i>
+                                    <h3 class="text-sm ml-1">
+                                        {{
+                                            formatDateForDisplay(
+                                                notification.created_at
+                                            )
+                                        }}
+                                    </h3>
+                                </div>
+                            </div>
+                
+
                 </div>
             </div>
         </span>
@@ -2686,7 +2754,7 @@ function formatDateForDisplay(dateString) {
                                                                         class="mt-4 p-1 bg-blue-100 flex items-center justify-center rounded-lg"
                                                                     >
                                                                         {{
-                                                                            update.user_role
+                                                                            update.user.role
                                                                         }}
                                                                     </h1>
                                                                 </div>
@@ -2818,7 +2886,7 @@ function formatDateForDisplay(dateString) {
                                                                     >{{
                                                                         update
                                                                             .task
-                                                                            .task_name
+                                                                            ?.task_name
                                                                     }}
                                                                 </h1>
                                                             </a>
@@ -3005,7 +3073,7 @@ function formatDateForDisplay(dateString) {
                                                                                 class="mt-4 p-1 bg-blue-100 flex items-center justify-center rounded-lg"
                                                                             >
                                                                                 {{
-                                                                                    update.user_role
+                                                                                    update.role
                                                                                 }}
                                                                             </h1>
                                                                         </div>
@@ -3285,13 +3353,14 @@ function formatDateForDisplay(dateString) {
             /></router-link>
             <h1 class="font-sans">work management</h1>
         </div>
-        <div class="flex items-center pr-4">
+        <div class="flex items-center pr-4 relative">
             <span
                 @click="toggleSideDetail"
                 @click.stop
                 class="h-full hover:bg-gray-200"
             >
                 <i class="far fa-bell m-2.5 text-sm"></i>
+                <h5 v-if = "unreadNotificationsCount !== 0" class="bg-blue-500 px-2 absolute bottom-0 text-xs rounded-full text-white">{{ unreadNotificationsCount }}</h5>
             </span>
             <span
                 @click="toggleUpdate"

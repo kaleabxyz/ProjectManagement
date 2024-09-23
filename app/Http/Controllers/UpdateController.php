@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Update;
 use Illuminate\Http\Request;
+use App\Events\TaskUpdatedEvent;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -41,11 +42,13 @@ class UpdateController extends Controller
 
             $update = Update::create($validatedData);
             $update->readers()->attach($validatedData['user_id'], ['is_read' => false]);
+            event(new TaskUpdatedEvent($update->board_id, null, $update->id));
+
             return response()->json($update, 201);
         } catch (\Illuminate\Validation\ValidationException $e) {
             // Log validation errors to the Laravel log
             Log::error('Validation Error:', $e->errors());
-
+            
             // Return validation errors to the client
             return response()->json(['errors' => $e->errors()], 422);
         }

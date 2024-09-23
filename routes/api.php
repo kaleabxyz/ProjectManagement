@@ -17,6 +17,7 @@ use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\TeamMemberController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Auth\PasswordController;
+use App\Http\Controllers\WorkspaceBoardController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
 
@@ -49,6 +50,7 @@ Route::put('/team-member/{id}/role', [TeamMemberController::class, 'updateRole']
 Route::post('/updates/{id}/read', [UpdateController::class, 'markAsRead']);
 Route::post('login', [UserController::class, 'login']);
 Route::apiResource('/activities',ActivityController::class);
+Route::apiResource('/workspace_board', WorkspaceBoardController::class);
 
 
 

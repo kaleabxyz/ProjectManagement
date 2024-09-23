@@ -39,7 +39,7 @@ class Workspace extends Model
     public function boards()
     {
         return $this->belongsToMany(Board::class, 'workspace_board', 'workspace_id', 'board_id')
-                    ->withPivot('created_at', 'updated_at');
+                    ->withPivot('created_at', 'updated_at','id');
     }
     
     public function folders()

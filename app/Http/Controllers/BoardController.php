@@ -198,10 +198,10 @@ class BoardController extends Controller
     {
         $request->validate([
             'workspace_id' => 'sometimes|exists:workspaces,id',
-            'folder_id' => 'sometimes|exists:folders,id',
+            'folder_id' => 'nullable|exists:folders,id',
             'team' => 'sometimes|exists:teams,id',
             'board_name' => 'sometimes|string|max:255',
-            'description' => 'nullable|string',
+            'discription' => 'nullable|string',
         ]);
 
         $board = Board::findOrFail($id);
