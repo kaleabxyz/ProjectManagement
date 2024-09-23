@@ -32,7 +32,6 @@ class TaskController extends Controller
         $validatedData = $request->validate([
             'task_name' => 'required|string|max:255',
             'status' => 'nullable|string|in:In Progress,Completed,Not Started',
-            'showUpdates' => 'boolean',
             'priority' => 'nullable|string|in:Critical,Low,Medium,High',
             'due_date' => 'nullable|date',
             'board_id' => 'required|integer|exists:boards,id',
@@ -43,7 +42,6 @@ class TaskController extends Controller
             'trashed_at' => 'nullable|date',
             'trashed_by' => 'nullable|integer|exists:users,id',
             'column' => 'nullable|integer',
-            'subItemVisible' => 'boolean',
         ]);
 
         // Create a new task using the validated data

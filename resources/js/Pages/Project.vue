@@ -2972,10 +2972,13 @@ onUnmounted(() => {
                     >
                         <i class="far fa-user-circle text-gray-500 mr-2"></i>
                         <h3>Group by</h3>
+                        
                         <div
                             v-if="showGroupFilter"
                             class="absolute flex p-6 flex-col justify-between z-20 top-10 bg-white shadow-lg rounded-lg w-36 h-fit"
                         >
+                        <h3 @click="selectGroup('')"
+                        >Clear</h3>
                             <h1
                                 class="p-2 rounded-md"
                                 :class="{
@@ -4752,6 +4755,35 @@ onUnmounted(() => {
                                                 ></i>
                                             </th>
                                         </tr>
+                                        <tr
+                                        v-if="
+                                                showSubTasks[groupName][index]
+                                            "
+                                    class="bg-white border w-fit hover:bg-gray-100 m-4 mt-0 rounded-md flex border-l-2 border-l-blue-300 z-5"
+                                >
+                                    <td
+                                        class="p-4 py-2 w-fit flex items-center justify-center border-l-8 border-l-blue-300 border border-gray-100"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            class="h-4 w-4 text-blue-600"
+                                        />
+                                    </td>
+                                        <td 
+                                        class="px-8 group py-1 w-56 border flex items-center"
+                                    >
+                                        <input
+                                           
+                                            type="text"
+                                            @focus="clearInput"
+                                            v-model="newSubTaskName"
+                                            @keyup.enter="checkAndCreateSubTask"
+                                            placeholder="+ Add sub task"
+                                            ref="editableInput"
+                                            class="border-0 px-0 focus:h-fit border-gray-300 text-sm rounded p-2 py-1 w-full"
+                                        />
+                                    </td>
+                                </tr>
                                         <tr
                                             v-if="task.subItemVisible"
                                             class="bg-white border w-fit hover:bg-gray-100 m-4 mt-0 rounded-md flex border-l-8 border-l-blue-300 z-5"

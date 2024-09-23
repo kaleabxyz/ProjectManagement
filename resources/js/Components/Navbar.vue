@@ -3369,7 +3369,7 @@ function formatDateForDisplay(dateString) {
             >
                 <i class="fa fa-laptop m-2.5 text-sm"></i>
             </span>
-            <span v-if = "userStore.user.role=='Admin' && route.path == '/project'"
+            <span v-if = "userStore.user.role=='Admin' "
                 @click="toggleInvite"
                 @click.stop
                 class="h-full hover:bg-gray-200"

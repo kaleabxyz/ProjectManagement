@@ -16,10 +16,9 @@ return new class extends Migration
         Schema::create('sub_tasks', function (Blueprint $table) {
             $table->id();
             $table->string('task_name')->index();
-            $table->string('status');
-            $table->string('priority');
-            $table->dateTime('due_date');
-            $table->bigInteger('board_id')->unsigned();
+            $table->string('status')->default("Not Started");
+            $table->string('priority')->default("Medium");
+            $table->dateTime('due_date')->nullable();
             $table->bigInteger('assigned_to')->nullable()->unsigned();
             $table->foreign('assigned_to')->references('id')->on('users')->onUpdate('cascade');
             $table->bigInteger('budget')->nullable();

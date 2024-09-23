@@ -23,10 +23,9 @@ class SubTaskController extends Controller
     {
         $validatedData = $request->validate([
             'task_name' => 'required|string|max:255',
-            'status' => 'required|string',
-            'priority' => 'required|string',
+            'status' => 'nullable|string|in:In Progress,Completed,Not Started',
+            'priority' => 'nullable|string|in:Critical,Low,Medium,High',
             'due_date' => 'required|date',
-            'board_id' => 'required|exists:boards,id',
             'assigned_to' => 'nullable|exists:users,id',
             'budget' => 'nullable|numeric',
             'notes' => 'nullable|string',
@@ -57,10 +56,9 @@ class SubTaskController extends Controller
     {
         $validatedData = $request->validate([
             'task_name' => 'required|string|max:255',
-            'status' => 'required|string',
-            'priority' => 'required|string',
+            'status' => 'nullable|string|in:In Progress,Completed,Not Started',
+            'priority' => 'nullable|string|in:Critical,Low,Medium,High',
             'due_date' => 'required|date',
-            'board_id' => 'required|exists:boards,id',
             'assigned_to' => 'nullable|exists:users,id',
             'budget' => 'nullable|numeric',
             'notes' => 'nullable|string',
