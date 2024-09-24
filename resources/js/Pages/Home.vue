@@ -176,8 +176,9 @@ const getRecentlyUpdatedBoards = () => {
 };
 
 // Computed property to automatically get the 5 most recently updated boards
-const recentlyUpdatedBoards = computed(() => getRecentlyUpdatedBoards());
-
+const recentlyUpdatedBoards = computed(() => 
+    getRecentlyUpdatedBoards().filter(Boolean)
+);
 const findWorkspaceByBoardId = (boardId) => {
     return userStore.user.workspaces.find((workspace) =>
         workspace.boards.some((board) => board.id === boardId)
@@ -231,7 +232,7 @@ const markNotificationAsRead = async (notificationId) => {
                     </h2>
                 </div>
                 <div
-                    class="ml-16 mt-4 h-full w-full pr-80 p-6 rounded-lg shadow-lg"
+                    class="ml-16 mt-4 h-full w-full pr-10  p-6 rounded-lg shadow-lg"
                 >
                     <div class="flex items-center">
                         <i
@@ -479,7 +480,7 @@ const markNotificationAsRead = async (notificationId) => {
                                         </div>
 
                                         <div class="items-center flex">
-                                            <button
+                                            <button v-if = "!notification.read"
                                                 @click="
                                                     markNotificationAsRead(
                                                         notification.id
@@ -520,8 +521,8 @@ const markNotificationAsRead = async (notificationId) => {
                         
                         v-if="showMyWorkspaces"
                         class="flex w-full gap-8 items-center flex-wrap"
-                    >
-                        <div v-for="workspace in user.workspaces"
+                    > {{ console.log('userStore workspaces', userStore.user.workspaces) }}
+                        <div v-for="workspace in userStore.user.workspaces"
                             :key = "workspace.id"
                         >
                             <div

@@ -13,6 +13,7 @@ use App\Http\Controllers\UpdateController;
 use App\Http\Controllers\SubTaskController;
 use App\Http\Controllers\ActivityController;
 use App\Http\Controllers\WorkspaceController;
+use App\Http\Controllers\AttachmentController;
 use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\TeamMemberController;
 use App\Http\Controllers\NotificationController;
@@ -51,6 +52,8 @@ Route::post('/updates/{id}/read', [UpdateController::class, 'markAsRead']);
 Route::post('login', [UserController::class, 'login']);
 Route::apiResource('/activities',ActivityController::class);
 Route::apiResource('/workspace_board', WorkspaceBoardController::class);
+Route::post('/attachments', [AttachmentController::class, 'store']);
+Route::get('/attachments/download/{id}', [AttachmentController::class, 'download']);
 
 
 

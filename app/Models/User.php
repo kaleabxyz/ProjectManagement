@@ -59,6 +59,10 @@ class User extends Authenticatable
     {
         return $this->hasMany(TeamMember::class, 'member');
     }
+    public function attachments()
+{
+    return $this->hasMany(Attachment::class,'user_id');
+}
    
 
     public function teams()

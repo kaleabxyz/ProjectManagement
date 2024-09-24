@@ -55,6 +55,10 @@ public function trashedBy()
     {
         return $this->belongsTo(Folder::class,'folder_id');
     }
+    public function attachments()
+    {
+        return $this->hasMany(Attachment::class,'board_id');
+    }
 
     /**
      * Get the team that owns the board.

@@ -21,7 +21,7 @@ export default defineConfig({
         host: '0.0.0.0',  // This makes the Vite server accessible externally.
         port: 5173,       // Optional: Set a custom port if needed.
         hmr: {
-            host: '192.168.1.14', // Replace with your local network IP
+            host: '192.168.1.6', // Replace with your local network IP
         }
     }
    

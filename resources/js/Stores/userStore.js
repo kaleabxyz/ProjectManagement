@@ -8,7 +8,7 @@ const isLocalhost =
     window.location.hostname === "127.0.0.1";
 axios.defaults.baseURL = isLocalhost
     ? "http://127.0.0.1:8000"
-    : "http://192.168.1.14:8000";
+    : "http://192.168.1.6:8000";
 export const useUserStore = defineStore("user", {
     state: () => ({
         user: null,
@@ -627,7 +627,7 @@ export const useUserStore = defineStore("user", {
             try {
                 axios.defaults.baseURL = isLocalhost
                     ? "http://127.0.0.1:8000"
-                    : "http://192.168.1.14:8000";
+                    : "http://192.168.1.6:8000";
                 const response = await axios.get("/api/notifications");
                 this.notifications = response.data;
                 console.log("notifications in userStore", this.notifications);

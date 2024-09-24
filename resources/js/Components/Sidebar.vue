@@ -21,9 +21,11 @@ const props = defineProps({
     modelValue: String, // this is the current value of showNav from the parent
 });
 
-// Emit the event
-const emit = defineEmits(["nav"]);
 
+// #region define code
+const searchTerm = ref('');
+const selectedFilter = ref('all');
+const emit = defineEmits(["nav"]);
 const boards = ref([]);
 const filteredFavorites = ref([]);
 const route = useRoute();
@@ -50,10 +52,11 @@ const showFolderOptions = ref([]);
 const showFolder = ref([]);
 const showFolders = ref(false);
 const showWorkspace = ref(false);
+// #endregion
 
 onMounted(() => {
     userStore.loadUserFromStorage(); // Optionally load user from storage
-    
+
     userStore.initTaskListeners(); // Optionally load user from storage
     if (userStore.user.role == "Manager") {
         console.log("user in mounted", userStore.user.id);
@@ -82,6 +85,67 @@ if (user) {
         });
     }
 }
+const fetchBoards = () => {
+    // Flatten all boards from all workspaces
+    const allBoards = userStore.user.workspaces.flatMap(
+        (workspace) => workspace.boards
+    );
+
+    // Filter boards that are archived
+    boards.value = allBoards.filter((board) => board.is_archived == true);
+
+    // Set boards.value to include both active and archived boards
+};
+const trashedItems = computed(() => {
+  const allItems = [];
+
+  // Map through workspaces
+  user.value.workspaces.forEach((workspace) => {
+    if (workspace.is_trashed) {
+      allItems.push({
+        name: workspace.name,
+        type: 'Workspace',
+        board: '-',
+        trashed_by: workspace.trashed_by,
+        trashed_at: workspace.trashed_at,
+      });
+    }
+
+    // Map through boards
+    workspace.boards.forEach((board) => {
+      if (board.is_trashed) {
+        allItems.push({
+          name: board.name,
+          type: 'Board',
+          board: workspace.name,
+          trashed_by: board.trashed_by,
+          trashed_at: board.trashed_at,
+        });
+      }
+
+      // Map through tasks
+      board.tasks.forEach((task) => {
+        if (task.is_trashed) {
+          allItems.push({
+            name: task.name,
+            type: 'Task',
+            board: board.name,
+            trashed_by: task.trashed_by,
+            trashed_at: task.trashed_at,
+          });
+        }
+      });
+    });
+  });
+
+  // Filter based on search term and filter selection
+  return allItems.filter((item) => {
+    const matchesSearch = item.name.toLowerCase().includes(searchTerm.value.toLowerCase());
+    const matchesFilter =
+      selectedFilter.value === 'all' || item.type.toLowerCase() === selectedFilter.value.toLowerCase();
+    return matchesSearch && matchesFilter;
+  });
+});
 
 const initEcho = () => {
     const echoInstance = new Echo({
@@ -127,7 +191,6 @@ const changeBoardWorkspace = async (
     try {
         // Assuming you have the board object available
 
-        
         // Update the workspace_board table
         const response = await axios.patch(
             `/api/workspace_board/${relationshipId}`,
@@ -135,9 +198,7 @@ const changeBoardWorkspace = async (
                 workspace_id: newWorkspaceId,
             }
         );
-        console.log(
-            `change workspace`,response
-        );
+        console.log(`change workspace`, response);
         updateBoardField("folder_id", null, boardId);
         // Optionally update the local state to reflect the change
         userStore.updateBoardField(boardId, "workspace_id", newWorkspaceId);
@@ -160,7 +221,9 @@ const updateBoardField = async (fieldName, fieldValue, boardId) => {
         // Optionally, update the local userStore after successful update
         userStore.updateBoardField(boardId, fieldName, fieldValue);
         console.log(`Board ${fieldName} updated successfully:`, response.data);
-
+        if (fieldName == "is_archived") {
+            fetchBoards();
+        }
         // Check if the updated field is the board_name
     } catch (error) {
         console.error(`Error updating board ${fieldName}:`, error);
@@ -247,6 +310,7 @@ const toggleOff = () => {
     showNav.value = "inactive";
     manuallyActivated.value = false;
     emit("nav", showNav.value);
+    console.log("toggle for side", showNav.value);
 };
 const handleMouseOver = () => {
     if (!manuallyActivated.value) {
@@ -260,15 +324,7 @@ const handleMouseLeave = () => {
         showNav.value = "inactive";
     }
 };
-const fetchBoards = async () => {
-    try {
-        const response = await axios.get("/api/boards");
-        boards.value = response.data;
-        filterByFavorite(boards.value);
-    } catch (error) {
-        console.error("There was an error fetching boards!", error);
-    }
-};
+
 const setArchive = async (id) => {
     selectedWorkspace.value.is_archived = true;
     try {
@@ -512,6 +568,141 @@ const navigateToBoard = (boardName, workspaceId) => {
                     <h1>Archive</h1>
                 </div>
             </div>
+            <div v-if = "archive == true"
+             class="container mx-auto px-4">
+                <h1 class="text-2xl font-semibold my-4">Archive</h1>
+                <p class="text-gray-600 mb-4">
+                    Boards or Projects you archive will stay here, so you can
+                    restore them later.
+                </p>
+
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th
+                                    scope="col"
+                                    class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                                >
+                                    Name
+                                </th>
+                                <th
+                                    scope="col"
+                                    class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                                >
+                                    Type
+                                </th>
+
+                                <th
+                                    scope="col"
+                                    class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                                >
+                                    Action
+                                </th>
+                            </tr>
+                        </thead>
+                        {{
+                            console.log("board for archive", boards)
+                        }}
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            <tr v-for="(item, index) in boards" :key="index">
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span>{{ item.board_name }}</span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span>Board</span>
+                                </td>
+
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <h1
+                                        @click.stop="
+                                            updateBoardField(
+                                                'is_archived',
+                                                false,
+                                                item.id
+                                            )
+                                        "
+                                        class="bg-blue-500 hover:bg-blue-600 text-white rounded-md w-fit cursor-pointer p-2"
+                                    >
+                                        Restore
+                                    </h1>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div v-if = "trash == true"
+             class="container mx-auto px-4">
+    <h1 class="text-2xl font-semibold my-4">Trash</h1>
+    <p class="text-gray-600 mb-4">
+     Workspaces, Boards, Tasks you archive will stay here, so you can restore them later. 
+      <a href="#" class="text-blue-500">Learn more</a>
+    </p>
+    <div class="flex items-center mb-4">
+    <input
+      type="text"
+      v-model="searchTerm"
+      placeholder="Search..."
+      class="border border-gray-300 rounded-md p-2 w-full"
+    />
+    <button @click="selectedFilter = 'all'" class="ml-2 bg-blue-500 text-white rounded-md p-2">All</button>
+    <button @click="selectedFilter = 'workspace'" class="ml-2 bg-blue-500 text-white rounded-md p-2">Workspaces</button>
+    <button @click="selectedFilter = 'board'" class="ml-2 bg-blue-500 text-white rounded-md p-2">Boards</button>
+    <button @click="selectedFilter = 'task'" class="ml-2 bg-blue-500 text-white rounded-md p-2">Tasks</button>
+  </div>
+
+  <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-gray-200">
+      <thead class="bg-gray-50">
+        <tr>
+          <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Name
+          </th>
+          <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Type
+          </th>
+          <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Archived From
+          </th>
+          <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Archived By
+          </th>
+          <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Date
+          </th>
+          <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Action
+          </th>
+        </tr>
+      </thead>
+      <tbody class="bg-white divide-y divide-gray-200">
+        <tr v-for="(item, index) in trashedItems" :key="index">
+          <td class="px-6 py-4 whitespace-nowrap">
+            <span>{{ item.name }}</span>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap">
+            <span>{{ item.type }}</span>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap">
+            <span>{{ item.board }}</span>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap">
+            <span>{{ item.trashed_by }}</span>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap">
+            <span>{{ item.trashed_at }}</span>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap">
+            <i class="fa fa-ellipsis-h"></i>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+    
+  </div>
         </div>
     </div>
 
@@ -523,7 +714,7 @@ const navigateToBoard = (boardName, workspaceId) => {
     >
         <span
             v-if="manuallyActivated || showNav === 'active'"
-            @click="toggleOff"
+            @click.stop="toggleOff"
             class="hidden group-hover:block"
         >
             <i
@@ -532,14 +723,14 @@ const navigateToBoard = (boardName, workspaceId) => {
         </span>
         <span
             v-if="showNav === 'inactive' || !manuallyActivated"
-            @click="toggleOn"
+            @click.stop="toggleOn"
         >
             <i
                 class="absolute right-0 top-0 p-2 px-2 bg-gray-100 fa fa-chevron-right text-sm ml-4"
             ></i>
         </span>
 
-        <div v-if="showNav === 'active'" class="resize-x">
+        <div v-if="showNav == 'active'" class="resize-x">
             <router-link to="/home">
                 <div
                     :class="{
@@ -571,7 +762,8 @@ const navigateToBoard = (boardName, workspaceId) => {
                     <h2 class="ml-2 font-thin text-sm">Home</h2>
                 </div>
             </router-link>
-            <div v-if = "false"
+            <div
+                v-if="false"
                 class="flex items-center py-1 rounded-md hover:bg-gray-200 cursor-pointer mb-2"
             >
                 <i
@@ -593,7 +785,7 @@ const navigateToBoard = (boardName, workspaceId) => {
                             <i class="fa text-orange-400 mr-2 fa-star"></i>
                         </span>
 
-                        <h1 class="text-md">Favorites</h1>
+                        <h1 class="text-sm">High Priority</h1>
                     </div>
                     <span v-if="!showFavorites">
                         <i class="fa text-sm ml-32 fa-chevron-down"></i>
@@ -611,7 +803,12 @@ const navigateToBoard = (boardName, workspaceId) => {
                     class="group/project relative"
                 >
                     <div
-                        v-if="boards.is_favorite && boards.board_name"
+                        v-if="
+                            boards.is_favorite &&
+                            boards.board_name &&
+                            !boards.is_archived &&
+                            !boards.is_trashed
+                        "
                         @click="
                             navigateToBoard(
                                 boards.board_name,
@@ -696,7 +893,9 @@ const navigateToBoard = (boardName, workspaceId) => {
                                     <i
                                         class="far fa-star mr-2 text-gray-500"
                                     ></i>
-                                    <h1 class="w-40">Remove from favorites</h1>
+                                    <h1 class="w-40">
+                                        Remove from High Priority
+                                    </h1>
                                 </div>
                                 <div
                                     class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
@@ -706,7 +905,13 @@ const navigateToBoard = (boardName, workspaceId) => {
                                     ></i>
                                     <h1 class="w-40">Duplicate</h1>
                                 </div>
-                                <div
+                                <div @click.stop="
+                                        updateBoardField(
+                                            'is_trashed',
+                                            true,
+                                            boards.id
+                                        )
+                                    "
                                     class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
                                 >
                                     <i
@@ -715,6 +920,13 @@ const navigateToBoard = (boardName, workspaceId) => {
                                     <h1 class="w-40">Delete</h1>
                                 </div>
                                 <div
+                                    @click.stop="
+                                        updateBoardField(
+                                            'is_archived',
+                                            true,
+                                            boards.id
+                                        )
+                                    "
                                     class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
                                 >
                                     <i
@@ -963,6 +1175,7 @@ const navigateToBoard = (boardName, workspaceId) => {
                                         >
                                             <div
                                                 @click.stop="
+                                                    fetchBoards();
                                                     showTrash = true;
                                                     trash = true;
                                                     archive = false;
@@ -977,6 +1190,7 @@ const navigateToBoard = (boardName, workspaceId) => {
                                             </div>
                                             <div
                                                 @click.stop="
+                                                    fetchBoards();
                                                     showTrash = true;
                                                     trash = false;
                                                     archive = true;
@@ -990,23 +1204,6 @@ const navigateToBoard = (boardName, workspaceId) => {
                                                 <h1>Archive</h1>
                                             </div>
                                         </div>
-                                    </div>
-
-                                    <div
-                                        v-if="
-                                            selectedWorkspace.id !=
-                                            user.workspaces[0].id
-                                        "
-                                        @click.stop="
-                                            setArchive(selectedWorkspace.id)
-                                        "
-                                        class="flex my-2 py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
-                                    >
-                                        <i
-                                            class="fa fa-suitcase text-gray-500 mr-2"
-                                            aria-hidden="true"
-                                        ></i>
-                                        <h1>Archive</h1>
                                     </div>
                                 </div>
                             </div>
@@ -1174,7 +1371,9 @@ const navigateToBoard = (boardName, workspaceId) => {
                         >
                             <div
                                 v-if="
-                                    boards?.folder_id == null
+                                    boards?.folder_id == null &&
+                                    !boards.is_archived &&
+                                    !boards.is_trashed
                                 "
                                 @click="
                                     navigateToBoard(
@@ -1374,7 +1573,11 @@ const navigateToBoard = (boardName, workspaceId) => {
                                                                             workspace.workspace_name
                                                                         )
                                                                     }}
-                                                                    <div v-if = "workspace.id !== selectedWorkspace.id"
+                                                                    <div
+                                                                        v-if="
+                                                                            workspace.id !==
+                                                                            selectedWorkspace.id
+                                                                        "
                                                                         @click="
                                                                             changeBoardWorkspace(
                                                                                 workspace.id,
@@ -1413,14 +1616,18 @@ const navigateToBoard = (boardName, workspaceId) => {
                                                         boards.id
                                                     )
                                                 "
-                                                v-if="!boards.is_favorite"
+                                                v-if="
+                                                    !boards.is_favorite &&
+                                                    userStore.user.role ==
+                                                        'Admin'
+                                                "
                                                 class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
                                             >
                                                 <i
                                                     class="far fa-star mr-2 text-gray-500"
                                                 ></i>
                                                 <h1 class="w-40">
-                                                    Add to favorites
+                                                    Add to High Priority
                                                 </h1>
                                             </div>
                                             <div
@@ -1431,14 +1638,18 @@ const navigateToBoard = (boardName, workspaceId) => {
                                                         boards.id
                                                     )
                                                 "
-                                                v-if="boards.is_favorite"
+                                                v-if="
+                                                    boards.is_favorite &&
+                                                    userStore.user.role ==
+                                                        'Admin'
+                                                "
                                                 class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
                                             >
                                                 <i
                                                     class="far fa-star mr-2 text-gray-500"
                                                 ></i>
                                                 <h1 class="w-40">
-                                                    Remove from favorites
+                                                    Remove from High Priority
                                                 </h1>
                                             </div>
 
@@ -1450,7 +1661,13 @@ const navigateToBoard = (boardName, workspaceId) => {
                                                 ></i>
                                                 <h1 class="w-40">Duplicate</h1>
                                             </div>
-                                            <div
+                                            <div @click.stop="
+                                        updateBoardField(
+                                            'is_trashed',
+                                            true,
+                                            boards.id
+                                        )
+                                    "
                                                 class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
                                             >
                                                 <i
@@ -1459,6 +1676,13 @@ const navigateToBoard = (boardName, workspaceId) => {
                                                 <h1 class="w-40">Delete</h1>
                                             </div>
                                             <div
+                                                @click.stop="
+                                                    updateBoardField(
+                                                        'is_archived',
+                                                        true,
+                                                        boards.id
+                                                    )
+                                                "
                                                 class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
                                             >
                                                 <i
@@ -1469,7 +1693,7 @@ const navigateToBoard = (boardName, workspaceId) => {
                                         </div>
                                     </div>
                                     <span
-                                        class="group-hover/project:block hidden items-center "
+                                        class="group-hover/project:block hidden items-center"
                                     >
                                         <i
                                             @click.stop="
@@ -1539,142 +1763,110 @@ const navigateToBoard = (boardName, workspaceId) => {
                                                     </h1>
                                                 </div>
                                                 <div
-                                                class="flex w-full relative py-2 group/move hover:bg-gray-100 justify-between cursor-pointer rounded-md px-4 items-center"
-                                            >
-                                                <div class="flex">
-                                                    <i
-                                                        class="fa fa-arrow-right mr-2 text-gray-500"
-                                                    ></i>
-                                                    <h1 class="w-40">
-                                                        Move to
-                                                    </h1>
-                                                    <div
-                                                        class="absolute hidden group-hover/move:block z-50 text-md font-light shadow-xl top-1 left-[17.5rem] w-64 bg-white p-1 py-4 rounded-lg"
-                                                    >
+                                                    class="flex w-full relative py-2 group/move hover:bg-gray-100 justify-between cursor-pointer rounded-md px-4 items-center"
+                                                >
+                                                    <div class="flex">
+                                                        <i
+                                                            class="fa fa-arrow-right mr-2 text-gray-500"
+                                                        ></i>
+                                                        <h1 class="w-40">
+                                                            Move to
+                                                        </h1>
                                                         <div
-                                                            @click.stop="
-                                                                showFolders = true
-                                                            "
-                                                            @mouseleave="
-                                                                showFolders = false
-                                                            "
-                                                            class="flex w-full relative group/folder my-2 items-center"
-                                                        >
-                                                            
-
-                                                            
-                                                        </div>
-                                                        <div
-                                                            @click.stop="
-                                                                showWorkspace =
-                                                                    !showWorkspace
-                                                            "
-                                                            @mouseleave="
-                                                                showWorkspace = false
-                                                            "
-                                                            class="flex w-full relative group/folder my-2 items-center"
+                                                            class="absolute hidden group-hover/move:block z-50 text-md font-light shadow-xl top-1 left-[17.5rem] w-64 bg-white p-1 py-4 rounded-lg"
                                                         >
                                                             <div
-                                                                v-if="
-                                                                    !showFolders &&
-                                                                    !showWorkspace
+                                                                @click.stop="
+                                                                    showFolders = true
                                                                 "
-                                                                class="flex py-2 px-4 w-full hover:bg-gray-100 cursor-pointer rounded-md items-center"
-                                                            >
-                                                                <i
-                                                                    class="far fa-square text-gray-500 mr-2"
-                                                                    aria-hidden="true"
-                                                                ></i>
-                                                                <h1>
-                                                                    Workspace
-                                                                </h1>
-                                                            </div>
-
+                                                                @mouseleave="
+                                                                    showFolders = false
+                                                                "
+                                                                class="flex w-full relative group/folder my-2 items-center"
+                                                            ></div>
                                                             <div
-                                                                class="flex flex-col max-h-44 overflow-y-auto w-full items-center"
-                                                                v-if="
-                                                                    showWorkspace
+                                                                @click.stop="
+                                                                    showWorkspace =
+                                                                        !showWorkspace
                                                                 "
+                                                                @mouseleave="
+                                                                    showWorkspace = false
+                                                                "
+                                                                class="flex w-full relative group/folder my-2 items-center"
                                                             >
-                                                                <h1>
-                                                                    Choose
-                                                                    Workspace
-                                                                </h1>
                                                                 <div
-                                                                    v-for="workspace in user.workspaces"
-                                                                    :key="
-                                                                        workspace.id
+                                                                    v-if="
+                                                                        !showFolders &&
+                                                                        !showWorkspace
                                                                     "
-                                                                    class="flex flex-col items-center bg-white"
+                                                                    class="flex py-2 px-4 w-full hover:bg-gray-100 cursor-pointer rounded-md items-center"
                                                                 >
-                                                                    {{
-                                                                        console.log(
-                                                                            "workspace is this",
-                                                                            workspace.workspace_name
-                                                                        )
-                                                                    }}
-                                                                    <div v-if = "workspace.id !== selectedWorkspace.id"
-                                                                        @click="
-                                                                            userStore.updateFolderField(folders.id,'workspace_id',workspace.id)
+                                                                    <i
+                                                                        class="far fa-square text-gray-500 mr-2"
+                                                                        aria-hidden="true"
+                                                                    ></i>
+                                                                    <h1>
+                                                                        Workspace
+                                                                    </h1>
+                                                                </div>
+
+                                                                <div
+                                                                    class="flex flex-col max-h-44 overflow-y-auto w-full items-center"
+                                                                    v-if="
+                                                                        showWorkspace
+                                                                    "
+                                                                >
+                                                                    <h1>
+                                                                        Choose
+                                                                        Workspace
+                                                                    </h1>
+                                                                    <div
+                                                                        v-for="workspace in user.workspaces"
+                                                                        :key="
+                                                                            workspace.id
                                                                         "
-                                                                        class="flex my-2 py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
+                                                                        class="flex flex-col items-center bg-white"
                                                                     >
-                                                                        <i
-                                                                            class="far fa-folder text-gray-500 mr-2"
-                                                                            aria-hidden="true"
-                                                                        ></i>
-                                                                        <h1>
-                                                                            {{
+                                                                        {{
+                                                                            console.log(
+                                                                                "workspace is this",
                                                                                 workspace.workspace_name
-                                                                            }}
-                                                                        </h1>
+                                                                            )
+                                                                        }}
+                                                                        <div
+                                                                            v-if="
+                                                                                workspace.id !==
+                                                                                selectedWorkspace.id
+                                                                            "
+                                                                            @click="
+                                                                                userStore.updateFolderField(
+                                                                                    folders.id,
+                                                                                    'workspace_id',
+                                                                                    workspace.id
+                                                                                )
+                                                                            "
+                                                                            class="flex my-2 py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
+                                                                        >
+                                                                            <i
+                                                                                class="far fa-folder text-gray-500 mr-2"
+                                                                                aria-hidden="true"
+                                                                            ></i>
+                                                                            <h1>
+                                                                                {{
+                                                                                    workspace.workspace_name
+                                                                                }}
+                                                                            </h1>
+                                                                        </div>
                                                                     </div>
                                                                 </div>
                                                             </div>
                                                         </div>
                                                     </div>
-                                                </div>
-                                                <i
-                                                    class="fa fa-chevron-right"
-                                                ></i>
-                                            </div>
-                                                <div @click="
-                                                                            userStore.updateFolderField(folders.id,'is_favorite',true)
-                                                                        "
-                                                    v-if="!folders.is_favorite"
-                                                    class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
-                                                >
                                                     <i
-                                                        class="far fa-star mr-2 text-gray-500"
+                                                        class="fa fa-chevron-right"
                                                     ></i>
-                                                    <h1 class="w-40">
-                                                        Add to favorites
-                                                    </h1>
                                                 </div>
-                                                <div @click="
-                                                                            userStore.updateFolderField(folders.id,'is_favorite',false)
-                                                                        "
-                                                    v-if="folders.is_favorite"
-                                                    class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
-                                                >
-                                                    <i
-                                                        class="far fa-star mr-2 text-gray-500"
-                                                    ></i>
-                                                    <h1 class="w-40">
-                                                        Remove from favorites
-                                                    </h1>
-                                                </div>
-                                                <div
-                                                    v-if="false"
-                                                    class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
-                                                >
-                                                    <i
-                                                        class="far fa-star mr-2 text-gray-500"
-                                                    ></i>
-                                                    <h1 class="w-40">
-                                                        Remove from favorites
-                                                    </h1>
-                                                </div>
+
                                                 <div
                                                     class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
                                                 >
@@ -1731,7 +1923,10 @@ const navigateToBoard = (boardName, workspaceId) => {
                                             v-if="
                                                 boards?.pivot.workspace_id ==
                                                     selectedWorkspace.id &&
-                                                boards.folder_id == folders.id
+                                                boards.folder_id ==
+                                                    folders.id &&
+                                                !boards.is_archived &&
+                                                !boards.is_trashed
                                             "
                                             @click="
                                                 navigateToBoard(
@@ -1942,16 +2137,20 @@ const navigateToBoard = (boardName, workspaceId) => {
                                                                                         workspace.workspace_name
                                                                                     )
                                                                                 }}
-                                                                                <div v-if = "workspace.id !== selectedWorkspace.id"
-                                                                                @click="
-                                                                            changeBoardWorkspace(
-                                                                                workspace.id,
-                                                                                boards.id,
-                                                                                boards
-                                                                                    .pivot
-                                                                                    .id
-                                                                            )
-                                                                        "
+                                                                                <div
+                                                                                    v-if="
+                                                                                        workspace.id !==
+                                                                                        selectedWorkspace.id
+                                                                                    "
+                                                                                    @click="
+                                                                                        changeBoardWorkspace(
+                                                                                            workspace.id,
+                                                                                            boards.id,
+                                                                                            boards
+                                                                                                .pivot
+                                                                                                .id
+                                                                                        )
+                                                                                    "
                                                                                     class="flex my-2 py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
                                                                                 >
                                                                                     <i
@@ -1982,7 +2181,10 @@ const navigateToBoard = (boardName, workspaceId) => {
                                                                 )
                                                             "
                                                             v-if="
-                                                                !boards.is_favorite
+                                                                !boards.is_favorite &&
+                                                                userStore.user
+                                                                    .role ==
+                                                                    'Admin'
                                                             "
                                                             class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
                                                         >
@@ -1990,7 +2192,8 @@ const navigateToBoard = (boardName, workspaceId) => {
                                                                 class="far fa-star mr-2 text-gray-500"
                                                             ></i>
                                                             <h1 class="w-40">
-                                                                Add to favorites
+                                                                Add to High
+                                                                Priority
                                                             </h1>
                                                         </div>
                                                         <div
@@ -2002,7 +2205,10 @@ const navigateToBoard = (boardName, workspaceId) => {
                                                                 )
                                                             "
                                                             v-if="
-                                                                boards.is_favorite
+                                                                boards.is_favorite &&
+                                                                userStore.user
+                                                                    .role ==
+                                                                    'Admin'
                                                             "
                                                             class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
                                                         >
@@ -2025,7 +2231,13 @@ const navigateToBoard = (boardName, workspaceId) => {
                                                                 Duplicate
                                                             </h1>
                                                         </div>
-                                                        <div
+                                                        <div @click.stop="
+                                        updateBoardField(
+                                            'is_trashed',
+                                            true,
+                                            boards.id
+                                        )
+                                    "
                                                             class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
                                                         >
                                                             <i
@@ -2036,6 +2248,13 @@ const navigateToBoard = (boardName, workspaceId) => {
                                                             </h1>
                                                         </div>
                                                         <div
+                                                            @click.stop="
+                                                                updateBoardField(
+                                                                    'is_archived',
+                                                                    true,
+                                                                    boards.id
+                                                                )
+                                                            "
                                                             class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
                                                         >
                                                             <i
@@ -2045,20 +2264,22 @@ const navigateToBoard = (boardName, workspaceId) => {
                                                                 Archive
                                                             </h1>
                                                         </div>
-                                                        <div @click.stop="
-                                                                            updateBoardField(
-                                                                                'folder_id',
-                                                                                null,
-                                                                                boards.id
-                                                                            )
-                                                                        "
+                                                        <div
+                                                            @click.stop="
+                                                                updateBoardField(
+                                                                    'folder_id',
+                                                                    null,
+                                                                    boards.id
+                                                                )
+                                                            "
                                                             class="flex w-full py-2 hover:bg-gray-100 cursor-pointer rounded-md px-4 items-center"
                                                         >
                                                             <i
                                                                 class="fa fa-remove mr-2 text-gray-500"
                                                             ></i>
                                                             <h1 class="w-40">
-                                                                Remove from folder
+                                                                Remove from
+                                                                folder
                                                             </h1>
                                                         </div>
                                                     </div>

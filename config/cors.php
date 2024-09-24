@@ -10,6 +10,8 @@ return [
         'http://127.0.0.1',
         'http://localhost:5173',
         '192.168.1.14:5173',
+        'http://192.168.1.6:5173',
+        'http://192.168.1.6:8000',
     ],
     'allowed_headers' => ['*'],
     'exposed_headers' => [],

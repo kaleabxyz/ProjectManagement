@@ -41,6 +41,8 @@ class UserController extends Controller
                 'owner:id,user_name,email,profile_picture_url',
                 'creator:id,user_name,email,profile_picture_url',
                 'team',
+                'attachments',
+                'attachments.user:id,user_name,email,profile_picture_url',
                 'team.members',
                 'tasks' => function ($query) {
                     $query->withCount('updates'); // Include update counts

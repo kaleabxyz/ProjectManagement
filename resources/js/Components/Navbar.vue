@@ -342,14 +342,7 @@ const fetchNotifications = async () => {
         console.error("Error fetching notifications", error);
     }
 };
-const markNotificationAsRead = async (notificationId) => {
-    try {
-        await axios.post(`/api/notifications/markAsRead/${notificationId}`);
-        console.log("Notification marked as read");
-    } catch (error) {
-        console.error("Error marking notification as read", error);
-    }
-};
+
 
 const handleAccept = async (notification) => {
     try {
@@ -1017,6 +1010,26 @@ function formatDateForDisplay(dateString) {
 
     return `${month} ${day}, ${taskYear}`;
 }
+const markNotificationAsRead = async (notificationId) => {
+    try {
+        // Send a request to the backend to mark the notification as read
+        const response = await axios.post(
+            `/api/notifications/markAsRead/${notificationId}`
+        );
+        console.log(response.data.message);
+
+        // Find the notification in userStore and mark it as read
+        const notificationIndex = userStore.notifications.findIndex(
+            (notification) => notification.id === notificationId
+        );
+
+        if (notificationIndex !== -1) {
+            userStore.notifications[notificationIndex].read = true;
+        }
+    } catch (error) {
+        console.error("Failed to mark notification as read:", error);
+    }
+};
 </script>
 
 <template v-if = "userStore.user">
@@ -2299,7 +2312,7 @@ function formatDateForDisplay(dateString) {
                     </div>
 
                 </div>
-                <div  v-if = "notification && notification.read == false && !notification.invitation"
+                <div  v-if = "notification && !notification.invitation"
                             class="flex flex-col w-full  border-b border-gray-300 pb-4" >
                                
                             <div
@@ -2319,9 +2332,11 @@ function formatDateForDisplay(dateString) {
                                             
                                             class="items-center flex"
                                         >
-                                            <button
+                                        <button v-if = "!notification.read"
                                                 @click="
-                                                    
+                                                    markNotificationAsRead(
+                                                        notification.id
+                                                    )
                                                 "
                                                 class="text-black px-4 py-2 rounded-lg hover:bg-gray-300 mr-4 text-sm"
                                             >
